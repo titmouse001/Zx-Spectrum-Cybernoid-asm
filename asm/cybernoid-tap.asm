@@ -389,7 +389,7 @@ DATAFLAG	equ $FF
 ; BASIC Program Header
 
 
-#code				0,17,HEADERFLAG	; declare code segment
+#code				PROG_HEADER,0,17,HEADERFLAG	; declare code segment
 
 			defb 0				; Program
 			defm "cybernoid "	; Pad to 10 chars
@@ -402,7 +402,7 @@ DATAFLAG	equ $FF
 ; BASIC Program
 
 
-#code				0,$200,DATAFLAG	; declare code segment
+#code				PROG_DATA,0,*,DATAFLAG	; declare code segment
 
 ; 10 BORDER 0: PAPER 0: INK 7: CLEAR 24835				; $6103
 			defb 0,10   		; line number
@@ -454,7 +454,7 @@ PROGRAM1END equ $
 ; Code Block 1 Header
 
 
-#code				0,17,HEADERFLAG	; declare code segment
+#code				CODE_HEADER,0,17,HEADERFLAG	; declare code segment
 
 CODE1START	equ $4000			; 16384
 
@@ -469,7 +469,8 @@ CODE1START	equ $4000			; 16384
 ; Code Block 1 Data
 
 
-#code				CODE1START,$1B00,DATAFLAG	; declare code segment
+; This works fine, screen amount is 0x1B00 (0x5B00 - 0x4000)															  
+#code				CODE_DATA,CODE1START,$1B00,DATAFLAG	; declare code segment
 
 			defb $00,$03,$FF,$E0,$00,$00,$00,$00				; $4000 ........
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $4008 ........
@@ -1343,7 +1344,7 @@ CODE1END equ $ ; Marker to show end of object code
 ; Code Block 2 Header
 
 
-#code				0,17,HEADERFLAG	; declare code segment
+#code				header2,0,17,HEADERFLAG	; declare code segment
 
 CODE2START	equ $6103			; 24835
 
@@ -1358,7 +1359,7 @@ CODE2START	equ $6103			; 24835
 ; Code Block 2 Data
 
 
-#code				CODE2START,$9F00,DATAFLAG	; declare code segment
+#code				codeblock2,CODE2START,*,DATAFLAG	; declare code segment
 
 			defb $3E,$00,$00,$00,$00,$00,$00,$00				; $6103 >.......
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $610B ........
