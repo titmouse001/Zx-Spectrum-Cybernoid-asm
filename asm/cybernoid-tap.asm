@@ -1,394 +1,41 @@
-;;-----------------------------------------------------------------------------
-;
-;;  Project Name:	Cybernoid
-;;     File Name:	Cybernoid-tap.tap
-;
-;;   Description:	Cybernoid Game as per http://www.worldofspectrum.org/infoseekid.cgi?id=0001196
-;
-;;-----------------------------------------------------------------------------
-;;                       A U T H O R   I D E N T I T Y
-;;-----------------------------------------------------------------------------
-;
-;;	Initials	Name
-;;	--------	-----------------------------------------------
-;;	DB			Derek Bolli
-;;  HC          Hewson Consultants Ltd, Raffaele Cecco, Nick Jones, J. Dave Rogers, John M. Phillips
-;
-;;-----------------------------------------------------------------------------
-;;                      R E V I S I O N   H I S T O R Y
-;;-----------------------------------------------------------------------------
-;
-;;	  Date		Time	Author	Description
-;;	--------	-----	------	---------------------------------------------
-;;	25/08/02	11:46	DB		Template Ported from Zeus assembler to zasm assembler
-;;	18/07/02	20:10	DB		Template Original version (converted from 2DMaze.Z80)
-;;  01/01/88    12:12   HC      Cybernoid Game by Raffaele Cecco, Nick Jones, J. Dave Rogers, John M. Phillips
-;
-;;-----------------------------------------------------------------------------
-;;           C O P Y R I G H T  N O T I C E  A N D  D I S C L A I M E R
-;;-----------------------------------------------------------------------------
-;;  Cybernoid Game (C) 1988 Hewson Consultants Ltd
-;;  Template Portions (c) Copyright 1984-2014, Derek Bolli (dbolli at bigpond.net.au)
-;;  ALL RIGHTS RESERVED
-;;  Permission to use, copy, modify, and distribute this software for
-;;  non-commercial purposes and without fee is hereby granted, provided
-;;  that the above copyright notice appear in all copies and that both the
-;;  copyright notice and this permission notice appear in supporting
-;;  documentation, and that the author of this software is notified of
-;;  the existence of the modified software.
-;
-;;  THE MATERIAL EMBODIED ON THIS SOFTWARE IS PROVIDED TO YOU "AS-IS"
-;;  AND WITHOUT WARRANTY OF ANY KIND, EXPRESS, IMPLIED OR OTHERWISE,
-;;  INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY OR
-;;  FITNESS FOR A PARTICULAR PURPOSE.  IN NO EVENT SHALL THE
-;;  AUTHOR BE LIABLE TO YOU OR ANYONE ELSE FOR ANY DIRECT,
-;;  SPECIAL, INCIDENTAL, INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY
-;;  KIND, OR ANY DAMAGES WHATSOEVER, INCLUDING WITHOUT LIMITATION,
-;;  LOSS OF PROFIT, LOSS OF USE, SAVINGS OR REVENUE, OR THE CLAIMS OF
-;;  THIRD PARTIES, WHETHER OR NOT THE AUTHOR HAS BEEN
-;;  ADVISED OF THE POSSIBILITY OF SUCH LOSS, HOWEVER CAUSED AND ON
-;;  ANY THEORY OF LIABILITY, ARISING OUT OF OR IN CONNECTION WITH THE
-;;  POSSESSION, USE OR PERFORMANCE OF THIS SOFTWARE.
-;;-----------------------------------------------------------------------------  
-
-
-; *************
-; * Cybernoid *
-; *************
-
 ; Cybernoid Game (C) 1988 Hewson Consultants Ltd
-; Template Portions (C) Derek Bolli 1984-2014
+; For original credits, see "RefNoLabels/cybernoid-tap.asm"
+;------------------------------------------------------------------
+; Output: Build file format
+#target				tap
+;------------------------------------------------------------------
 
-; ***************
-; Version History:
+; BASIC Keywords
+KWRDSCREENSTR	equ	$AA	
+KWRDAT			equ	$AC
+KWRDCODE		equ	$AF
+KWRDVAL			equ	$B0
+KWRDEXP			equ	$B9
+KWRDUSR			equ	$C0
+KWRDLINE		equ	$CA
+KWRDCAT			equ	$CF
+KWRDBEEP		equ	$D7
+KWRDINK			equ	$D9
+KWRDPAPER		equ	$DA
+KWRDBRIGHT		equ	$DC
+KWRDLPRINT		equ	$E0
+KWRDSTOP		equ	$E2
+KWRDREAD		equ	$E3
+KWRDDATA		equ	$E4
+KWRDRESTORE		equ	$E5
+KWRDBORDER		equ	$E7
+KWRDREM			equ	$EA
+KWRDLOAD		equ	$EF
+KWRDPAUSE		equ	$F2
+KWRDPOKE		equ	$F4
+KWRDPRINT		equ	$F5
+KWRDRANDOMIZE	equ	$F9
+KWRDCLS			equ	$FB
+KWRDCLEAR		equ	$FD
+HEADERFLAG		equ $00			
+DATAFLAG		equ $FF
 
-;   DB    1988      0.0d  Initial version
-
-
-#target				tap				; declare target file format
-
-; . . . . . . . . . . .
-; Equates
-
-ERROR1		equ		$0008
-PRINTA1		equ		$0010
-GETCHAR		equ		$0018
-NEXTCHAR	equ		$0020
-MASKINT		equ		$0038
-
-KEYSCAN		EQU		$028E			
-BEEPER		equ		$03B5			
-BEEP		equ		$03F8
-LDBYTES		equ		$0556			
-POSTORE		equ		$0ADC
-POFETCH		equ		$0B03
-POATTR		equ		$0BDB
-TEMPS		equ		$0D4D
-ROMCLS		equ		$0D6B
-CLSET		equ		$0DD9
-CLADDR		equ		$0E9B
-EDLOOP		equ		$0F38
-EDEDIT		equ		$0FA9
-EDERROR		equ		$107F
-CHANOPEN	equ		$1601			
-STRDATA1	equ		$1727			
-NEXT2NUM	equ		$1C79			
-EXPT2NUM	equ		$1C7A
-EXPT1NUM	equ		$1C82
-EXPTEXP		equ		$1C8C			
-FNDINT1		equ		$1E94			
-FINDINT2	equ		$1E99
-PIXADD		equ		$22AA
-;PIXADD		equ		OURPIXADD		; Point to our modified PIXADD
-POINT		equ		$22CB			; Coords on stack on entry (use STACKBC), binary result on stack at exit (use FPTOA)
-CRGRE1		equ		$233B			; On entry stack = X Y Z -> Draws circle at X,Y with radius Z
-DRAWLINE	equ		$24B7
-;DRAWLN2	equ		$24BA			; Use our routine below...
-SCANNING	equ		$24FB
-STKSTORE	equ		$2AB6
-STKFETCH	equ		$2BF1
-DECTOFP		equ		$2C9B
-STACKA		equ		$2D28
-STACKBC		equ		$2D2B
-FPTOBC		equ		$2DA2
-FPTOA		equ		$2DD5
-PRINTFP		equ		$2DE3
-STACKNUM	equ		$33B4	
-
-DFILE		equ		$4000			; Screen coords 0 - 255, 0 (top) - 175 (or 191)
-ATTRS		equ		$5800			; Screen chars 0 - 31, 0 - 21 (or 23)
-
-COMMA_CONTROL equ		$06				
-CHAR_ENTER	equ		$0D				; ASCII CR
-INK_CONTROL	equ		$10				
-PAPER_CONTROL	equ		$11				
-INVERSE_CONTROL	equ		$14				
-AT_CONTROL	equ		$16				
-
-CHAR_SPACE	equ		$20				; ASCII Space
-
-GRAPHICS_SHIFT_3	equ		$8C			; Graphic Shift 3
-
-GRAPHICS_A	equ		$90				; Graphic Char A
-
-KWRDSCREENSTR	equ		$AA				; BASIC Keywords (see pp358-360 of Mastering Machine Code by Toni Baker)
-KWRDAT			equ		$AC
-KWRDCODE		equ		$AF
-KWRDVAL			equ		$B0
-KWRDEXP			equ		$B9
-KWRDUSR			equ		$C0
-KWRDLINE		equ		$CA
-KWRDCAT			equ		$CF
-KWRDBEEP		equ		$D7
-KWRDINK			equ		$D9
-KWRDPAPER		equ		$DA
-KWRDBRIGHT		equ		$DC
-KWRDLPRINT		equ		$E0
-KWRDSTOP		equ		$E2
-KWRDREAD		equ		$E3
-KWRDDATA		equ		$E4
-KWRDRESTORE		equ		$E5
-KWRDBORDER		equ		$E7
-KWRDREM			equ		$EA
-KWRDLOAD		equ		$EF
-KWRDPAUSE		equ		$F2
-KWRDPOKE		equ		$F4
-KWRDPRINT		equ		$F5
-KWRDRANDOMIZE	equ		$F9
-KWRDCLS			equ		$FB
-KWRDCLEAR		equ		$FD
-
-; . . . . . . . . . . .
-; Interface 1 Edition 2 equates (as per Fuse 1.0)
-
-MAINROM		equ		$00
-CALBAS		equ		$10				; Call a main ROM routine
-SHERR		equ		$20
-ROMERR		equ		$28
-NEWVAR		equ		$30
-ERR6			equ		$01F0
-NREPORTC		equ		$052F
-STEND		equ		$05B7
-END1			equ		$05C1			
-EXPTNUM		equ		$061E
-NREPORT2		equ		$0663
-CHECKM2		equ		$066D
-NREPORT3		equ		$062D
-UNPAGE		equ		$0700
-NREPORTN		equ		$0906
-OPRSCH		equ		$0B17
-OPSTREAM		equ		$0B51
-TCHANOUT		equ		$0C3A
-BCHANOUT		equ		$0D07
-SETTMCH		equ		$10A5
-DELMBUF		equ		$119F
-RWFERR		equ		$1132
-GETRLP		equ		$125F
-RSSH2		equ		$11A3
-GHDRC		equ		$11A5
-GETMHD2		equ		$13A9
-RESBMAP		equ		$13E3
-DECSECT		equ		$13F7
-CHKSHDR		equ		$1426
-CLOSE		equ		$1718
-SELDRIVE		equ		$1532
-OUTMBUF		equ		$15B3
-GETMBLK		equ		$15F2
-DELAYBC		equ		$1652
-RDSECTOR		equ		$1F3F
-RSSH			equ		$1AC5
-FREESECT		equ		$1D43
-PRCHAR		equ		$1D71
-INCHK		equ		$1E49
-DISPHEX		equ		$14D6
-DISPHEX2		equ		$14ED
-DISPCH		equ		$14F8
-
-; . . . . . . . . . . .
-; Constants
-
-FALSE		equ		$00
-TRUE		equ		$01
-
-
-KSTATE		equ 	$5C00 			; Keyboard bytes
-LASTK		equ 	$5C08			; Last keypress
-REPDEL		equ		$5C09			; Delay until repeat starts (Default 35)
-REPPER		equ 	$5C0A			; Key repeat delay (Default 5)
-DEFADD		equ		$5C0B			; Pointer to DEF FN params during eval
-KDATA		equ		$5C0D			; Second byte of colour control from keyboard
-TVDATA		equ		$5C0E			; Both bytes of colour, AT, TAB controls
-STRMS		equ		$5C10			; Address of Stream data
-CHARS		equ		$5C36			; Address - $0100 of character definitions in ROM ($3D00)
-RASP		equ		$5C38			; Duration of buzz (i.e. if no mem for input)
-PIP			equ		$5C39			; Duration of keyboard click (Default 0)
-ERRNR		equ		$5C3A			; Error Report Number - 1 <<< IY Points here
-FLAGS		equ		$5C3B			; Flags (bit 5 = LASTK is valid, bit 1 = Printer output)
-TVFLAG		equ		$5C3C			; Flag bits
-ERRSP		equ		$5C3D			; Pointer to top of stack for RET on error
-LISTSP		equ		$5C3F			; Pointer to return from auto list
-MODE		equ		$5C41			; Keyword, Extended, Graphics or Letters/Caps
-NEWPPC		equ		$5C42			; Next line number of program
-NSPPC		equ		$5C44			; Next statement offset (in next line)
-PPC			equ		$5C45			; Current line number of program
-SUBPPC		equ		$5C47			; Current statement offset (in current line)
-BORDCR		equ		$5C48			; Bits 5, 4, 3 = border colour
-EPPC		equ		$5C49			; Program edit cursor line number
-VARS		equ		$5C4B			; Pointer to first variable
-DEST		equ		$5C4D			; Pointer to variable during assignment
-CHANS		equ		$5C4F			; Pointer to first channel area
-CURCHL		equ		$5C51			; Pointer to current channel area
-PROG		equ		$5C53			; Pointer to first line in program
-NXTLIN		equ		$5C55			; Pointer to next program line
-DATADD		equ		$5C57			; Pointer to just past last data item read
-ELINE		equ		$5C59			; Pointer to edit line
-KCUR		equ		$5C5B			; Pointer to cursor
-CHADD		equ		$5C5D			; Pointer to next char
-XPTR		equ		$5C5F			; Pointer to syntax error
-WORKSP		equ		$5C61			; Pointer to workspace
-STKBOT		equ		$5C63			; Pointer to calculator stack base
-STKEND		equ		$5C65			; Pointer to topmost memory address used by BASIC
-BREG		equ		$5C67			; Byte used for B register of calculator
-MEM			equ		$5C68			; Pointer to calculator memory
-FLAGS2		equ		$5C6A			; Bit flags
-DFSZ		equ		$5C6B			; Lines in lower screen (Default 2)
-STOP		equ		$5C6C			; Line number of top line of auto list
-OLDPPC		equ		$5C6E			; Continuation line number
-OSPCC		equ		$5C70			; Continuation statement number
-FLAGX		equ		$5C71			; Bit flags
-STRLEN		equ		$5C72			; String length during assignment
-TADDR		equ		$5C74			; Pointer to next syntax table item
-SEED		equ		$5C76			; Word used by random number routines
-FRAMES		equ		$5C78			; Frame counter low, med, high bytes
-UDG			equ		$5C7B			; Pointer to bit patterns for user defined graphics
-COORDS		equ		$5C7D			; Plot x,y values
-PPOSN		equ		$5C7F			; Printer position (Range 33-02)
-PRCC		equ		$5C80			; Low byte of next address in printer buffer
-									; $5C81 Unused
-ECHOE		equ		$5C82			; Column, line for input buffer
-DFCC		equ		$5C84			; Next screen location for print
-DFCCL		equ		$5C86			; Next screen location for print (lower screen)
-SPOSN		equ		$5C88			; Screen column (32-02), screen row (24-01)
-SPOSNL		equ		$5C8A			; Screen column (32-02), screen row (24-01) (lower screen)
-SCRCT		equ		$5C8C			; Remaining scroll count + 1 (0 is maximum)
-ATTRP		equ		$5C8D			; Screen colours
-MASKP		equ 	$5C8E			; Defines the transparent screen colours
-ATTRT		equ		$5C8F			; Temporary colours
-MASKT		equ		$5C90			; Defines the transparent temporary screen colours
-PFLAG		equ		$5C91			; Bit flags
-MEMBOT		equ		$5C92			; Scratchpad area for calculator routines
-SPARE2		equ		$5CB0			; Pointer used by NMI routine at $0066
-RAMTOP		equ		$5CB2			; Pointer to highest stack byte (value $3E)
-PRAMT		equ 	$5CB4			; Highest byte that passed RAM test
-
-
-KSTATEOFF	equ		KSTATE-ERRNR	; Offsets for use in (IY+n)
-LASTKOFF	equ		LASTK-ERRNR		
-REPDELOFF	equ		REPDEL-ERRNR	
-REPPEROFF	equ		REPPER-ERRNR	
-DEFADDOFF	equ		DEFADD-ERRNR	
-KDATAOFF	equ		KDATA-ERRNR		
-TVDATAOFF	equ		TVDATA-ERRNR	
-STRMSOFF	equ		STRMS-ERRNR		
-CHARSOFF	equ		CHARS-ERRNR		
-RASPOFF		equ		RASP-ERRNR		
-PIPOFF		equ		PIP-ERRNR		
-ERRNROFF	equ		ERRNR-ERRNR		
-FLAGSOFF	equ		FLAGS-ERRNR		
-TVFLAGOFF	equ		TVFLAG-ERRNR	
-ERRSPOFF	equ		ERRSP-ERRNR		
-LISTSPOFF	equ		LISTSP-ERRNR	
-MODEOFF		equ		MODE-ERRNR		
-NEWPPCOFF	equ		NEWPPC-ERRNR	
-NSPPCOFF	equ		NSPPC-ERRNR		
-PPCOFF		equ		PPC-ERRNR		
-SUBPPCOFF	equ		SUBPPC-ERRNR	
-BORDCROFF	equ		BORDCR-ERRNR	
-EPPCOFF		equ		EPPC-ERRNR		
-VARSOFF		equ		VARS-ERRNR		
-DESTOFF		equ		DEST-ERRNR		
-CHANSOFF	equ		CHANS-ERRNR		
-CURCHLOFF	equ		CURCHL-ERRNR	
-PROGOFF		equ		PROG-ERRNR		
-NXTLINOFF	equ		NXTLIN-ERRNR	
-DATADDOFF	equ		DATADD-ERRNR	
-ELINEOFF	equ		ELINE-ERRNR		
-KCUROFF		equ		KCUR-ERRNR		
-CHADDOFF	equ		CHADD-ERRNR		
-XPTROFF		equ		XPTR-ERRNR		
-WORKSPOFF	equ		WORKSP-ERRNR	
-STKBOTOFF	equ		STKBOT-ERRNR	
-STKENDOFF	equ		STKEND-ERRNR	
-BREGOFF		equ		BREG-ERRNR		
-MEMOFF		equ		MEM-ERRNR		
-FLAGS2OFF	equ		FLAGS2-ERRNR	
-DFSZOFF		equ		DFSZ-ERRNR		
-
-ATTRTOFF		equ		ATTRT-ERRNR	
-
-; -----------------------------
-; THE 'SHADOW' SYSTEM VARIABLES
-; -----------------------------
-
-FLAGS3		equ $5CB6				; $5CB6 FLAGS3 IY+$7C - Flags
-VECTOR		equ $5CB7				; $5CB7 VECTOR Address used to extend BASIC.
-SBRT			equ $5CB9				; $5CB9 SBRT 10 bytes of Z80 code to Page ROM.
-BAUD			equ $5CC3				; $5CC3 BAUD =(3500000/(26*baud rate)) -2
-NTSTAT		equ $5CC5				; $5CC5 NTSTAT Own network station number.
-IOBORD		equ $5CC6				; $5CC6 IOBORD Border colour during I/O
-SERFL		equ $5CC7				; $5CC7 SER_FL 2 byte workspace used by RS232
-SECTOR		equ $5CC9				; $5CC9 SECTOR 2 byte workspace used by Microdrive.
-CHADD_		equ $5CCB				; $5CCB CHADD_ Temporary store for CH_ADD
-NTRESP		equ $5CCC				; $5CCC NTRESP Store for network response code.
-
-NTDEST		equ $5CCD				; $5CCD NTDEST Destination station number 0 - 64.
-NTSRCE		equ $5CCE				; $5CCE NTSRCE Source station number.
-NTNUMB		equ $5CD0				; $5CD0 NTNUMB Network block number 0 - 65535
-NTTYPE		equ $5CD2				; $5CD2 NTTYPE Header type block.
-NTLEN		equ $5CD3				; $5CD3 NTLEN Data block length 0 - 255.
-NTDCS		equ $5CD4				; $5CD4 NTDCS Data block checksum.
-NTHDS		equ $5CD5				; $5CD5 NTHDS Header block checksum.
-
-DSTR1		equ $5CD6				; $5CD6 D_STR1 2 byte drive number 1 - 8.
-SSTR1		equ $5CD8				; $5CD8 S_STR1 Stream number 1 - 15.
-LSTR1		equ $5CD9				; $5CD9 L_STR1 Device type "M", "N", "T" or "B"
-NSTR1		equ $5CDA				; $5CDA N-STR1 Length of filename.
-								; $5CDC (dynamic) Address of filename.
-
-DSTR2		equ $5CDE				; $5CDE D_STR2 2 byte drive  File type.
-								; $5CDF        number.       Length of
-SSTR2		equ $5CE0				; $5CE0 S_STR2 Stream number.Data.
-LSTR2		equ $5CE1				; $5CE1 L_STR2 Device type.  Start of
-NSTR2		equ $5CE2				; $5CE2 N-STR2 Length of     data.   \
-								; $5CE3        filename.     Program  \
-								; $5CE4 (dynamic) Address of length. Start of
-								; $5CE5 (dynamic) filename           data.
-
-HD00			equ $5CE6				; $5CE6 HD_00 File type .      _
-HD0B			equ $5CE7				; $5CE7 HD_0B Length of data.   /\
-HD0D			equ $5CE9				; $5CE9 HD_0D Start of data.   /
-HD0F			equ $5CEB				; $5CEB HD_0F Program length. /
-HD11			equ $5CED				; $5CED HD_11 Line number.
-
-COPIES		equ $5CEF				; $5CEF COPIES Number of copies made by SAVE.
-
-CHREC		equ	$0D
-CHDRIV		equ	$19				; Offset to DSTR1
-HDNUMB		equ	$29
-
-
-
-; . . . . . . . . . . .
-; Constants
-
-HEADERFLAG	equ $00				; As per http://k1.dyndns.org/Develop/projects/zasm/doc/z13.htm#L
-DATAFLAG	equ $FF
-
-
-; . . . . . . . . . . .
 ; BASIC Program Header
-
-
 #code				PROG_HEADER,0,17,HEADERFLAG	; declare code segment
 
 			defb 0				; Program
@@ -397,11 +44,7 @@ DATAFLAG	equ $FF
 			defw 10				; BASIC Line number for autostart
 			defw PROGRAM1END    ; length of BASIC program without variables
 
-
-; . . . . . . . . . . .
 ; BASIC Program
-
-
 #code				PROG_DATA,0,*,DATAFLAG	; declare code segment
 
 ; 10 BORDER 0: PAPER 0: INK 7: CLEAR 24835				; $6103
@@ -450,11 +93,7 @@ L40END		defb $0D                    ; line end marker
 
 PROGRAM1END equ $
 
-
-; . . . . . . . . . . .
 ; Code Block 1 Header
-
-
 #code				CODE_HEADER,0,17,HEADERFLAG	; declare code segment
 
 CODE1START	equ $4000			; 16384
@@ -465,10 +104,7 @@ CODE1START	equ $4000			; 16384
 			defw CODE1START		; Code Start Address
 			defw 0				; Unused
 
-
-; . . . . . . . . . . .
 ; Code Block 1 Data
-
 
 ; This works fine, screen amount is 0x1B00 (0x5B00 - 0x4000)															  
 #code				CODE_DATA,CODE1START,$1B00,DATAFLAG	; declare code segment
