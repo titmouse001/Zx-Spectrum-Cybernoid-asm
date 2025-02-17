@@ -1166,8 +1166,8 @@ L_6501:
 			CALL L_671E				; $654B
 			CALL L_81A6				; $654E
 			CALL L_66E7				; $6551
-			LD A,$04				; $6554
-			LD ($78D3),A				; $6556
+			LD A,$04				; $6554	 	; starting lives)
+			LD ($78D3),A			; $6556		; store lives
 			LD HL,$78F9				; $6559
 			LD DE,$78FA				; $655C
 			LD BC,$0005				; $655F
@@ -1197,7 +1197,7 @@ L_656A:
 			CALL L_7B4A				; $6596
 			CALL L_7C10				; $6599
 			CALL L_7069				; $659C
-			CALL L_87AC				; $659F
+			CALL L_87AC				; $659F		; Guns
 			CALL L_8A69				; $65A2
 			CALL L_7F1D				; $65A5
 			CALL L_7FE7				; $65A8
@@ -1205,18 +1205,18 @@ L_656A:
 			CALL L_89D7				; $65AE
 			CALL L_8923				; $65B1
 			CALL L_7584				; $65B4
-			CALL L_8D3C				; $65B7
-			CALL L_8CD7				; $65BA
-			CALL L_9040				; $65BD
-			CALL L_9267				; $65C0
-			CALL L_97F0				; $65C3
+			CALL L_8D3C				; $65B7		; Guns
+			CALL L_8CD7				; $65BA		; Enemies
+			CALL L_9040				; $65BD		; Tunnel Aliens
+			CALL L_9267				; $65C0		; snakes
+			CALL L_97F0				; $65C3		; rockets
 			CALL L_970F				; $65C6
-			CALL L_9BE2				; $65C9
+			CALL L_9BE2				; $65C9		; Flying Aliens
 			CALL L_98B4				; $65CC
 			CALL L_A04E				; $65CF
 			CALL L_8066				; $65D2
 			CALL L_A086				; $65D5
-			CALL L_8EDB				; $65D8
+			CALL L_8EDB				; $65D8		; Immunity
 			CALL L_7E27				; $65DB
 			CALL L_79FE				; $65DE
 			CALL L_660B				; $65E1
@@ -2137,6 +2137,10 @@ L_6BCF:
 
 			defb $4A,$6C,$87,$6C,$87,$6C                        ; $6C44 Jl.l.l
 
+
+; == ROUTINE - DISPLAY 8x8 icon ==
+; input: D=Y, E=X, A=char
+; This draws text + other icons - the whole top bar is draw with this.
 L_6C4A:
 			PUSH AF				; $6C4A
 			PUSH DE				; $6C4B
@@ -2146,43 +2150,43 @@ L_6C4A:
 			LD H,$00				; $6C4F
 			ADD HL,HL				; $6C51
 			ADD HL,HL				; $6C52
-			ADD HL,HL				; $6C53
+			ADD HL,HL				; $6C53	;Ax8 for 8 byte char bitmap
 			LD BC,$0000				; $6C54
 			ADD HL,BC				; $6C57
 			PUSH HL				; $6C58
-			LD A,D				; $6C59
-			AND $F8				; $6C5A
-			OR $40				; $6C5C
+			LD A,D				; $6C59	; Y coords
+			AND $F8				; $6C5A ; Aligned to 8-pixel rows
+			OR $40				; $6C5C	; screen base
 			LD B,A				; $6C5E
 			LD A,D				; $6C5F
 			LD H,B				; $6C60
-			AND $07				; $6C61
+			AND $07				; $6C61	; pixel row offset
 			RRCA				; $6C63
 			RRCA				; $6C64
-			RRCA				; $6C65
-			ADD A,E				; $6C66
+			RRCA				; $6C65	; /8
+			ADD A,E				; $6C66	; X coords
 			LD L,A				; $6C67
 			POP DE				; $6C68
-			LD B,$08				; $6C69
+			LD B,$08			; $6C69
 L_6C6B:
-			LD A,(DE)				; $6C6B
+			LD A,(DE)			; $6C6B ; char data
 			INC DE				; $6C6C
-			LD (HL),A				; $6C6D
-			INC H				; $6C6E
-			DJNZ L_6C6B				; $6C6F
-			DEC H				; $6C71
+			LD (HL),A			; $6C6D ; 8 pixels to screen
+			INC H				; $6C6E ; +0x100, skip 8 lines 
+			DJNZ L_6C6B			; $6C6F
+			DEC H				; $6C71 ; get last value
 			POP BC				; $6C72
 			LD A,H				; $6C73
 			RRCA				; $6C74
 			RRCA				; $6C75
-			RRCA				; $6C76
+			RRCA				; $6C76 ; attribute row 
 			AND $03				; $6C77
-			OR $58				; $6C79
+			OR $58				; $6C79	; 0x5800, attribute memory
 			LD H,A				; $6C7B
-			LD (HL),C				; $6C7C
-			LD DE,$0700				; $6C7D
-			ADD HL,DE				; $6C80
-			LD (HL),$00				; $6C81
+			LD (HL),C			; $6C7C	; set colour (L is value same as icon)
+			LD DE,$0700			; $6C7D
+			ADD HL,DE			; $6C80
+			LD (HL),$00			; $6C81 ; marker flag ?
 			POP HL				; $6C83
 			POP DE				; $6C84
 			POP AF				; $6C85
@@ -2447,7 +2451,7 @@ L_6E0D:
 			defb $00,$00,$10,$20,$3A,$16,$79,$46				; $6E6B ... :.yF
 			defb $00,$00,$08,$10,$39,$10,$79,$47				; $6E73 ....9.yG
 			defb $00,$00,$08,$10,$39,$10,$79,$A0				; $6E7B ....9.y.
-			defb $00,$00,$10,$30,$3A,$16,$79,$FF				; $6E83 ...0:.y.
+			defb $00,$00,$10,$30,$3A,$16,$79,$FF				; $6E83 ...0:.y.			 
 
 L_6E8B:
 			PUSH AF				; $6E8B
@@ -2601,11 +2605,14 @@ L_706C:
 			ADD HL,BC				; $70B1
 			JR L_706C				; $70B2
 
+			; === ROUTINE TO SETUP IM2  ===
+			; patches location $FDFD with "JP L_70D3"						 
 L_70B4:
 			LD A,$C3				; $70B4
 			LD ($FDFD),A				; $70B6
 			LD HL,$70D3				; $70B9
 			LD ($FDFE),HL				; $70BC
+			; Fill 'IM2 jump table' full of $FD			 
 			LD HL,$FE00				; $70BF
 			LD (HL),$FD				; $70C2
 			LD DE,$FE01				; $70C4
@@ -2616,6 +2623,7 @@ L_70B4:
 			LD I,A				; $70D0
 			RET				; $70D2
 
+L_70D3:					 
 			PUSH AF				; $70D3
 			PUSH BC				; $70D4
 			PUSH DE				; $70D5
@@ -2849,7 +2857,7 @@ L_72D2:
 L_72EC:
 			CALL L_8FD6				; $72EC
 			CALL L_91B1				; $72EF
-			CALL L_9B68				; $72F2
+			CALL L_9B68				; $72F2 	; Enemies
 			CALL L_A1D6				; $72F5
 			LD A,E				; $72F8
 			ADD A,$08				; $72F9
@@ -3305,8 +3313,8 @@ L_7676:
 			LDIR				; $769E
 			LD HL,$76CC				; $76A0
 			CALL L_6B29				; $76A3
-			LD HL,$78D3				; $76A6
-			INC (HL)				; $76A9
+			LD HL,$78D3				; $76A6	; load lives
+			INC (HL)				; $76A9	; bonus life
 			LD DE,$7972				; $76AA
 			CALL L_78D4				; $76AD
 			CALL L_688F				; $76B0
@@ -3427,13 +3435,14 @@ L_78BF:
 			DJNZ L_78BF				; $78C5
 			RET				; $78C7
 
+; === DISPLAY LIVES ===												
 L_78C8:
-			LD A,($78D3)				; $78C8
-			LD DE,$0203				; $78CB
-			LD C,$46				; $78CE
-			JP L_7977				; $78D0
+			LD A,($78D3)			; $78C8	; load lives;
+			LD DE,$0203				; $78CB	; char_y=02,char_x=03
+			LD C,$46				; $78CE	; colour FBPPPIII, bright yellow
+			JP L_7977				; $78D0	; display score
 
-			NOP				; $78D3
+VAR_LIVES:	defb $0					; $78D3		; VAR:LIVES
 
 L_78D4:
 			PUSH AF				; $78D4
@@ -3506,37 +3515,38 @@ L_7948:
 			defb $00,$30,$30,$30,$30,$30,$30,$FF				; $796B .000000.
 			defb $00,$00,$00,$00                                ; $7973 ....
 
+; === Display Routine / custom font $C2F1 ===					
 L_7977:
 			PUSH BC				; $7977
 			PUSH HL				; $7978
 			LD HL,$C2F1				; $7979
 			LD ($6C55),HL				; $797C
 			LD B,$64				; $797F
-			CALL L_7991				; $7981
+			CALL L_7991				; $7981 ; hundreds
 			LD B,$0A				; $7984
-			CALL L_7991				; $7986
+			CALL L_7991				; $7986	; hundreds
 			LD B,$01				; $7989
-			CALL L_7991				; $798B
+			CALL L_7991				; $798B	; last digit
 			POP HL				; $798E
 			POP BC				; $798F
 			RET				; $7990
 
 L_7991:
 			LD L,$00				; $7991
-L_7993:
+L_COUNT_DIGIT_VALUE:
 			SUB B				; $7993
 			JR C,$7999				; $7994
-			INC L				; $7996
-			JR L_7993				; $7997
+			INC L				; $7996 ; count the digit value
+			JR L_COUNT_DIGIT_VALUE				; $7997
 
 			ADD A,B				; $7999
 			PUSH AF				; $799A
 			LD A,B				; $799B
-			CP $64				; $799C
+			CP $64				; $799C	 
 			JR Z,$79A7				; $799E
 			LD A,L				; $79A0
-			ADD A,$30				; $79A1
-			CALL L_6C4A				; $79A3
+			ADD A,$30				; $79A1  ; ascii 48 = "0"
+			CALL L_6C4A				; $79A3	 ; Display 8X8 icon
 			INC E				; $79A6
 			POP AF				; $79A7
 			RET				; $79A8
@@ -3908,7 +3918,7 @@ L_7C10:
 			ADD HL,BC				; $7C34
 			LD A,(HL)				; $7C35
 			OR A				; $7C36
-			RET Z				; $7C37
+			RET Z				; $7C37    ; ? NOP for Infinite Weapons ?
 			PUSH HL				; $7C38
 			INC HL				; $7C39
 			LD A,(HL)				; $7C3A
@@ -3924,7 +3934,7 @@ L_7C43:
 			OR A				; $7C47
 			RET Z				; $7C48
 			LD A,(HL)				; $7C49
-			DEC A				; $7C4A
+			DEC A				; $7C4A			; shields
 			LD (HL),A				; $7C4B
 			LD DE,$0211				; $7C4C
 			LD C,$47				; $7C4F
@@ -6148,10 +6158,10 @@ L_8EDB:
 			LD ($6AEF),HL				; $8F3F
 			LD ($6AF4),HL				; $8F42
 			XOR A				; $8F45
-			LD ($6AEE),A				; $8F46
-			LD ($6AF3),A				; $8F49
-			LD HL,$78D3				; $8F4C
-			DEC (HL)				; $8F4F
+			LD ($6AEE),A			; $8F46  ; NInfinite Backshot, Z 8 36680 0 0
+			LD ($6AF3),A			; $8F49  ; NEternal Satellite, M 8 36683 0 0
+			LD HL,$78D3				; $8F4C  ; load lives
+			DEC (HL)				; $8F4F  ; lose life
 			LD E,$20				; $8F50
 			CALL L_EF42				; $8F52
 			JP L_78C8				; $8F55
@@ -6159,7 +6169,7 @@ L_8EDB:
 			DEC A				; $8F58
 			LD ($8F94),A				; $8F59
 			RET NZ				; $8F5C
-			LD A,($78D3)				; $8F5D
+			LD A,($78D3)				; $8F5D   ;load lives
 			OR A				; $8F60
 			JP Z,$8F95				; $8F61
 			LD HL,$0753				; $8F64
@@ -11200,7 +11210,7 @@ L_F033:
 			CP $E6				; $F078
 			JP Z,$F09E				; $F07A
 			CP $F0				; $F07D
-			JP Z,$F0F3				; $F07F
+			JP Z,$F0F3				; $F07F		 ; sound
 			CP $FF				; $F082
 			JP Z,$F0D2				; $F084
 			JR L_F033				; $F087
