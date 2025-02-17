@@ -1488,8 +1488,13 @@ CODE2START	equ $6103			; 24835
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $64E3 ........
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $64EB ........
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $64F3 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $64FB ........
-			defb $00                                            ; $6503 .
+			defb $00,$00,$00,$00,$00; removed ,$00,$00,$00		; $64FB ........
+			;defb $00                                           ; $6503 .
+			; UPDATED TO USE INSTRUCTIONS
+			NOP			; $6501
+			NOP			; $6502
+			NOP			; $6502
+			NOP		 	; $6503
 
 			DI                      ; $6504                     ; :dbolli:20141209 15:16:27 <<< Main Entry Point
 			LD SP,$0000				; $6505
@@ -2275,7 +2280,10 @@ CODE2START	equ $6103			; 24835
 			defb $0B,$15,$08,$1A,$04,$1E,$00,$20				; $6B0B ....... 
 			defb $FC,$1E,$F8,$1A,$F5,$15,$F3,$0F				; $6B13 ........
 			defb $F1,$08,$F1,$00,$F1,$F8,$F3,$F1				; $6B1B ........
-			defb $F5,$EB,$F8,$E6,$FC,$E2,$7E,$23				; $6B23 ......~#
+			defb $F5,$EB,$F8,$E6,$FC,$E2;  REMOVED ,$7E,$23		; $6B23
+			; UPDATED TO USE INSTRUCTION
+			ld a,(HL)			; $6B29
+			inc hl				; $6B2A
 
 			CP $61				; $6B2B
 			JP NC,$6B37				; $6B2D
@@ -5149,34 +5157,36 @@ CODE2START	equ $6103			; 24835
 			LD A,D				; $84BF
 			ADD A,$10				; $84C0
 			LD D,A				; $84C2
-			DJNZ $84B7				; $84C3
-			RET				; $84C5
+			DJNZ $84B7			; $84C3
+			RET					; $84C5
 
-			LD B,$0E				; $84C6
-			LD A,$14				; $84C8
-			CALL $A548				; $84CA
-			CALL $A57F				; $84CD
+			LD B,$0E			; $84C6
+			LD A,$14			; $84C8
+			CALL $A548			; $84CA
+			CALL $A57F			; $84CD
 			LD A,E				; $84D0
-			ADD A,$08				; $84D1
+			ADD A,$08			; $84D1
 			LD E,A				; $84D3
-			DJNZ $84C8				; $84D4
-			RET				; $84D6
+			DJNZ $84C8			; $84D4
+			RET					; $84D6
 
-			defb $00,$6D,$6E,$00                                ; $84D7 .mn.
-			defb $00,$00,$00,$00,$6F,$70,$5A,$5B				; $84DB ....opZ[
-			defb $5C,$5D,$5E,$5F,$60,$61,$62,$63				; $84E3 \]^_`abc
-			defb $00,$64,$65,$66,$67,$68,$69,$6A				; $84EB .defghij
-			defb $6B,$6C,$76                                    ; $84F3 klv
+			defb $00,$6D,$6E,$00                   	; $84D7 .mn.
+			defb $00,$00,$00,$00,$6F,$70,$5A,$5B	; $84DB ....opZ[
+			defb $5C,$5D,$5E,$5F,$60,$61,$62,$63	; $84E3 \]^_`abc
+			defb $00,$64,$65,$66,$67,$68,$69,$6A	; $84EB .defghij
+			defb $6B,$6C ; REMOVED ,$76             ; $84F3 kl
+			; UPDATED TO USE INSTRUCTION
+			HALT				; $84F5
 
 			PUSH AF				; $84F6
 			PUSH BC				; $84F7
 			PUSH DE				; $84F8
 			PUSH HL				; $84F9
 			AND A				; $84FA
-			LD HL,$4102				; $84FB
-			LD D,$0E				; $84FE
+			LD HL,$4102			; $84FB
+			LD D,$0E			; $84FE
 			PUSH HL				; $8500
-			LD B,$04				; $8501
+			LD B,$04			; $8501
 			RR (HL)				; $8503
 			INC L				; $8505
 			RR (HL)				; $8506
@@ -6226,8 +6236,12 @@ CODE2START	equ $6103			; 24835
 
 			defb $B0,$30,$20,$00,$30,$30,$00                    ; $8E1C .0 .00.
 			defb $FC,$22,$03,$02,$FC,$22,$03,$03				; $8E23 ."..."..
-			defb $FC,$33,$54,$A9,$FC,$FF,$E5,$2A				; $8E2B .3T....*
-			defb $42,$8E,$77,$23,$73,$23,$72,$23				; $8E33 B.w#s#r#
+			defb $FC,$33,$54,$A9,$FC,$FF ; REMOVED  ,$E5,$2A	; $8E2B
+			; UPDATED TO USED INSTRUCTIONS
+			PUSH HL												; $8E31
+			LD HL,($8E42)										; $8E32
+			;defb $42,$8E,	
+			defb $77,$23,$73,$23,$72,$23						; $8E33 
 			defb $36,$FF,$22,$42,$8E,$E1,$C9,$44				; $8E3B 6."B...D
 			defb $8E,$56,$B9,$22,$00,$00,$00,$00				; $8E43 .V."....
 			defb $45,$03,$FC,$33,$45,$8A,$ED,$11				; $8E4B E..3E...
@@ -9596,7 +9610,15 @@ CODE2START	equ $6103			; 24835
 			defb $FF,$07,$00,$12,$FF,$05,$A8,$05				; $C04B ........
 			defb $04,$15,$FF,$08,$00,$30,$31,$00				; $C053 .....01.
 			defb $00,$00,$14,$14,$13,$FF,$08,$00				; $C05B ........
-			defb $32,$33,$00,$00,$00,$7B,$1D,$FF				; $C063 23...{..
+
+			defb $32,$33,$00,$00 ; REMOVED ,$00,$7B,$1D,$FF		; $C063
+
+			; UPDATED TO USE INSTRUCITONS
+			NOP					; $C067
+			LD A,E				; $C068
+			DEC E				; $C069
+			RST	 $38			; $C06A
+	
 			defb $0B,$00,$EC,$EC,$EC,$7C,$00,$00				; $C06B .....|..
 			defb $00,$A0,$A1,$FF,$0A,$00,$7D,$00				; $C073 ......}.
 			defb $00,$00,$A2,$A3,$FF,$0A,$00,$7D				; $C07B .......}
