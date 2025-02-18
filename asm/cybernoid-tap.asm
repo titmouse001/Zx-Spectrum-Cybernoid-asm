@@ -1136,7 +1136,9 @@ L_6501:
 
 			DI                      ; $6504                     ; :dbolli:20141209 15:16:27 <<< Main Entry Point
 			LD SP,$0000				; $6505
+			; setup IM2
 			CALL L_70B4				; $6508
+			; Zero memory top - $5B00 to $6503						 
 			LD HL,$5B00				; $650B
 			LD DE,$5B01				; $650E
 			LD (HL),$00				; $6511
@@ -1950,7 +1952,8 @@ L_6A71:
 			LD DE,($6AF6)				; $6AE7
 			JP L_A446				; $6AEB
 
-			defb $00,$00,$00,$00,$00                            ; $6AEE ....
+			defb $00											; $6AEE    ; Immediate Backshot
+			defb $00,$00,$00,$00                            	; $6AEF ....
 			defb $00,$00,$00,$00,$00,$00,$00,$E0				; $6AF3 ........
 			defb $04,$E2,$08,$E6,$0B,$EB,$0D,$F1				; $6AFB ........
 			defb $0F,$F8,$0F,$00,$0F,$08,$0D,$0F				; $6B03 ........
@@ -2623,6 +2626,7 @@ L_70B4:
 			LD I,A				; $70D0
 			RET				; $70D2
 
+; === INTERRUPT ROUTINE, called 50pfs  ===
 L_70D3:					 
 			PUSH AF				; $70D3
 			PUSH BC				; $70D4
@@ -2651,10 +2655,10 @@ L_70D3:
 			XOR $01				; $70FB
 			LD ($711B),A				; $70FD
 			CALL Z,$85BA				; $7100
-			JP L_7109				; $7103
+			JP SKIP_AY_MUSIC				; $7103
 
 			CALL L_EF38				; $7106
-L_7109:
+SKIP_AY_MUSIC:
 			POP HL				; $7109
 			POP DE				; $710A
 			POP BC				; $710B
@@ -3432,17 +3436,17 @@ L_78BF:
 			CALL L_6C4A				; $78C0
 			INC E				; $78C3
 			INC HL				; $78C4
-			DJNZ L_78BF				; $78C5
-			RET				; $78C7
+			DJNZ L_78BF			; $78C5
+			RET					; $78C7
 
 ; === DISPLAY LIVES ===												
 L_78C8:
 			LD A,($78D3)			; $78C8	; load lives;
 			LD DE,$0203				; $78CB	; char_y=02,char_x=03
 			LD C,$46				; $78CE	; colour FBPPPIII, bright yellow
-			JP L_7977				; $78D0	; display score
+			JP Display3DigitNumber	; $78D0	; display score
 
-VAR_LIVES:	defb $0					; $78D3		; VAR:LIVES
+VAR_LIVES:	defb $0					; $78D3	; LIVES
 
 L_78D4:
 			PUSH AF				; $78D4
@@ -3515,55 +3519,59 @@ L_7948:
 			defb $00,$30,$30,$30,$30,$30,$30,$FF				; $796B .000000.
 			defb $00,$00,$00,$00                                ; $7973 ....
 
-; === Display Routine / custom font $C2F1 ===					
-L_7977:
-			PUSH BC				; $7977
-			PUSH HL				; $7978
-			LD HL,$C2F1				; $7979
-			LD ($6C55),HL				; $797C
+; === Display Routine, uses custom font @ $C2F1 ===					
+; note: the game code chops of the 3 digit! Can be fixed to display 3 digits.
+Display3DigitNumber:  ; L_7977:
+			PUSH BC					; $7977
+			PUSH HL					; $7978
+			LD HL,$C2F1				; $7979 ; font data
+			LD ($6C55),HL			; $797C	; modifies this "LD BC,$XXXX" @$6C55 
 			LD B,$64				; $797F
-			CALL L_7991				; $7981 ; hundreds
+			CALL Display8x8Digits	; $7981 ; hundreds
 			LD B,$0A				; $7984
-			CALL L_7991				; $7986	; hundreds
+			CALL Display8x8Digits	; $7986	; hundreds
 			LD B,$01				; $7989
-			CALL L_7991				; $798B	; last digit
-			POP HL				; $798E
-			POP BC				; $798F
-			RET				; $7990
+			CALL Display8x8Digits	; $798B	; last digit
+			POP HL					; $798E
+			POP BC					; $798F
+			RET						; $7990
 
-L_7991:
+Display8x8Digits:
 			LD L,$00				; $7991
-L_COUNT_DIGIT_VALUE:
-			SUB B				; $7993
-			JR C,$7999				; $7994
-			INC L				; $7996 ; count the digit value
-			JR L_COUNT_DIGIT_VALUE				; $7997
-
-			ADD A,B				; $7999
+COUNT_DIGIT_VALUE:
+			SUB B					; $7993
+			JR C,COUNT_DIGIT_DONE	; $7994
+			INC L					; $7996 ; count the digit value
+			JR COUNT_DIGIT_VALUE	; $7997
+COUNT_DIGIT_DONE:
+			ADD A,B				; $7999  ; remainder
 			PUSH AF				; $799A
+			
+			; Note: this will chop off the 3 digit (?could update to space leading zeros?)
 			LD A,B				; $799B
-			CP $64				; $799C	 
-			JR Z,$79A7				; $799E
+			CP $64				; $799C	 ; skip digits after 100
+			
+			JR Z,$79A7			; $799E
 			LD A,L				; $79A0
-			ADD A,$30				; $79A1  ; ascii 48 = "0"
-			CALL L_6C4A				; $79A3	 ; Display 8X8 icon
-			INC E				; $79A6
+			ADD A,$30			; $79A1  ; ascii 48 = "0"
+			CALL L_6C4A			; $79A3	 ; Display 8X8 icon
+			INC E				; $79A6	 ; X coords 
 			POP AF				; $79A7
-			RET				; $79A8
+			RET					; $79A8
 
 L_79A9:
-			LD HL,$79BE				; $79A9
-			CALL L_6B29				; $79AC
-			LD A,($79D3)				; $79AF
+			LD HL,$79BE			; $79A9
+			CALL L_6B29			; $79AC
+			LD A,($79D3)		; $79AF
 			OR A				; $79B2
 			RET Z				; $79B3
-			LD E,$7B				; $79B4
+			LD E,$7B			; $79B4
 			LD B,A				; $79B6
 L_79B7:
-			CALL L_79D4				; $79B7
+			CALL L_79D4			; $79B7
 			DEC E				; $79BA
-			DJNZ L_79B7				; $79BB
-			RET				; $79BD
+			DJNZ L_79B7			; $79BB
+			RET					; $79BD
 
 			defb $DF,$01,$1D,$E6,$D1                            ; $79BE .....
 			defb $C5,$E0,$05,$12,$DC,$13,$AB,$D3				; $79C3 ........
@@ -3860,14 +3868,14 @@ L_7B8D:
 			ADD HL,DE				; $7B98
 			LD DE,$0211				; $7B99
 			LD A,(HL)				; $7B9C
-			CALL L_7977				; $7B9D
+			CALL Display3DigitNumber				; $7B9D
 			INC HL				; $7BA0
 			INC HL				; $7BA1
 			INC HL				; $7BA2
 			INC HL				; $7BA3
 			LD A,(HL)				; $7BA4
 			LD E,$15				; $7BA5
-			JP L_7977				; $7BA7
+			JP Display3DigitNumber				; $7BA7
 
 			defb $42                                            ; $7BAA B
 			defb $4F,$4D,$42,$53,$20,$20,$20,$20				; $7BAB OMBS    
@@ -3938,7 +3946,7 @@ L_7C43:
 			LD (HL),A				; $7C4B
 			LD DE,$0211				; $7C4C
 			LD C,$47				; $7C4F
-			JP L_7977				; $7C51
+			JP Display3DigitNumber				; $7C51
 
 			NOP				; $7C54
 			XOR A				; $7C55
@@ -11045,8 +11053,9 @@ L_C067:
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $EF2B ........
 			defb $00,$00,$00,$00,$00                            ; $EF33 .....
 
+PLAY_AY_MUSIC_50FPS:											   
 L_EF38:
-			JP L_EFE5				; $EF38
+			JP L_EFE5				; $EF38  ; self modifying, replaced with RET
 
 L_EF3B:
 			JP L_EF93				; $EF3B
@@ -11090,7 +11099,8 @@ L_EF42:
 			LD (IX+$18),A				; $EF8C
 			LD (IX+$20),A				; $EF8F
 			RET				; $EF92
-
+			
+; == MUSIC, AY-CHIP ==
 L_EF93:
 			XOR A				; $EF93
 			LD ($F224),A				; $EF94
@@ -11105,11 +11115,11 @@ L_EFAB:
 			LD HL,$F203				; $EFAB
 			LD E,$0D				; $EFAE
 			LD BC,$FFFD				; $EFB0
-			OUT (C),E				; $EFB3
+			OUT (C),E				; $EFB3	; AY chip
 			LD BC,$BFFD				; $EFB5
 			LD A,(HL)				; $EFB8
 			DEC HL				; $EFB9
-			OUT (C),A				; $EFBA
+			OUT (C),A				; $EFBA	; AY chip
 			DEC E				; $EFBC
 			JP P,$EFB0				; $EFBD
 			RET				; $EFC0
