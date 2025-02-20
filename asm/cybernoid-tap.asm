@@ -55,7 +55,6 @@ L20END		defb $0D								; line end marker
         	defm "24835",$0e0000036100  	; number 24835, ascii & internal format
 L30END		defb $0D						; line end marker
 
-L_6504:
 ; 40 RANDOMIZE USR 25860				; $6504
 			defb 0,40					; line number
 			defb L40END-($+1)			; line length
@@ -84,7 +83,7 @@ CODE1START	equ $4000					; $4000, 16384
 CODE1END equ $ ; Marker to show end of object code
 ;-----------------------------------------------------------------------------
 
-; Noting startup code will clear $5B00 to $6503
+; note: startup code will clear $5B00 to $6503
 
 ;-----------------------------------------------------------------------------
 ; Code Block 2 Header - game code
@@ -101,22 +100,20 @@ CODE2START	equ $6103					; 24835
 
 #code				codeblock2,CODE2START,*,DATAFLAG	; declare code segment
 
+			defb $3E,$00,$00,$00,$00,$00,$00,$00				; $6103
+			defs $6193-$610B,0
+			defb $00,$00,$00,$00,$00,$00,$00,$DB				; $6193
+			defb $02,$4D,$00,$04,$65,$00,$00,$03				; $619B
+			defb $65,$28,$FE,$1C,$5B,$00,$00,$00				; $61A3
+			defs $64FB-$61AB,0
+			defb $00,$00,$00,$00,$00							; $64FB 
+			defb $00                                            ; $6450  
+L_6501:			
+			defb $00                                            ; $6451 
+			defb $00                                            ; $6452 
+			defb $00                                            ; $6453 
 
-; Seeing this in the original, but it will never execute.  
-; defb $02,$4D,$00,$04,$65,$00,$00,$03				; $619B .M..e...
-; defb $65,$28,$FE,$1C,$5B,$00,$00,$00				; $61A3 e(..[...
-
-	; zero this memory (the code zeroes it anyway).  
-	; This will change the binary in a harmless way.  
-	rept  (25856-24835)  ; no jump points found from $6103 to $6500.  
-		defb    0
-	endm
-
-L_6501:		NOP			; $6501	  ; this has a call - game reset maybe?
-			NOP			; $6502
-			NOP			; $6502
-			NOP		 	; $6503
-
+L_6504:
 			DI                      ; $6504        ; <- CALLED BY BASIC
 			LD SP,$0000				; $6505
 			; setup IM2
@@ -126,27 +123,29 @@ L_6501:		NOP			; $6501	  ; this has a call - game reset maybe?
 			LD DE,$5B01				; $650E
 			LD (HL),$00				; $6511
 			LD BC,$0A03				; $6513
-			LDIR				; $6516
-			XOR A				; $6518
-			LD ($81A5),A				; $6519
-			LD ($7BFA),A				; $651C
+			LDIR					; $6516
+			XOR A					; $6518
+			LD ($81A5),A			; $6519
+			LD ($7BFA),A			; $651C
 			OUT ($FE),A				; $651F
-			LD A,($386E)				; $6521
-			SUB $FF				; $6524
-			JR Z,$652A				; $6526
+			LD A,($386E)			; $6521
+			SUB $FF					; $6524
+			JR Z,L_652A				; $6526
 			LD A,$01				; $6528
-			LD ($8599),A				; $652A
-			OR A				; $652D
-			JP NZ,$653F				; $652E
+L_652A:
+			LD ($8599),A			; $652A
+			OR A					; $652D
+			JP NZ,L_653F			; $652E
 			LD A,$C9				; $6531
-			LD ($EF38),A				; $6533
-			LD ($EF3B),A				; $6536
-			LD ($EF42),A				; $6539
+			LD ($EF38),A			; $6533
+			LD ($EF3B),A			; $6536
+			LD ($EF42),A			; $6539
 			CALL L_8738				; $653C
+L_653F:
 			CALL L_EF3B				; $653F
 			LD E,$01				; $6542
 			CALL L_EF42				; $6544
-			EI				; $6547
+			EI						; $6547
 			CALL L_7BFC				; $6548
 			CALL L_671E				; $654B
 			CALL L_81A6				; $654E
@@ -157,31 +156,44 @@ L_6501:		NOP			; $6501	  ; this has a call - game reset maybe?
 			LD DE,$78FA				; $655C
 			LD BC,$0005				; $655F
 			LD (HL),$30				; $6562
-			LDIR				; $6564
-			XOR A				; $6566
+			LDIR					; $6564
+			XOR A					; $6566
 			CALL L_7465				; $6567
-L_656A:
-			LD A,($711A)				; $656A
-			CP $02				; $656D
-			JR NC,$6574				; $656F
-			JP L_656A				; $6571
 
-			XOR A				; $6574
-			LD ($711A),A				; $6575
-			LD HL,$65EA				; $6578
-			INC (HL)				; $657B
+INGAME_LOOP:
+			; clamp frame rate - 25fps (interrupt updates FrameCounter)
+			LD A,(FrameCounter) 	; ($711A) ; $656A	
+			CP $02					; $656D 
+			JR NC,L_6574			; $656F
+			JP INGAME_LOOP			; $6571
+
+			; frame count is a byte - reset 
+L_6574:
+			XOR A					; $6574
+			LD (FrameCounter),A  	; ($711A),A	; $6575
+
+			LD HL,EventDelay		; $6578
+			INC (HL)				; $657B	 ; timingCounter 		
+
 			LD HL,$8E44				; $657C
-			LD (HL),$FF				; $657F
-			LD ($8E42),HL				; $6581
-			CALL L_688F				; $6584
+			LD (HL),$FF				; $657F	; reset about to die flag
+			LD ($8E42),HL			; $6581 ; ?????????????
+
+			CALL L_688F				; $6584 ; user input
+
 			CALL L_68AC				; $6587
+
 			CALL L_75B8				; $658A
-			CALL L_7A50				; $658D
-			CALL L_7AEA				; $6590
-			CALL L_7CD2				; $6593
-			CALL L_7B4A				; $6596
-			CALL L_7C10				; $6599
-			CALL L_7069				; $659C
+
+			CALL L_7A50				; $658D  ; process player weapons
+
+			CALL L_7AEA				; $6590  ; process player shots
+			CALL L_7CD2				; $6593	 ; process player missiles
+			CALL L_7B4A				; $6596  ; process enemy shots
+			CALL L_7C10				; $6599  ; ... player missiles
+
+			CALL ExplosiveFX		; $659C
+
 			CALL L_87AC				; $659F		; Guns
 			CALL L_8A69				; $65A2
 			CALL L_7F1D				; $65A5
@@ -206,9 +218,9 @@ L_656A:
 			CALL L_79FE				; $65DE
 			CALL L_660B				; $65E1
 			CALL L_65EB				; $65E4
-			JP L_656A				; $65E7
+			JP INGAME_LOOP			; $65E7
 
-			NOP				; $65EA
+EventDelay:	defb 0					; $65EA  ; timing (hold delay when firing missiles)
 
 L_65EB:
 			LD A,$FE				; $65EB
@@ -221,11 +233,13 @@ L_65EB:
 			RET NZ				; $65F8
 			LD BC,$01F4				; $65F9
 			CALL L_676A				; $65FC
+L_65FF:
 			CALL L_6672				; $65FF
-			JR NZ,$65FF				; $6602
+			JR NZ,L_65FF				; $6602
+L_6604:
 			CALL L_662B				; $6604
 			OR A				; $6607
-			JR Z,$6604				; $6608
+			JR Z,L_6604				; $6608
 			RET				; $660A
 
 L_660B:
@@ -285,8 +299,9 @@ L_6679:
 L_669C:
 			ADD HL,HL				; $669C
 			RLA				; $669D
-			JR NC,$66A1				; $669E
+			JR NC,L_66A1				; $669E
 			ADD HL,DE				; $66A0
+L_66A1:
 			DJNZ L_669C				; $66A1
 			LD A,H				; $66A3
 			POP BC				; $66A4
@@ -530,6 +545,7 @@ L_6802:
 			INC A				; $6814
 			RET				; $6815
 
+L_6816:
 			LD D,$01				; $6816
 			LD HL,$68A6				; $6818
 			LD C,$FE				; $681B
@@ -537,20 +553,23 @@ L_6802:
 			LD B,$DF				; $681E
 			IN A,(C)				; $6820
 			AND $02				; $6822
-			JR NZ,$6827				; $6824
+			JR NZ,L_6827				; $6824
 			LD (HL),D				; $6826
+L_6827:
 			INC HL				; $6827
 			LD B,$DF				; $6828
 			IN A,(C)				; $682A
 			AND $01				; $682C
-			JR NZ,$6831				; $682E
+			JR NZ,L_6831				; $682E
 			LD (HL),D				; $6830
+L_6831:
 			INC HL				; $6831
 			LD B,$FB				; $6832
 			IN A,(C)				; $6834
 			AND $01				; $6836
-			JR NZ,$683B				; $6838
+			JR NZ,L_683B				; $6838
 			LD (HL),D				; $683A
+L_683B:
 			INC HL				; $683B
 			LD B,$7F				; $683C
 			IN A,(C)				; $683E
@@ -559,6 +578,7 @@ L_6802:
 			LD (HL),D				; $6843
 			RET				; $6844
 
+L_6845:
 			LD BC,$EFFE				; $6845
 			IN A,(C)				; $6848
 			CPL				; $684A
@@ -601,9 +621,9 @@ L_688F:
 			LD ($68A9),HL				; $6895
 			LD A,($68AB)				; $6898
 			OR A				; $689B
-			JP Z,$6816				; $689C
+			JP Z,L_6816				; $689C
 			CP $01				; $689F
-			JP Z,$6845				; $68A1
+			JP Z,L_6845				; $68A1
 			JP L_686A				; $68A4
 
 			NOP				; $68A7
@@ -622,81 +642,88 @@ L_68AC:
 			LD HL,($68A7)				; $68BC
 			LD A,H				; $68BF
 			XOR L				; $68C0
-			JR Z,$690E				; $68C1
+			JR Z,L_690E				; $68C1
 			BIT 0,L				; $68C3
-			JR NZ,$68EC				; $68C5
+			JR NZ,L_68EC				; $68C5
 			LD A,($696B)				; $68C7
 			CP $FF				; $68CA
 			LD A,$01				; $68CC
 			LD ($696B),A				; $68CE
-			JR NZ,$68D9				; $68D1
+			JR NZ,L_68D9				; $68D1
 			LD ($696F),A				; $68D3
 			JP L_690E				; $68D6
 
+L_68D9:
 			LD A,E				; $68D9
 			CP $78				; $68DA
-			CALL Z,$71B4				; $68DC
+			CALL Z,L_71B4				; $68DC
 			CALL L_6972				; $68DF
-			JR NZ,$690E				; $68E2
+			JR NZ,L_690E				; $68E2
 			INC E				; $68E4
 			LD A,$01				; $68E5
 			LD ($696F),A				; $68E7
 			JR L_690E				; $68EA
+L_68EC:
 			LD A,($696B)				; $68EC
 			CP $01				; $68EF
 			LD A,$FF				; $68F1
 			LD ($696B),A				; $68F3
-			JR NZ,$68FE				; $68F6
+			JR NZ,L_68FE				; $68F6
 			LD ($696F),A				; $68F8
 			JP L_690E				; $68FB
 
+L_68FE:
 			LD A,E				; $68FE
 			OR A				; $68FF
-			CALL Z,$71B4				; $6900
+			CALL Z,L_71B4				; $6900
 			CALL L_699C				; $6903
-			JR NZ,$690E				; $6906
+			JR NZ,L_690E				; $6906
 			DEC E				; $6908
 			LD A,$01				; $6909
 			LD ($696F),A				; $690B
 L_690E:
+L_690E:
 			LD A,($68A9)				; $690E
 			OR A				; $6911
-			JR Z,$692D				; $6912
+			JR Z,L_692D				; $6912
 			LD A,$FE				; $6914
 			LD ($696C),A				; $6916
 			LD A,D				; $6919
 			CP $20				; $691A
-			CALL Z,$71B4				; $691C
+			CALL Z,L_71B4				; $691C
 			CALL L_69E6				; $691F
-			JR NZ,$6944				; $6922
+			JR NZ,L_6944				; $6922
 			DEC D				; $6924
 			DEC D				; $6925
 			LD A,$01				; $6926
 			LD ($696F),A				; $6928
 			JR L_6944				; $692B
+L_692D:
 			LD A,$02				; $692D
 			LD ($696C),A				; $692F
 			LD A,D				; $6932
 			CP $B0				; $6933
-			CALL Z,$71B4				; $6935
+			CALL Z,L_71B4				; $6935
 			CALL L_69C4				; $6938
-			JR NZ,$6944				; $693B
+			JR NZ,L_6944				; $693B
 			INC D				; $693D
 			INC D				; $693E
 			LD A,$01				; $693F
 			LD ($696F),A				; $6941
 L_6944:
+L_6944:
 			LD A,($696F)				; $6944
 			OR A				; $6947
-			JP Z,$6A46				; $6948
+			JP Z,L_6A46				; $6948
 			LD BC,($6969)				; $694B
 			LD ($6969),DE				; $694F
 L_6953:
 			LD A,($696B)				; $6953
 			LD L,$01				; $6956
 			INC A				; $6958
-			JR NZ,$695C				; $6959
+			JR NZ,L_695C				; $6959
 			INC L				; $695B
+L_695C:
 			LD A,L				; $695C
 			LD HL,($696D)				; $695D
 			CALL L_A1FD				; $6960
@@ -713,11 +740,11 @@ L_6972:
 			LD A,E				; $6975
 			AND $03				; $6976
 			LD A,$00				; $6978
-			JR NZ,$6997				; $697A
+			JR NZ,L_6997				; $697A
 			LD A,E				; $697C
 			CP $78				; $697D
 			LD A,$00				; $697F
-			JR NC,$6997				; $6981
+			JR NC,L_6997				; $6981
 			CALL L_678F				; $6983
 			INC L				; $6986
 			INC L				; $6987
@@ -729,9 +756,10 @@ L_6972:
 			LD A,D				; $698F
 			AND $07				; $6990
 			LD A,E				; $6992
-			JR Z,$6997				; $6993
+			JR Z,L_6997				; $6993
 			ADD HL,BC				; $6995
 			OR (HL)				; $6996
+L_6997:
 			OR A				; $6997
 			POP HL				; $6998
 			POP DE				; $6999
@@ -745,11 +773,11 @@ L_699C:
 			LD A,E				; $699F
 			AND $03				; $69A0
 			LD A,$00				; $69A2
-			JR NZ,$69BF				; $69A4
+			JR NZ,L_69BF				; $69A4
 			LD A,E				; $69A6
 			OR A				; $69A7
 			LD A,$00				; $69A8
-			JR Z,$69BF				; $69AA
+			JR Z,L_69BF				; $69AA
 			CALL L_678F				; $69AC
 			DEC L				; $69AF
 			LD BC,$0020				; $69B0
@@ -760,9 +788,10 @@ L_699C:
 			LD A,D				; $69B7
 			AND $07				; $69B8
 			LD A,E				; $69BA
-			JR Z,$69BF				; $69BB
+			JR Z,L_69BF				; $69BB
 			ADD HL,BC				; $69BD
 			OR (HL)				; $69BE
+L_69BF:
 			OR A				; $69BF
 			POP HL				; $69C0
 			POP DE				; $69C1
@@ -776,7 +805,7 @@ L_69C4:
 			LD A,D				; $69C7
 			AND $07				; $69C8
 			LD A,$00				; $69CA
-			JR NZ,$69E1				; $69CC
+			JR NZ,L_69E1				; $69CC
 			CALL L_678F				; $69CE
 			LD BC,$0040				; $69D1
 			ADD HL,BC				; $69D4
@@ -787,9 +816,10 @@ L_69C4:
 			LD A,E				; $69D9
 			AND $03				; $69DA
 			LD A,D				; $69DC
-			JR Z,$69E1				; $69DD
+			JR Z,L_69E1				; $69DD
 			INC L				; $69DF
 			OR (HL)				; $69E0
+L_69E1:
 			OR A				; $69E1
 			POP HL				; $69E2
 			POP DE				; $69E3
@@ -802,7 +832,7 @@ L_69E6:
 			LD A,D				; $69E9
 			AND $07				; $69EA
 			LD A,$00				; $69EC
-			JR NZ,$6A03				; $69EE
+			JR NZ,L_6A03				; $69EE
 			CALL L_678F				; $69F0
 			LD BC,$FFE0				; $69F3
 			ADD HL,BC				; $69F6
@@ -813,9 +843,10 @@ L_69E6:
 			LD A,E				; $69FB
 			AND $03				; $69FC
 			LD A,D				; $69FE
-			JR Z,$6A03				; $69FF
+			JR Z,L_6A03				; $69FF
 			INC L				; $6A01
 			OR (HL)				; $6A02
+L_6A03:
 			OR A				; $6A03
 			POP HL				; $6A04
 			POP DE				; $6A05
@@ -826,53 +857,58 @@ L_69E6:
 			NOP				; $6A09
 
 L_6A0A:
-			LD A,($6AEE)				; $6A0A
-			OR A				; $6A0D
-			JP Z,$6A46				; $6A0E
-			LD HL,($6AEF)				; $6A11
-			LD BC,($6AF1)				; $6A14
-			LD DE,($6969)				; $6A18
-			LD A,($696B)				; $6A1C
-			CP $FF				; $6A1F
-			JR Z,$6A36				; $6A21
-			LD A,E				; $6A23
-			SUB $08				; $6A24
-			LD E,A				; $6A26
-			LD ($6AF1),DE				; $6A27
+			LD A,($6AEE)			; $6A0A
+			OR A					; $6A0D
+			JP Z,L_6A46				; $6A0E
+			LD HL,($6AEF)			; $6A11
+			LD BC,($6AF1)			; $6A14
+			LD DE,($6969)			; $6A18
+			LD A,($696B)			; $6A1C
+			CP $FF					; $6A1F
+			JR Z,L_6A36				; $6A21
+			LD A,E					; $6A23
+			SUB $08					; $6A24
+			LD E,A					; $6A26
+			LD ($6AF1),DE			; $6A27
 			LD A,$07				; $6A2B
 			CALL L_A1FD				; $6A2D
-			LD ($6AEF),HL				; $6A30
+			LD ($6AEF),HL			; $6A30
 			JP L_6A46				; $6A33
 
-			LD A,E				; $6A36
+L_6A36:
+			LD A,E					; $6A36
 			ADD A,$08				; $6A37
-			LD E,A				; $6A39
-			LD ($6AF1),DE				; $6A3A
+			LD E,A					; $6A39
+			LD ($6AF1),DE			; $6A3A
 			LD A,$08				; $6A3E
 			CALL L_A1FD				; $6A40
-			LD ($6AEF),HL				; $6A43
+			LD ($6AEF),HL			; $6A43
 L_6A46:
-			LD A,($6AF3)				; $6A46
-			OR A				; $6A49
-			JR Z,$6ABA				; $6A4A
-			LD DE,($6AF6)				; $6A4C
-			LD A,($8F94)				; $6A50
-			OR A				; $6A53
-			JP NZ,$6A87				; $6A54
-			LD A,($696B)				; $6A57
-			CP $FF				; $6A5A
-			LD A,($6AF8)				; $6A5C
-			JR Z,$6A6B				; $6A5F
-			CP $17				; $6A61
-			JR C,$6A67				; $6A63
+			LD A,($6AF3)			; $6A46
+			OR A					; $6A49
+			JR Z,L_6ABA				; $6A4A  ; Enable Mace
+
+			LD DE,($6AF6)			; $6A4C
+			LD A,($8F94)			; $6A50
+			OR A					; $6A53
+			JP NZ,L_6A87				; $6A54
+			LD A,($696B)			; $6A57
+			CP $FF					; $6A5A
+			LD A,($6AF8)			; $6A5C
+			JR Z,L_6A6B				; $6A5F
+			CP $17					; $6A61
+			JR C,L_6A67				; $6A63
 			LD A,$FF				; $6A65
-			INC A				; $6A67
+L_6A67:
+			INC A					; $6A67
 			JP L_6A71				; $6A68
 
-			OR A				; $6A6B
-			JR NZ,$6A70				; $6A6C
+L_6A6B:
+			OR A					; $6A6B
+			JR NZ,L_6A70				; $6A6C
 			LD A,$18				; $6A6E
-			DEC A				; $6A70
+L_6A70:
+			DEC A					; $6A70
 L_6A71:
 			LD ($6AF8),A				; $6A71
 			ADD A,A				; $6A74
@@ -888,6 +924,7 @@ L_6A71:
 			LD A,(HL)				; $6A84
 			ADD A,D				; $6A85
 			LD D,A				; $6A86
+L_6A87:
 			LD BC,($6AF6)				; $6A87
 			LD ($6AF6),DE				; $6A8B
 			LD HL,($6AF4)				; $6A8F
@@ -896,15 +933,16 @@ L_6A71:
 			LD ($6AF4),HL				; $6A97
 			LD A,$7B				; $6A9A
 			CP E				; $6A9C
-			CALL NC,$8ABF				; $6A9D
+			CALL NC,L_8ABF				; $6A9D
 			LD A,$01				; $6AA0
 			CALL L_67B9				; $6AA2
 			CALL L_9A75				; $6AA5
-			JR Z,$6AB1				; $6AA8
+			JR Z,L_6AB1				; $6AA8
 			PUSH DE				; $6AAA
 			LD E,$21				; $6AAB
 			CALL L_EF42				; $6AAD
 			POP DE				; $6AB0
+L_6AB1:
 			INC E				; $6AB1
 			INC E				; $6AB2
 			INC D				; $6AB3
@@ -912,23 +950,26 @@ L_6A71:
 			INC D				; $6AB5
 			INC D				; $6AB6
 			CALL L_6C9A				; $6AB7
+L_6ABA:
 			LD C,$47				; $6ABA
 			LD A,($7E94)				; $6ABC
 			OR A				; $6ABF
-			JR Z,$6ACE				; $6AC0
+			JR Z,L_6ACE				; $6AC0
 			DEC A				; $6AC2
 			LD ($7E94),A				; $6AC3
-			LD A,($65EA)				; $6AC6
+			LD A,(EventDelay); ($65EA)				; $6AC6
 			AND $07				; $6AC9
 			OR $40				; $6ACB
 			LD C,A				; $6ACD
+L_6ACE:
 			LD DE,($6969)				; $6ACE
 			CALL L_A446				; $6AD2
 			LD A,($6AEE)				; $6AD5
 			OR A				; $6AD8
-			JR Z,$6AE2				; $6AD9
+			JR Z,L_6AE2				; $6AD9
 			LD DE,($6AF1)				; $6ADB
 			CALL L_A446				; $6ADF
+L_6AE2:
 			LD A,($6AF3)				; $6AE2
 			OR A				; $6AE5
 			RET Z				; $6AE6
@@ -950,13 +991,14 @@ L_6B29:
 			inc hl				; $6B2A
 
 			CP $61				; $6B2B
-			JP NC,$6B37				; $6B2D
+			JP NC,L_6B37				; $6B2D
 			CALL L_6C4A				; $6B30
 			INC E				; $6B33
 			JP L_6B29				; $6B34
 
+L_6B37:
 			CP $90				; $6B37
-			JP NC,$6B47				; $6B39
+			JP NC,L_6B47				; $6B39
 			SUB $78				; $6B3C
 			ADD A,D				; $6B3E
 			LD D,A				; $6B3F
@@ -966,42 +1008,48 @@ L_6B29:
 			INC HL				; $6B43
 			JP L_6B29				; $6B44
 
+L_6B47:
 			CP $CF				; $6B47
-			JP NC,$6B54				; $6B49
+			JP NC,L_6B54				; $6B49
 			INC D				; $6B4C
 			SUB $AF				; $6B4D
 			ADD A,E				; $6B4F
 			LD E,A				; $6B50
 			JP L_6B29				; $6B51
 
+L_6B54:
 			CP $DF				; $6B54
-			JP NC,$6B6D				; $6B56
+			JP NC,L_6B6D				; $6B56
 			SUB $CF				; $6B59
 			CP $08				; $6B5B
-			JP C,$6B64				; $6B5D
+			JP C,L_6B64				; $6B5D
 			SUB $08				; $6B60
 			OR $40				; $6B62
+L_6B64:
 			LD B,A				; $6B64
 			LD A,C				; $6B65
 			AND $38				; $6B66
 			OR B				; $6B68
 			LD C,A				; $6B69
 			JP L_6B29				; $6B6A
+L_6B6D:
 			CP $DF				; $6B6D
-			JP NZ,$6B79				; $6B6F
+			JP NZ,L_6B79				; $6B6F
 			LD D,(HL)				; $6B72
 			INC HL				; $6B73
 			LD E,(HL)				; $6B74
 			INC HL				; $6B75
 			JP L_6B29				; $6B76
+L_6B79:
 			CP $E0				; $6B79
-			JP NZ,$6B83				; $6B7B
+			JP NZ,L_6B83				; $6B7B
 			LD C,(HL)				; $6B7E
 			INC HL				; $6B7F
 			JP L_6B29				; $6B80
 
+L_6B83:
 			CP $E1				; $6B83
-			JP NZ,$6B8F				; $6B85
+			JP NZ,L_6B8F				; $6B85
 			LD B,(HL)				; $6B88
 			INC HL				; $6B89
 L_6B8A:
@@ -1009,8 +1057,9 @@ L_6B8A:
 			PUSH BC				; $6B8B
 			JP L_6B29				; $6B8C
 
+L_6B8F:
 			CP $E2				; $6B8F
-			JP NZ,$6B9F				; $6B91
+			JP NZ,L_6B9F				; $6B91
 			POP BC				; $6B94
 			DJNZ L_6B9B				; $6B95
 			POP AF				; $6B97
@@ -1020,8 +1069,9 @@ L_6B9B:
 			POP HL				; $6B9B
 			JP L_6B8A				; $6B9C
 
+L_6B9F:
 			CP $E3				; $6B9F
-			JP NZ,$6BB5				; $6BA1
+			JP NZ,L_6BB5				; $6BA1
 			LD A,(HL)				; $6BA4
 			INC HL				; $6BA5
 			PUSH HL				; $6BA6
@@ -1036,8 +1086,9 @@ L_6B9B:
 			INC HL				; $6BB1
 			JP L_6B29				; $6BB2
 
+L_6BB5:
 			CP $E4				; $6BB5
-			JP NZ,$6BC7				; $6BB7
+			JP NZ,L_6BC7				; $6BB7
 			LD B,(HL)				; $6BBA
 			INC HL				; $6BBB
 			LD A,(HL)				; $6BBC
@@ -1048,8 +1099,9 @@ L_6BBD:
 			INC HL				; $6BC3
 			JP L_6B29				; $6BC4
 
+L_6BC7:
 			CP $E5				; $6BC7
-			JP NZ,$6BD9				; $6BC9
+			JP NZ,L_6BD9				; $6BC9
 			LD B,(HL)				; $6BCC
 			INC HL				; $6BCD
 			LD A,(HL)				; $6BCE
@@ -1060,8 +1112,9 @@ L_6BCF:
 			INC HL				; $6BD5
 			JP L_6B29				; $6BD6
 
+L_6BD9:
 			CP $E6				; $6BD9
-			JR NZ,$6BEA				; $6BDB
+			JR NZ,L_6BEA				; $6BDB
 			LD A,(HL)				; $6BDD
 			LD ($6C55),A				; $6BDE
 			INC HL				; $6BE1
@@ -1070,8 +1123,9 @@ L_6BCF:
 			INC HL				; $6BE6
 			JP L_6B29				; $6BE7
 
+L_6BEA:
 			CP $E7				; $6BEA
-			JR NZ,$6C07				; $6BEC
+			JR NZ,L_6C07				; $6BEC
 			PUSH HL				; $6BEE
 			LD HL,($6C55)				; $6BEF
 			PUSH HL				; $6BF2
@@ -1084,21 +1138,25 @@ L_6BCF:
 			LD ($6C55),HL				; $6C00
 			POP HL				; $6C03
 			JP L_6B29				; $6C04
+L_6C07:
 			CP $E8				; $6C07
-			JR NZ,$6C13				; $6C09
+			JR NZ,L_6C13				; $6C09
 			LD A,(HL)				; $6C0B
 			LD ($6C82),A				; $6C0C
 			INC HL				; $6C0F
 			JP L_6B29				; $6C10
 
+L_6C13:
 			CP $E9				; $6C13
-			JR NZ,$6C1A				; $6C15
+			JR NZ,L_6C1A				; $6C15
 			JP L_6B29				; $6C17
 
+L_6C1A:
 			CP $EA				; $6C1A
-			JR NZ,$6C21				; $6C1C
+			JR NZ,L_6C21				; $6C1C
 			JP L_6B29				; $6C1E
 
+L_6C21:
 			CP $EB				; $6C21
 			RET NZ				; $6C23
 			PUSH BC				; $6C24
@@ -1209,10 +1267,10 @@ L_6C9A:
 			LD IX,$6CFC				; $6CA8
 			LD A,(IX+$00)				; $6CAC
 			CP $FF				; $6CAF
-			JR Z,$6CEE				; $6CB1
+			JR Z,L_6CEE				; $6CB1
 			LD A,(IX+$04)				; $6CB3
 			OR A				; $6CB6
-			JR Z,$6CF5				; $6CB7
+			JR Z,L_6CF5				; $6CB7
 			LD A,(IX+$02)				; $6CB9
 			LD ($67FE),A				; $6CBC
 			LD A,(IX+$03)				; $6CBF
@@ -1223,7 +1281,7 @@ L_6C9A:
 			LD D,(IX+$01)				; $6CCD
 			CALL L_6802				; $6CD0
 			OR A				; $6CD3
-			JR Z,$6CF5				; $6CD4
+			JR Z,L_6CF5				; $6CD4
 			LD (IX+$04),$00				; $6CD6
 			LD BC,($67FE)				; $6CDA
 			LD A,$F8				; $6CDE
@@ -1235,6 +1293,7 @@ L_6C9A:
 			CALL L_6D4D				; $6CE6
 			LD E,$1E				; $6CE9
 			CALL L_EF42				; $6CEB
+L_6CEE:
 			POP IX				; $6CEE
 			POP HL				; $6CF0
 			POP DE				; $6CF1
@@ -1242,6 +1301,7 @@ L_6C9A:
 			POP AF				; $6CF3
 			RET				; $6CF4
 
+L_6CF5:
 			defb $11,$08,$00,$DD,$19,$18                        ; $6CF5 ......
 			defb $B0,$4C,$44,$09,$48,$2C,$28,$48				; $6CFB .LD.H,(H
 			defb $4C,$29,$0D,$0A,$24,$33,$3A,$09				; $6D03 L)..$3:.
@@ -1279,13 +1339,14 @@ L_6D4D:
 			RRCA				; $6D77
 			RRCA				; $6D78
 			LD C,A				; $6D79
+L_6D7A:
 			PUSH DE				; $6D7A
 			PUSH BC				; $6D7B
 			CALL L_678F				; $6D7C
 L_6D7F:
 			LD A,(HL)				; $6D7F
 			OR A				; $6D80
-			CALL NZ,$6D96				; $6D81
+			CALL NZ,L_6D96				; $6D81
 			INC HL				; $6D84
 			INC HL				; $6D85
 			LD A,E				; $6D86
@@ -1298,9 +1359,10 @@ L_6D7F:
 			ADD A,$10				; $6D8F
 			LD D,A				; $6D91
 			DEC C				; $6D92
-			JR NZ,$6D7A				; $6D93
+			JR NZ,L_6D7A				; $6D93
 			RET				; $6D95
 
+L_6D96:
 			PUSH BC				; $6D96
 			PUSH DE				; $6D97
 			PUSH HL				; $6D98
@@ -1388,17 +1450,19 @@ L_6E0D:
 			LD A,(HL)				; $6E0E
 			CP $FF				; $6E0F
 			LD A,C				; $6E11
-			JR Z,$6E1D				; $6E12
+			JR Z,L_6E1D				; $6E12
 			CP (HL)				; $6E14
-			JR Z,$6E21				; $6E15
+			JR Z,L_6E21				; $6E15
 			LD BC,$0008				; $6E17
 			ADD HL,BC				; $6E1A
 			JR L_6E0D				; $6E1B
+L_6E1D:
 			POP HL				; $6E1D
 			POP BC				; $6E1E
 			POP AF				; $6E1F
 			RET				; $6E20
 
+L_6E21:
 			LD (IX+$04),A				; $6E21
 			INC HL				; $6E24
 			LD A,(HL)				; $6E25
@@ -1449,11 +1513,12 @@ L_6E8B:
 L_6E95:
 			LD A,(HL)				; $6E95
 			OR A				; $6E96
-			JR Z,$6EA0				; $6E97
+			JR Z,L_6EA0				; $6E97
 			CP $FF				; $6E99
-			JR Z,$6EBF				; $6E9B
+			JR Z,L_6EBF				; $6E9B
 			ADD HL,BC				; $6E9D
 			JR L_6E95				; $6E9E
+L_6EA0:
 			LD A,$01				; $6EA0
 			CALL L_6679				; $6EA2
 			ADD A,$02				; $6EA5
@@ -1476,11 +1541,18 @@ L_6E95:
 			LD A,C				; $6EBB
 			AND $47				; $6EBC
 			LD (HL),A				; $6EBE
+L_6EBF:
 			POP BC				; $6EBF
 			POP HL				; $6EC0
 			POP DE				; $6EC1
 			POP AF				; $6EC2
 			RET				; $6EC3
+
+;------------------------------------------------------
+; Comment block from $6EC4 to $7068
+; this memory could be used, will find out at some point!
+; #include "comment-block.asm"
+;------------------------------------------------------
 
 			defb $0A,$09,$45,$58,$09,$44,$45                    ; $6EC4 ..EX.DE
 			defb $2C,$48,$4C,$0D,$0A,$09,$50,$4F				; $6ECB ,HL...PO
@@ -1536,60 +1608,66 @@ L_6E95:
 			defb $0D,$0A,$09,$43,$50,$09,$31,$32				; $705B ...CP.12
 			defb $38,$0D,$0A,$09,$4A,$FF                        ; $7063 8...J.
 
-L_7069:
-			LD HL,$6EC4				; $7069
-L_706C:
-			LD A,(HL)				; $706C
-			LD B,A				; $706D
-			CP $FF				; $706E
-			RET Z				; $7070
-			OR A				; $7071
-			JR NZ,$707A				; $7072
-			LD BC,$0006				; $7074
-			ADD HL,BC				; $7077
-			JR L_706C				; $7078
+;------------------------------------------------------
 
+; Func handles a range of 'boom' sprites.
+; It's used for debris, explosions and volcanic eruptions
+ExplosiveFX:
+			LD HL,$6EC4			; $7069   ; Explosive data
+L_706C:
+			LD A,(HL)			; $706C
+			LD B,A				; $706D
+			CP $FF				; $706E   
+			RET Z				; $7070	  ; exit sprites loop on $ff marker
+			OR A				; $7071
+			JR NZ,L_707A			; $7072
+			LD BC,$0006			; $7074
+			ADD HL,BC			; $7077
+			JR L_706C			; $7078
+
+L_707A:
 			PUSH HL				; $707A
 			INC HL				; $707B
 			PUSH HL				; $707C
-			LD E,(HL)				; $707D
+			LD E,(HL)			; $707D
 			INC HL				; $707E
-			LD D,(HL)				; $707F
+			LD D,(HL)			; $707F
 			LD A,B				; $7080
-			CALL L_80BD				; $7081
+			CALL L_80BD			; $7081
 			INC HL				; $7084
 			LD A,E				; $7085
-			ADD A,(HL)				; $7086
+			ADD A,(HL)			; $7086
 			LD E,A				; $7087
 			CP $78				; $7088
-			JR NC,$70AA				; $708A
+			JR NC,L_70AA			; $708A
 			INC HL				; $708C
-			INC (HL)				; $708D
-			LD A,(HL)				; $708E
+			INC (HL)			; $708D
+			LD A,(HL)			; $708E
 			ADD A,D				; $708F
 			LD D,A				; $7090
 			CP $B8				; $7091
-			JR NC,$70AA				; $7093
+			JR NC,L_70AA			; $7093
 			INC HL				; $7095
-			LD C,(HL)				; $7096
+			LD C,(HL)			; $7096
 			POP HL				; $7097
-			LD (HL),E				; $7098
+			LD (HL),E			; $7098
 			INC HL				; $7099
-			LD (HL),D				; $709A
+			LD (HL),D			; $709A
 			LD A,B				; $709B
-			CALL L_80BD				; $709C
-			CALL L_A4AD				; $709F
+			CALL L_80BD			; $709C
+			CALL L_A4AD			; $709F  ;  Draw explosion
 			POP HL				; $70A2
-			LD BC,$0006				; $70A3
-			ADD HL,BC				; $70A6
-			JP L_706C				; $70A7
+			LD BC,$0006			; $70A3
+			ADD HL,BC			; $70A6
+			JP L_706C			; $70A7
 
+L_70AA:
 			POP HL				; $70AA
 			POP HL				; $70AB
-			LD (HL),$00				; $70AC
-			LD BC,$0006				; $70AE
-			ADD HL,BC				; $70B1
-			JR L_706C				; $70B2
+			LD (HL),$00			; $70AC
+			LD BC,$0006			; $70AE
+			ADD HL,BC			; $70B1
+			JR L_706C			; $70B2
 
 			; === ROUTINE TO SETUP IM2  ===
 			; patches location $FDFD with "JP L_70D3"						 
@@ -1623,25 +1701,27 @@ L_70D3:
 			PUSH BC				; $70DE
 			PUSH DE				; $70DF
 			PUSH HL				; $70E0
-			LD HL,$711A				; $70E1
+			LD HL,FrameCounter ; $711A				; $70E1
 			INC (HL)				; $70E4
 			LD A,($830A)				; $70E5
 			OR A				; $70E8
-			CALL Z,$EF3B				; $70E9
+			CALL Z,L_EF3B				; $70E9
 			LD A,($830A)				; $70EC
 			OR A				; $70EF
-			JR Z,$7109				; $70F0
+			JR Z,L_7109				; $70F0
 			LD A,($8599)				; $70F2
 			OR A				; $70F5
-			JR NZ,$7106				; $70F6
+			JR NZ,L_7106				; $70F6
 			LD A,($711B)				; $70F8
 			XOR $01				; $70FB
 			LD ($711B),A				; $70FD
-			CALL Z,$85BA				; $7100
+			CALL Z,L_85BA				; $7100
 			JP SKIP_AY_MUSIC				; $7103
 
+L_7106:
 			CALL L_EF38				; $7106
 SKIP_AY_MUSIC:
+L_7109:
 			POP HL				; $7109
 			POP DE				; $710A
 			POP BC				; $710B
@@ -1657,7 +1737,7 @@ SKIP_AY_MUSIC:
 			EI				; $7117
 			RETI				; $7118
 
-			defb $00                                            ; $711A .
+FrameCounter: defb $00                                            ; $711A
 			defb $00,$AA,$A5,$25,$A6,$82,$A6,$D3				; $711B ...%....
 			defb $A6,$42,$A7,$BD,$A7,$C0,$A7,$2D				; $7123 .B.....-
 			defb $A8,$A9,$A8,$03,$A9,$71,$A9,$CB				; $712B .....q..
@@ -1679,18 +1759,20 @@ SKIP_AY_MUSIC:
 			defb $C2,$FD,$C2,$75,$C3,$91,$77,$00				; $71AB ...u..w.
 			defb $00                                            ; $71B3 .
 
+L_71B4:
 			LD A,E				; $71B4
 			CP $78				; $71B5
-			JR Z,$71C6				; $71B7
+			JR Z,L_71C6				; $71B7
 			OR A				; $71B9
-			JR Z,$71C6				; $71BA
+			JR Z,L_71C6				; $71BA
 			LD A,($6971)				; $71BC
 			CP D				; $71BF
-			JP NZ,$71D6				; $71C0
+			JP NZ,L_71D6				; $71C0
 			JP L_71CD				; $71C3
+L_71C6:
 			LD A,($6970)				; $71C6
 			CP E				; $71C9
-			JP NZ,$71D6				; $71CA
+			JP NZ,L_71D6				; $71CA
 L_71CD:
 			POP HL				; $71CD
 			INC HL				; $71CE
@@ -1701,33 +1783,37 @@ L_71CD:
 			PUSH HL				; $71D4
 			RET				; $71D5
 
+L_71D6:
 			POP HL				; $71D6
 			LD A,($696B)				; $71D7
 			CP $FF				; $71DA
 			LD A,E				; $71DC
-			JR Z,$71E9				; $71DD
+			JR Z,L_71E9				; $71DD
 			CP $78				; $71DF
-			JR NZ,$71F2				; $71E1
+			JR NZ,L_71F2				; $71E1
 			LD A,$01				; $71E3
 			LD E,$00				; $71E5
 			JR L_720E				; $71E7
 
+L_71E9:
 			OR A				; $71E9
-			JR NZ,$71F2				; $71EA
+			JR NZ,L_71F2				; $71EA
 			LD A,$FF				; $71EC
 			LD E,$78				; $71EE
 			JR L_720E				; $71F0
 
+L_71F2:
 			LD A,($696C)				; $71F2
 			CP $FE				; $71F5
 			LD A,D				; $71F7
-			JR Z,$7204				; $71F8
+			JR Z,L_7204				; $71F8
 			CP $B0				; $71FA
 			RET NZ				; $71FC
 			LD A,($744C)				; $71FD
 			LD D,$20				; $7200
 			JR L_720E				; $7202
 
+L_7204:
 			CP $20				; $7204
 			RET NZ				; $7206
 			LD A,($744C)				; $7207
@@ -1743,7 +1829,7 @@ L_721E:
 			XOR A				; $721E
 			LD ($7E94),A				; $721F
 			LD ($800D),A				; $7222
-			LD ($65EA),A				; $7225
+			LD (EventDelay),A				; $7225
 			LD ($80B3),A				; $7228
 			LD A,$FF				; $722B
 			LD ($9B47),A				; $722D
@@ -1770,31 +1856,34 @@ L_721E:
 			CALL L_744D				; $7269
 			LD DE,$2000				; $726C
 L_726F:
+L_726F:
 			LD A,(HL)				; $726F
 			INC HL				; $7270
 			OR A				; $7271
-			JR Z,$7284				; $7272
+			JR Z,L_7284				; $7272
 			CP $FF				; $7274
-			JR Z,$729A				; $7276
+			JR Z,L_729A				; $7276
 			PUSH HL				; $7278
 			CALL L_A548				; $7279
 			CALL L_A57F				; $727C
 			CALL L_678F				; $727F
 			LD (HL),A				; $7282
 			POP HL				; $7283
+L_7284:
 			LD A,E				; $7284
 			ADD A,$08				; $7285
 			LD E,A				; $7287
 			CP $80				; $7288
-			JP NZ,$726F				; $728A
+			JP NZ,L_726F				; $728A
 			LD A,D				; $728D
 			CP $B0				; $728E
-			JR Z,$72C8				; $7290
+			JR Z,L_72C8				; $7290
 			ADD A,$10				; $7292
 			LD D,A				; $7294
 			LD E,$00				; $7295
 			JP L_726F				; $7297
 
+L_729A:
 			LD B,(HL)				; $729A
 			INC HL				; $729B
 			LD A,(HL)				; $729C
@@ -1802,7 +1891,7 @@ L_726F:
 L_729E:
 			LD C,A				; $729E
 			OR A				; $729F
-			JR Z,$72AF				; $72A0
+			JR Z,L_72AF				; $72A0
 			PUSH HL				; $72A2
 			CALL L_A548				; $72A3
 			CALL L_A57F				; $72A6
@@ -1810,34 +1899,39 @@ L_729E:
 			LD (HL),A				; $72AC
 			LD C,A				; $72AD
 			POP HL				; $72AE
+L_72AF:
 			LD A,E				; $72AF
 			ADD A,$08				; $72B0
 			LD E,A				; $72B2
 			CP $80				; $72B3
-			JP NZ,$72C2				; $72B5
+			JP NZ,L_72C2				; $72B5
 			LD A,D				; $72B8
 			CP $B0				; $72B9
-			JR Z,$72C8				; $72BB
+			JR Z,L_72C8				; $72BB
 			ADD A,$10				; $72BD
 			LD D,A				; $72BF
 			LD E,$00				; $72C0
+L_72C2:
 			LD A,C				; $72C2
 			DJNZ L_729E				; $72C3
 			JP L_726F				; $72C5
 
+L_72C8:
 			CALL L_742E				; $72C8
 			LD IX,$6CFC				; $72CB
 			LD DE,$2000				; $72CF
 L_72D2:
+L_72D2:
 			CALL L_678F				; $72D2
 			LD A,(HL)				; $72D5
 			CP $E9				; $72D6
-			JR C,$72DF				; $72D8
+			JR C,L_72DF				; $72D8
 			LD (HL),$00				; $72DA
 			JP L_72EC				; $72DC
 
+L_72DF:
 			OR A				; $72DF
-			CALL NZ,$732A				; $72E0
+			CALL NZ,L_732A				; $72E0
 			CALL L_8748				; $72E3
 			CALL L_6E07				; $72E6
 			CALL L_73AA				; $72E9
@@ -1850,15 +1944,16 @@ L_72EC:
 			ADD A,$08				; $72F9
 			LD E,A				; $72FB
 			CP $80				; $72FC
-			JP NZ,$72D2				; $72FE
+			JP NZ,L_72D2				; $72FE
 			LD A,D				; $7301
 			CP $B0				; $7302
-			JR Z,$730E				; $7304
+			JR Z,L_730E				; $7304
 			ADD A,$10				; $7306
 			LD D,A				; $7308
 			LD E,$00				; $7309
 			JP L_72D2				; $730B
 
+L_730E:
 			LD (IX+$00),$FF				; $730E
 			CALL L_67AD				; $7312
 			CALL L_9BD8				; $7315
@@ -1870,6 +1965,7 @@ L_72EC:
 			LD C,E				; $7326
 			JP L_6953				; $7327
 
+L_732A:
 			CP $E9				; $732A
 			RET NC				; $732C
 			PUSH AF				; $732D
@@ -1878,12 +1974,13 @@ L_72EC:
 			LD DE,$0005				; $7330
 			LD B,A				; $7333
 			LD HL,$736D				; $7334
+L_7337:
 			LD A,(HL)				; $7337
 			ADD HL,DE				; $7338
 			CP $FF				; $7339
-			JR Z,$735B				; $733B
+			JR Z,L_735B				; $733B
 			CP B				; $733D
-			JR NZ,$7337				; $733E
+			JR NZ,L_7337				; $733E
 			SBC HL,DE				; $7340
 			INC HL				; $7342
 			EX DE,HL				; $7343
@@ -1909,6 +2006,7 @@ L_72EC:
 			POP AF				; $7359
 			RET				; $735A
 
+L_735B:
 			POP HL				; $735B
 			PUSH HL				; $735C
 			INC HL				; $735D
@@ -1942,12 +2040,13 @@ L_73B1:
 			LD A,(HL)				; $73B1
 			INC HL				; $73B2
 			CP $FF				; $73B3
-			JP Z,$73F0				; $73B5
+			JP Z,L_73F0				; $73B5
 			CP B				; $73B8
-			JR Z,$73BF				; $73B9
+			JR Z,L_73BF				; $73B9
 			INC HL				; $73BB
 			JP L_73B1				; $73BC
 
+L_73BF:
 			PUSH HL				; $73BF
 			PUSH BC				; $73C0
 			LD L,(HL)				; $73C1
@@ -1980,6 +2079,7 @@ L_73B1:
 			INC HL				; $73EC
 			JP L_73B1				; $73ED
 
+L_73F0:
 			POP HL				; $73F0
 			POP DE				; $73F1
 			POP AF				; $73F2
@@ -2032,6 +2132,7 @@ L_7457:
 			RET				; $7464
 
 L_7465:
+L_7465:
 			LD ($74E1),A				; $7465
 			ADD A,A				; $7468
 			ADD A,A				; $7469
@@ -2066,7 +2167,7 @@ L_7465:
 			LD ($6AEE),A				; $749F
 			LD ($6AF3),A				; $74A2
 			LD ($8F94),A				; $74A5
-			LD ($711A),A				; $74A8
+			LD (FrameCounter),A ;  ($711A),A				; $74A8
 			LD HL,$0000				; $74AB
 			LD ($7973),HL				; $74AE
 			CALL L_7935				; $74B1
@@ -2109,13 +2210,14 @@ L_74F3:
 L_74F8:
 			LD A,(HL)				; $74F8
 			CP $FF				; $74F9
-			JR NZ,$7502				; $74FB
+			JR NZ,L_7502				; $74FB
 			POP HL				; $74FD
 			POP DE				; $74FE
 			POP BC				; $74FF
 			POP AF				; $7500
 			RET				; $7501
 
+L_7502:
 			LD E,A				; $7502
 			INC HL				; $7503
 			LD D,(HL)				; $7504
@@ -2123,11 +2225,11 @@ L_74F8:
 			PUSH HL				; $7506
 			CALL L_6802				; $7507
 			OR A				; $750A
-			JR Z,$752F				; $750B
+			JR Z,L_752F				; $750B
 			CALL L_678F				; $750D
 			LD A,(HL)				; $7510
 			OR A				; $7511
-			JR Z,$752F				; $7512
+			JR Z,L_752F				; $7512
 			CALL L_88EA				; $7514
 			LD A,(HL)				; $7517
 			LD HL,$C6F9				; $7518
@@ -2138,6 +2240,7 @@ L_74F8:
 			CALL L_788E				; $7527
 			LD A,$04				; $752A
 			CALL L_85B0				; $752C
+L_752F:
 			POP HL				; $752F
 			JP L_74F8				; $7530
 
@@ -2186,7 +2289,7 @@ L_75B8:
 			RET Z				; $75BF
 			LD A,($7643)				; $75C0
 			OR A				; $75C3
-			JP Z,$75DC				; $75C4
+			JP Z,L_75DC				; $75C4
 			DEC A				; $75C7
 			LD ($7643),A				; $75C8
 			RET NZ				; $75CB
@@ -2194,9 +2297,10 @@ L_75B8:
 			LD A,($74E1)				; $75CF
 			INC A				; $75D2
 			CP $03				; $75D3
-			JP NZ,$7465				; $75D5
+			JP NZ,L_7465				; $75D5
 			XOR A				; $75D8
 			JP L_7465				; $75D9
+L_75DC:
 			LD HL,($6969)				; $75DC
 			LD A,D				; $75DF
 			SUB $10				; $75E0
@@ -2288,12 +2392,12 @@ L_7676:
 			DJNZ L_7676				; $7680
 			LD A,($79D3)				; $7682
 			CP $11				; $7685
-			JP NC,$76BB				; $7687
+			JP NC,L_76BB				; $7687
 			LD HL,($7973)				; $768A
 			LD DE,$05DC				; $768D
 			AND A				; $7690
 			SBC HL,DE				; $7691
-			JR C,$76BB				; $7693
+			JR C,L_76BB				; $7693
 			LD HL,$796D				; $7695
 			LD DE,$771A				; $7698
 			LD BC,$0005				; $769B
@@ -2304,18 +2408,21 @@ L_7676:
 			INC (HL)				; $76A9	; bonus life
 			LD DE,$7972				; $76AA
 			CALL L_78D4				; $76AD
+L_76B0:
 			CALL L_688F				; $76B0
 			LD A,($68AA)				; $76B3
 			OR A				; $76B6
-			JP Z,$76B0				; $76B7
+			JP Z,L_76B0				; $76B7
 			RET				; $76BA
 
+L_76BB:
 			LD HL,$7730				; $76BB
 			CALL L_6B29				; $76BE
+L_76C1:
 			CALL L_688F				; $76C1
 			LD A,($68AA)				; $76C4
 			OR A				; $76C7
-			JP Z,$76C1				; $76C8
+			JP Z,L_76C1				; $76C8
 			RET				; $76CB
 
 			defb $E6,$F1,$C2,$E0,$45,$DF,$13                    ; $76CC ....E..
@@ -2446,10 +2553,11 @@ L_78DF:
 			ADD A,C				; $78E3
 			CP $3A				; $78E4
 			LD C,$01				; $78E6
-			JR C,$78EE				; $78E8
+			JR C,L_78EE				; $78E8
 			SUB $0A				; $78EA
 			JR L_78EF				; $78EC
 
+L_78EE:
 			DEC C				; $78EE
 L_78EF:
 			LD (HL),A				; $78EF
@@ -2483,10 +2591,11 @@ L_7940:
 L_7948:
 			OR A				; $7948
 			SBC HL,DE				; $7949
-			JR C,$7950				; $794B
+			JR C,L_7950				; $794B
 			INC A				; $794D
 			JR L_7948				; $794E
 
+L_7950:
 			ADD HL,DE				; $7950
 			LD (IX+$00),A				; $7951
 			INC IX				; $7954
@@ -2534,11 +2643,12 @@ COUNT_DIGIT_DONE:
 			LD A,B				; $799B
 			CP $64				; $799C	 ; skip digits after 100
 			
-			JR Z,$79A7			; $799E
+			JR Z,L_79A7			; $799E
 			LD A,L				; $79A0
 			ADD A,$30			; $79A1  ; ascii 48 = "0"
 			CALL L_6C4A			; $79A3	 ; Display 8X8 icon
 			INC E				; $79A6	 ; X coords 
+L_79A7:
 			POP AF				; $79A7
 			RET					; $79A8
 
@@ -2613,6 +2723,7 @@ L_79FE:
 			defb $00,$00,$00,$00                                ; $7A1B ....
 
 L_7A1F:
+L_7A1F:
 			PUSH AF				; $7A1F
 			PUSH BC				; $7A20
 			PUSH HL				; $7A21
@@ -2637,17 +2748,18 @@ L_7A1F:
 			ADD HL,BC				; $7A3D
 			LD A,(HL)				; $7A3E
 			OR A				; $7A3F
-			JR NZ,$7A48				; $7A40
+			JR NZ,L_7A48				; $7A40
 			LD BC,$FD00				; $7A42
 			ADD HL,BC				; $7A45
 			LD (HL),$47				; $7A46
+L_7A48:
 			POP HL				; $7A48
 			POP BC				; $7A49
 			POP AF				; $7A4A
 			RET				; $7A4B
 
 			RET NZ				; $7A4C
-			JR NC,$7A5B				; $7A4D
+			JR NC,L_7A5B				; $7A4D
 			INC BC				; $7A4F
 L_7A50:
 			LD A,($8F94)				; $7A50
@@ -2655,18 +2767,21 @@ L_7A50:
 			RET NZ				; $7A54
 			LD A,($68AA)				; $7A55
 			OR A				; $7A58
-			JR NZ,$7A5F				; $7A59
+			JR NZ,L_7A5F				; $7A59
+L_7A5B:
 			LD ($7AE9),A				; $7A5B
 			RET				; $7A5E
 
+L_7A5F:
 			LD A,($7AE9)				; $7A5F
 			OR A				; $7A62
-			JR Z,$7A6B				; $7A63
+			JR Z,L_7A6B				; $7A63
 			INC A				; $7A65
 			RET Z				; $7A66
 			LD ($7AE9),A				; $7A67
 			RET				; $7A6A
 
+L_7A6B:
 			INC A				; $7A6B
 			LD ($7AE9),A				; $7A6C
 			LD DE,($6969)				; $7A6F
@@ -2678,8 +2793,9 @@ L_7A50:
 			LD A,($696B)				; $7A7D
 			CP $FF				; $7A80
 			LD A,$05				; $7A82
-			JR NZ,$7A88				; $7A84
+			JR NZ,L_7A88				; $7A84
 			LD A,$01				; $7A86
+L_7A88:
 			ADD A,E				; $7A88
 			LD E,A				; $7A89
 			LD A,($696B)				; $7A8A
@@ -2694,9 +2810,10 @@ L_7A50:
 			CP $FF				; $7A9E
 			LD A,$0E				; $7AA0
 			LD C,$04				; $7AA2
-			JR Z,$7AAA				; $7AA4
+			JR Z,L_7AAA				; $7AA4
 			LD A,$FA				; $7AA6
 			LD C,$FC				; $7AA8
+L_7AAA:
 			ADD A,E				; $7AAA
 			LD E,A				; $7AAB
 			LD A,D				; $7AAC
@@ -2712,6 +2829,7 @@ L_7AB5:
 			CP $7C				; $7AB7
 			RET NC				; $7AB9
 			LD HL,$7B36				; $7ABA
+L_7ABD:
 			BIT 7,(HL)				; $7ABD
 			RET NZ				; $7ABF
 			INC HL				; $7AC0
@@ -2719,7 +2837,7 @@ L_7AB5:
 			LD A,(HL)				; $7AC2
 			INC HL				; $7AC3
 			OR A				; $7AC4
-			JR NZ,$7ABD				; $7AC5
+			JR NZ,L_7ABD				; $7AC5
 			EX AF,AF'				; $7AC7
 			DEC HL				; $7AC8
 			LD (HL),A				; $7AC9
@@ -2738,7 +2856,7 @@ L_7AB5:
 			LD A,(HL)				; $7ADE
 			OR (HL)				; $7ADF
 			POP HL				; $7AE0
-			JP Z,$7A1F				; $7AE1
+			JP Z,L_7A1F				; $7AE1
 			INC HL				; $7AE4
 			INC HL				; $7AE5
 			LD (HL),$00				; $7AE6
@@ -2750,6 +2868,7 @@ L_7AEA:
 			CALL L_67B9				; $7AEC
 			LD HL,$7B36				; $7AEF
 L_7AF2:
+L_7AF2:
 			LD E,(HL)				; $7AF2
 			BIT 7,E				; $7AF3
 			RET NZ				; $7AF5
@@ -2759,20 +2878,20 @@ L_7AF2:
 			LD A,(HL)				; $7AF9
 			INC HL				; $7AFA
 			OR A				; $7AFB
-			JR Z,$7AF2				; $7AFC
+			JR Z,L_7AF2				; $7AFC
 			LD C,E				; $7AFE
 			ADD A,E				; $7AFF
 			CP $7C				; $7B00
-			JR NC,$7B27				; $7B02
+			JR NC,L_7B27				; $7B02
 			EX AF,AF'				; $7B04
 			PUSH HL				; $7B05
 			CALL L_678F				; $7B06
 			LD A,(HL)				; $7B09
 			POP HL				; $7B0A
 			OR A				; $7B0B
-			JR NZ,$7B27				; $7B0C
+			JR NZ,L_7B27				; $7B0C
 			CALL L_9A75				; $7B0E
-			JP NZ,$7B27				; $7B11
+			JP NZ,L_7B27				; $7B11
 			EX AF,AF'				; $7B14
 			LD E,A				; $7B15
 			DEC HL				; $7B16
@@ -2787,6 +2906,7 @@ L_7AF2:
 			CALL L_7A1F				; $7B21
 			JP L_7AF2				; $7B24
 
+L_7B27:
 			CALL L_7A1F				; $7B27
 			DEC HL				; $7B2A
 			LD (HL),$00				; $7B2B
@@ -2804,11 +2924,12 @@ L_7B4A:
 			IN A,($FE)				; $7B4C
 			AND $1F				; $7B4E
 			CP $1F				; $7B50
-			JR NZ,$7B59				; $7B52
+			JR NZ,L_7B59				; $7B52
 			XOR A				; $7B54
 			LD ($7B49),A				; $7B55
 			RET				; $7B58
 
+L_7B59:
 			LD D,A				; $7B59
 			LD A,($7B49)				; $7B5A
 			OR A				; $7B5D
@@ -2819,11 +2940,12 @@ L_7B4A:
 			LD BC,$0500				; $7B64
 L_7B67:
 			RRCA				; $7B67
-			JR NC,$7B6E				; $7B68
+			JR NC,L_7B6E				; $7B68
 			INC C				; $7B6A
 			DJNZ L_7B67				; $7B6B
 			RET				; $7B6D
 
+L_7B6E:
 			LD A,C				; $7B6E
 			LD ($7BFA),A				; $7B6F
 L_7B72:
@@ -2920,6 +3042,7 @@ L_7C10:
 			LD ($7C54),A				; $7C3F
 			JP (HL)				; $7C42
 L_7C43:
+L_7C43:
 			POP HL				; $7C43
 			LD A,($7C54)				; $7C44
 			OR A				; $7C47
@@ -2939,23 +3062,25 @@ L_7C43:
 			LD HL,$7D75				; $7C5C
 			LD A,($696C)				; $7C5F
 			CP $02				; $7C62
-			JP Z,$7C6A				; $7C64
+			JP Z,L_7C6A				; $7C64
 			LD HL,$7D85				; $7C67
+L_7C6A:
 			LD IX,$7D95				; $7C6A
-			LD A,($65EA)				; $7C6E
+			LD A,(EventDelay)				; $7C6E
 			AND $03				; $7C71
-			JP NZ,$7C43				; $7C73
+			JP NZ,L_7C43				; $7C73
 			LD BC,$0007				; $7C76
 L_7C79:
 			LD A,(IX+$00)				; $7C79
 			CP $FF				; $7C7C
-			JP Z,$7C43				; $7C7E
+			JP Z,L_7C43				; $7C7E
 			LD A,(IX+$02)				; $7C81
 			OR A				; $7C84
-			JR Z,$7C8C				; $7C85
+			JR Z,L_7C8C				; $7C85
 			ADD IX,BC				; $7C87
 			JP L_7C79				; $7C89
 
+L_7C8C:
 			LD A,$02				; $7C8C
 			CALL L_85B0				; $7C8E
 			PUSH DE				; $7C91
@@ -2980,8 +3105,9 @@ L_7C79:
 			EX DE,HL				; $7CBC
 			CP $FE				; $7CBD
 			LD A,$01				; $7CBF
-			JR Z,$7CC4				; $7CC1
+			JR Z,L_7CC4				; $7CC1
 			XOR A				; $7CC3
+L_7CC4:
 			LD (IX+$06),A				; $7CC4
 			CALL L_80BD				; $7CC7
 			LD A,$01				; $7CCA
@@ -2998,12 +3124,13 @@ L_7CDB:
 			RET Z				; $7CE0
 			LD A,(IX+$02)				; $7CE1
 			OR A				; $7CE4
-			JR NZ,$7CEF				; $7CE5
+			JR NZ,L_7CEF				; $7CE5
 L_7CE7:
 			LD BC,$0007				; $7CE7
 			ADD IX,BC				; $7CEA
 			JP L_7CDB				; $7CEC
 
+L_7CEF:
 			LD C,(IX+$02)				; $7CEF
 			LD B,$00				; $7CF2
 			LD L,(IX+$03)				; $7CF4
@@ -3011,16 +3138,18 @@ L_7CE7:
 			DEC HL				; $7CFA
 			ADD HL,BC				; $7CFB
 			DEC C				; $7CFC
-			JR Z,$7D02				; $7CFD
+			JR Z,L_7D02				; $7CFD
 			LD (IX+$02),C				; $7CFF
+L_7D02:
 			LD E,(IX+$00)				; $7D02
 			LD D,(IX+$01)				; $7D05
 			LD A,C				; $7D08
 			CP $0B				; $7D09
-			JR NC,$7D15				; $7D0B
-			LD A,($65EA)				; $7D0D
+			JR NC,L_7D15				; $7D0B
+			LD A,(EventDelay)				; $7D0D
 			AND $01				; $7D10
-			CALL Z,$8ABF				; $7D12
+			CALL Z,L_8ABF				; $7D12
+L_7D15:
 			LD A,(IX+$06)				; $7D15
 			CALL L_80BD				; $7D18
 			LD A,(IX+$05)				; $7D1B
@@ -3030,24 +3159,24 @@ L_7CE7:
 			LD A,(HL)				; $7D23
 			POP HL				; $7D24
 			OR A				; $7D25
-			JR NZ,$7D58				; $7D26
+			JR NZ,L_7D58				; $7D26
 			LD A,B				; $7D28
 			ADD A,E				; $7D29
 			CP $7C				; $7D2A
-			JR NC,$7D58				; $7D2C
+			JR NC,L_7D58				; $7D2C
 			LD E,A				; $7D2E
 			LD (IX+$00),A				; $7D2F
 			LD A,(IX+$01)				; $7D32
 			LD D,A				; $7D35
 			CALL L_815D				; $7D36
-			JR NZ,$7D58				; $7D39
+			JR NZ,L_7D58				; $7D39
 			LD A,(HL)				; $7D3B
 			ADD A,D				; $7D3C
 			LD D,A				; $7D3D
 			CP $B8				; $7D3E
-			JR NC,$7D58				; $7D40
+			JR NC,L_7D58				; $7D40
 			CALL L_9A75				; $7D42
-			JR NZ,$7D58				; $7D45
+			JR NZ,L_7D58				; $7D45
 			LD (IX+$01),D				; $7D47
 			LD A,(IX+$06)				; $7D4A
 			LD C,$47				; $7D4D
@@ -3055,6 +3184,7 @@ L_7CE7:
 			CALL L_80BD				; $7D52
 			JP L_7CE7				; $7D55
 
+L_7D58:
 			XOR A				; $7D58
 			LD (IX+$02),A				; $7D59
 			CALL L_6C9A				; $7D5C
@@ -3091,9 +3221,10 @@ L_7CE7:
 			CALL L_67B9				; $7DD9
 			LD HL,$7E57				; $7DDC
 L_7DDF:
+L_7DDF:
 			LD A,(HL)				; $7DDF
 			CP $FF				; $7DE0
-			JR Z,$7DF7				; $7DE2
+			JR Z,L_7DF7				; $7DE2
 			LD C,A				; $7DE4
 			INC HL				; $7DE5
 			LD B,(HL)				; $7DE6
@@ -3101,25 +3232,27 @@ L_7DDF:
 			LD A,(HL)				; $7DE8
 			INC HL				; $7DE9
 			OR A				; $7DEA
-			JR Z,$7DDF				; $7DEB
+			JR Z,L_7DDF				; $7DEB
 			CALL L_6802				; $7DED
 			OR A				; $7DF0
-			JP NZ,$7C43				; $7DF1
+			JP NZ,L_7C43				; $7DF1
 			JP L_7DDF				; $7DF4
 
+L_7DF7:
 			LD HL,$7E57				; $7DF7
 L_7DFA:
 			LD A,(HL)				; $7DFA
 			CP $FF				; $7DFB
-			JP Z,$7C43				; $7DFD
+			JP Z,L_7C43				; $7DFD
 			INC HL				; $7E00
 			INC HL				; $7E01
 			LD A,(HL)				; $7E02
 			OR A				; $7E03
-			JR Z,$7E0A				; $7E04
+			JR Z,L_7E0A				; $7E04
 			INC HL				; $7E06
 			JP L_7DFA				; $7E07
 
+L_7E0A:
 			LD (HL),$01				; $7E0A
 			DEC HL				; $7E0C
 			LD (HL),D				; $7E0D
@@ -3142,6 +3275,7 @@ L_7E27:
 			LD C,$47				; $7E2C
 			LD HL,$7E57				; $7E2E
 L_7E31:
+L_7E31:
 			LD A,(HL)				; $7E31
 			CP $FF				; $7E32
 			RET Z				; $7E34
@@ -3152,10 +3286,10 @@ L_7E31:
 			LD A,(HL)				; $7E39
 			INC HL				; $7E3A
 			OR A				; $7E3B
-			JP Z,$7E31				; $7E3C
+			JP Z,L_7E31				; $7E3C
 			CALL L_A4AD				; $7E3F
 			CALL L_9A75				; $7E42
-			JP Z,$7E31				; $7E45
+			JP Z,L_7E31				; $7E45
 			DEC HL				; $7E48
 			LD (HL),$00				; $7E49
 			INC HL				; $7E4B
@@ -3172,7 +3306,7 @@ L_7E31:
 
 			LD A,($7E94)				; $7E76
 			OR A				; $7E79
-			JP NZ,$7C43				; $7E7A
+			JP NZ,L_7C43				; $7E7A
 			LD A,$04				; $7E7D
 			CALL L_85B0				; $7E7F
 			PUSH DE				; $7E82
@@ -3188,7 +3322,7 @@ L_7E31:
 
 			LD A,($800D)				; $7E95
 			OR A				; $7E98
-			JP NZ,$7C43				; $7E99
+			JP NZ,L_7C43				; $7E99
 			LD A,$96				; $7E9C
 			LD ($800D),A				; $7E9E
 			LD A,$01				; $7EA1
@@ -3229,6 +3363,7 @@ L_7E31:
 
 L_7EE4:
 			LD HL,$7F08				; $7EE4
+L_7EE7:
 			LD A,(HL)				; $7EE7
 			CP $FF				; $7EE8
 			RET Z				; $7EEA
@@ -3239,7 +3374,7 @@ L_7EE4:
 			LD A,(HL)				; $7EEF
 			INC HL				; $7EF0
 			OR A				; $7EF1
-			JR NZ,$7EE7				; $7EF2
+			JR NZ,L_7EE7				; $7EF2
 			DEC HL				; $7EF4
 			LD (HL),$01				; $7EF5
 			DEC HL				; $7EF7
@@ -3265,6 +3400,7 @@ L_7F1D:
 			CALL L_67B9				; $7F1F
 			LD HL,$7F08				; $7F22
 L_7F25:
+L_7F25:
 			LD A,(HL)				; $7F25
 			CP $FF				; $7F26
 			RET Z				; $7F28
@@ -3279,30 +3415,32 @@ L_7F25:
 			LD A,(HL)				; $7F31
 			INC HL				; $7F32
 			OR A				; $7F33
-			JR Z,$7F25				; $7F34
+			JR Z,L_7F25				; $7F34
 			LD A,C				; $7F36
 			CP $FE				; $7F37
-			JR Z,$7F45				; $7F39
+			JR Z,L_7F45				; $7F39
 			CALL L_8115				; $7F3B
 			OR A				; $7F3E
-			CALL NZ,$7F97				; $7F3F
+			CALL NZ,L_7F97				; $7F3F
 			JP L_7F4C				; $7F42
 
+L_7F45:
 			CALL L_8139				; $7F45
 			OR A				; $7F48
-			CALL NZ,$7F97				; $7F49
+			CALL NZ,L_7F97				; $7F49
 L_7F4C:
 			LD A,B				; $7F4C
 			CP $FC				; $7F4D
-			JR Z,$7F5B				; $7F4F
+			JR Z,L_7F5B				; $7F4F
 			CALL L_815D				; $7F51
 			OR A				; $7F54
-			CALL NZ,$7FBF				; $7F55
+			CALL NZ,L_7FBF				; $7F55
 			JP L_7F62				; $7F58
 
+L_7F5B:
 			CALL L_8181				; $7F5B
 			OR A				; $7F5E
-			CALL NZ,$7FBF				; $7F5F
+			CALL NZ,L_7FBF				; $7F5F
 L_7F62:
 			LD A,$05				; $7F62
 			CALL L_80BD				; $7F64
@@ -3330,12 +3468,13 @@ L_7F62:
 			CALL L_9A75				; $7F82
 			LD A,($800D)				; $7F85
 			OR A				; $7F88
-			JP Z,$7F25				; $7F89
+			JP Z,L_7F25				; $7F89
 			CP $0A				; $7F8C
-			JP NC,$7F25				; $7F8E
+			JP NC,L_7F25				; $7F8E
 			CALL L_8ABF				; $7F91
 			JP L_7F25				; $7F94
 
+L_7F97:
 			LD A,C				; $7F97
 			NEG				; $7F98
 			LD C,A				; $7F9A
@@ -3357,6 +3496,7 @@ L_7F62:
 			POP BC				; $7FBB
 			JP L_6C9A				; $7FBC
 
+L_7FBF:
 			LD A,B				; $7FBF
 			NEG				; $7FC0
 			LD B,A				; $7FC2
@@ -3387,6 +3527,7 @@ L_7FE7:
 			RET NZ				; $7FF0
 			LD HL,$7F08				; $7FF1
 L_7FF4:
+L_7FF4:
 			LD A,(HL)				; $7FF4
 			CP $FF				; $7FF5
 			RET Z				; $7FF7
@@ -3400,7 +3541,7 @@ L_7FF4:
 			LD (HL),$00				; $7FFF
 			INC HL				; $8001
 			OR A				; $8002
-			JR Z,$7FF4				; $8003
+			JR Z,L_7FF4				; $8003
 			LD A,$05				; $8005
 			CALL L_80BD				; $8007
 			JP L_7FF4				; $800A
@@ -3409,13 +3550,13 @@ L_7FF4:
 			LD IX,$80B1				; $800E
 			LD A,(IX+$02)				; $8012
 			OR A				; $8015
-			JP NZ,$7C43				; $8016
+			JP NZ,L_7C43				; $8016
 			LD BC,$0008				; $8019
 			LD IY,$6CFC				; $801C
 L_8020:
 			LD A,(IY+$00)				; $8020
 			CP $FF				; $8023
-			JR NZ,$8038				; $8025
+			JR NZ,L_8038				; $8025
 			LD A,$78				; $8027
 			CALL L_6679				; $8029
 			LD C,A				; $802C
@@ -3425,12 +3566,14 @@ L_8020:
 			LD B,A				; $8034
 			JP L_8049				; $8035
 
+L_8038:
 			LD A,(IY+$04)				; $8038
 			OR A				; $803B
-			JR NZ,$8043				; $803C
+			JR NZ,L_8043				; $803C
 			ADD IY,BC				; $803E
 			JP L_8020				; $8040
 
+L_8043:
 			LD C,(IY+$00)				; $8043
 			LD B,(IY+$01)				; $8046
 L_8049:
@@ -3453,10 +3596,11 @@ L_8066:
 			LD C,(IX+$00)				; $806F
 			LD B,(IX+$01)				; $8072
 			LD H,$05				; $8075
+L_8077:
 			CALL L_8BCA				; $8077
-			JR Z,$809E				; $807A
+			JR Z,L_809E				; $807A
 			DEC H				; $807C
-			JR NZ,$8077				; $807D
+			JR NZ,L_8077				; $807D
 			LD L,(IX+$0A)				; $807F
 			LD H,(IX+$0B)				; $8082
 			LD A,$11				; $8085
@@ -3473,6 +3617,7 @@ L_8066:
 			LD C,$47				; $8099
 			JP L_A446				; $809B
 
+L_809E:
 			LD L,(IX+$0A)				; $809E
 			LD H,(IX+$0B)				; $80A1
 			XOR A				; $80A4
@@ -3571,10 +3716,10 @@ L_8115:
 			PUSH HL				; $8117
 			LD A,E				; $8118
 			CP $7A				; $8119
-			JR NC,$8134				; $811B
+			JR NC,L_8134				; $811B
 			AND $03				; $811D
 			LD A,$00				; $811F
-			JR NZ,$8134				; $8121
+			JR NZ,L_8134				; $8121
 			CALL L_678F				; $8123
 			INC L				; $8126
 			LD BC,$0020				; $8127
@@ -3583,9 +3728,10 @@ L_8115:
 			LD A,D				; $812C
 			AND $07				; $812D
 			LD A,E				; $812F
-			JR Z,$8134				; $8130
+			JR Z,L_8134				; $8130
 			ADD HL,BC				; $8132
 			OR (HL)				; $8133
+L_8134:
 			OR A				; $8134
 			POP HL				; $8135
 			POP DE				; $8136
@@ -3598,10 +3744,10 @@ L_8139:
 			PUSH HL				; $813B
 			LD A,E				; $813C
 			CP $04				; $813D
-			JR C,$8158				; $813F
+			JR C,L_8158				; $813F
 			AND $03				; $8141
 			LD A,$00				; $8143
-			JR NZ,$8158				; $8145
+			JR NZ,L_8158				; $8145
 			CALL L_678F				; $8147
 			DEC L				; $814A
 			LD BC,$0020				; $814B
@@ -3610,9 +3756,10 @@ L_8139:
 			LD A,D				; $8150
 			AND $07				; $8151
 			LD A,E				; $8153
-			JR Z,$8158				; $8154
+			JR Z,L_8158				; $8154
 			ADD HL,BC				; $8156
 			OR (HL)				; $8157
+L_8158:
 			OR A				; $8158
 			POP HL				; $8159
 			POP DE				; $815A
@@ -3625,10 +3772,10 @@ L_815D:
 			PUSH HL				; $815F
 			LD A,D				; $8160
 			CP $B8				; $8161
-			JR NC,$817C				; $8163
+			JR NC,L_817C				; $8163
 			AND $07				; $8165
 			LD A,$00				; $8167
-			JR NZ,$817C				; $8169
+			JR NZ,L_817C				; $8169
 			CALL L_678F				; $816B
 			LD BC,$0020				; $816E
 			ADD HL,BC				; $8171
@@ -3637,9 +3784,10 @@ L_815D:
 			LD A,E				; $8174
 			AND $03				; $8175
 			LD A,D				; $8177
-			JR Z,$817C				; $8178
+			JR Z,L_817C				; $8178
 			INC L				; $817A
 			OR (HL)				; $817B
+L_817C:
 			OR A				; $817C
 			POP HL				; $817D
 			POP DE				; $817E
@@ -3652,10 +3800,10 @@ L_8181:
 			PUSH HL				; $8183
 			LD A,D				; $8184
 			CP $20				; $8185
-			JR C,$81A0				; $8187
+			JR C,L_81A0				; $8187
 			AND $07				; $8189
 			LD A,$00				; $818B
-			JR NZ,$81A0				; $818D
+			JR NZ,L_81A0				; $818D
 			CALL L_678F				; $818F
 			LD BC,$FFE0				; $8192
 			ADD HL,BC				; $8195
@@ -3664,9 +3812,10 @@ L_8181:
 			LD A,E				; $8198
 			AND $03				; $8199
 			LD A,D				; $819B
-			JR Z,$81A0				; $819C
+			JR Z,L_81A0				; $819C
 			INC L				; $819E
 			OR (HL)				; $819F
+L_81A0:
 			OR A				; $81A0
 			POP HL				; $81A1
 			POP DE				; $81A2
@@ -3675,40 +3824,43 @@ L_8181:
 
 			NOP				; $81A5
 L_81A6:
+L_81A6:
 			CALL L_66AA				; $81A6
 			CALL L_844F				; $81A9
 			LD HL,$8235				; $81AC
 			CALL L_6B29				; $81AF
 			LD A,($8599)				; $81B2
 			OR A				; $81B5
-			JR NZ,$81CB				; $81B6
+			JR NZ,L_81CB				; $81B6
 			LD A,($81A5)				; $81B8
 			OR A				; $81BB
-			JR NZ,$81CB				; $81BC
+			JR NZ,L_81CB				; $81BC
 			DI				; $81BE
 			CALL L_FB86				; $81BF
 			CALL L_FB8D				; $81C2
 			EI				; $81C5
 			LD A,$01				; $81C6
 			LD ($81A5),A				; $81C8
+L_81CB:
 			CALL L_6672				; $81CB
-			JP NZ,$81CB				; $81CE
+			JP NZ,L_81CB				; $81CE
 			LD BC,$01F4				; $81D1
+L_81D4:
 			PUSH BC				; $81D4
 			CALL L_84F5				; $81D5
 			CALL L_82E5				; $81D8
 			CALL L_662B				; $81DB
 			POP BC				; $81DE
 			CP $31				; $81DF
-			JR C,$8229				; $81E1
+			JR C,L_8229				; $81E1
 			CP $37				; $81E3
-			JR NC,$8229				; $81E5
+			JR NC,L_8229				; $81E5
 			CP $31				; $81E7
 			RET Z				; $81E9
 			CP $32				; $81EA
 			JP Z,$830C				; $81EC
 			CP $36				; $81EF
-			JR NZ,$8214				; $81F1
+			JR NZ,L_8214				; $81F1
 			LD A,($830A)				; $81F3
 			XOR $01				; $81F6
 			LD ($830A),A				; $81F8
@@ -3717,17 +3869,19 @@ L_81A6:
 			LD E,$01				; $81FF
 			CALL L_EF42				; $8201
 			POP BC				; $8204
+L_8205:
 			CALL L_82E5				; $8205
 			CALL L_6672				; $8208
-			CALL NZ,$84F5				; $820B
-			JP NZ,$8205				; $820E
+			CALL NZ,L_84F5				; $820B
+			JP NZ,L_8205				; $820E
 			JP L_8229				; $8211
 
+L_8214:
 			SUB $33				; $8214
 			LD E,A				; $8216
 			LD A,($68AB)				; $8217
 			CP E				; $821A
-			JR Z,$8229				; $821B
+			JR Z,L_8229				; $821B
 			LD A,E				; $821D
 			LD ($68AB),A				; $821E
 			PUSH BC				; $8221
@@ -3735,10 +3889,11 @@ L_81A6:
 			CALL L_6B29				; $8225
 			POP BC				; $8228
 L_8229:
+L_8229:
 			DEC BC				; $8229
 			LD A,B				; $822A
 			OR C				; $822B
-			JP NZ,$81D4				; $822C
+			JP NZ,L_81D4				; $822C
 			CALL L_9433				; $822F
 			JP L_81A6				; $8232
 
@@ -3808,13 +3963,15 @@ L_8329:
 			LD C,$44				; $832C
 			CALL L_6C4A				; $832E
 			PUSH DE				; $8331
+L_8332:
 			CALL L_6672				; $8332
-			CALL NZ,$84F5				; $8335
-			JP NZ,$8332				; $8338
+			CALL NZ,L_84F5				; $8335
+			JP NZ,L_8332				; $8338
+L_833B:
 			CALL L_662B				; $833B
 			OR A				; $833E
-			CALL Z,$84F5				; $833F
-			JP Z,$833B				; $8342
+			CALL Z,L_84F5				; $833F
+			JP Z,L_833B				; $8342
 			LD (IX+$02),D				; $8345
 			LD (IX+$06),E				; $8348
 			LD DE,$000A				; $834B
@@ -3824,17 +3981,21 @@ L_8329:
 			POP DE				; $8355
 			LD HL,$83C1				; $8356
 			CP $20				; $8359
-			JR NZ,$8360				; $835B
+			JR NZ,L_8360				; $835B
 			LD HL,$83C5				; $835D
+L_8360:
 			CP $0D				; $8360
-			JR NZ,$8367				; $8362
+			JR NZ,L_8367				; $8362
 			LD HL,$83CD				; $8364
+L_8367:
 			CP $01				; $8367
-			JR NZ,$836E				; $8369
+			JR NZ,L_836E				; $8369
 			LD HL,$83D5				; $836B
+L_836E:
 			CP $02				; $836E
-			JR NZ,$8375				; $8370
+			JR NZ,L_8375				; $8370
 			LD HL,$83E2				; $8372
+L_8375:
 			LD ($83C1),A				; $8375
 			LD C,$44				; $8378
 			CALL L_6B29				; $837A
@@ -3849,14 +4010,14 @@ L_8329:
 L_8391:
 			LD A,(DE)				; $8391
 			CP (HL)				; $8392
-			JP NZ,$81A6				; $8393
+			JP NZ,L_81A6				; $8393
 			INC HL				; $8396
 			INC DE				; $8397
 			DJNZ L_8391				; $8398
 			LD A,($8F4F)				; $839A
 			XOR $35				; $839D
 			LD ($8F4F),A				; $839F
-			JP NZ,$81A6				; $83A2
+			JP NZ,L_81A6				; $83A2
 			LD A,$04				; $83A5
 			CALL L_85B0				; $83A7
 			LD E,$22				; $83AA
@@ -3918,6 +4079,7 @@ L_844F:
 			LD DE,$101C				; $8493
 			LD HL,$84D7				; $8496
 			LD C,$03				; $8499
+L_849B:
 			LD B,$0A				; $849B
 L_849D:
 			LD A,(HL)				; $849D
@@ -3933,7 +4095,7 @@ L_849D:
 			ADD A,$10				; $84AE
 			LD D,A				; $84B0
 			DEC C				; $84B1
-			JR NZ,$849B				; $84B2
+			JR NZ,L_849B				; $84B2
 			RET				; $84B4
 
 L_84B5:
@@ -3967,6 +4129,7 @@ L_84C8:
 			defb $6B,$6C ; REMOVED ,$76             ; $84F3 kl
 			; UPDATED TO USE INSTRUCTION
 L_84F5:
+L_84F5:
 			HALT				; $84F5
 
 			PUSH AF				; $84F6
@@ -3976,6 +4139,7 @@ L_84F5:
 			AND A				; $84FA
 			LD HL,$4102			; $84FB
 			LD D,$0E			; $84FE
+L_8500:
 			PUSH HL				; $8500
 			LD B,$04			; $8501
 L_8503:
@@ -3995,11 +4159,12 @@ L_8503:
 			INC L				; $8517
 			DJNZ L_8503				; $8518
 			POP HL				; $851A
-			JR NC,$851F				; $851B
+			JR NC,L_851F				; $851B
 			SET 7,(HL)				; $851D
+L_851F:
 			CALL L_674C				; $851F
 			DEC D				; $8522
-			JP NZ,$8500				; $8523
+			JP NZ,L_8500				; $8523
 			LD HL,$4040				; $8526
 			LD DE,$4140				; $8529
 			LD B,(HL)				; $852C
@@ -4009,6 +4174,7 @@ L_8503:
 			EX DE,HL				; $8530
 			PUSH BC				; $8531
 			LD BC,$013E				; $8532
+L_8535:
 			LDI				; $8535
 			LDI				; $8537
 			EX AF,AF'				; $8539
@@ -4018,7 +4184,7 @@ L_8503:
 			LD D,H				; $853D
 			CALL L_674C				; $853E
 			EX AF,AF'				; $8541
-			JP PE,$8535				; $8542
+			JP PE,L_8535				; $8542
 			POP BC				; $8545
 			EX DE,HL				; $8546
 			LD (HL),B				; $8547
@@ -4027,6 +4193,7 @@ L_8503:
 			LD DE,$57BE				; $854A
 			LD BC,$0140				; $854D
 			LD HL,$4040				; $8550
+L_8553:
 			LDI				; $8553
 			LDI				; $8555
 			EX AF,AF'				; $8557
@@ -4039,10 +4206,11 @@ L_8503:
 			CALL L_675B				; $8560
 			EX DE,HL				; $8563
 			EX AF,AF'				; $8564
-			JP PE,$8553				; $8565
+			JP PE,L_8553				; $8565
 			AND A				; $8568
 			LD HL,$51DD				; $8569
 			LD D,$0E				; $856C
+L_856E:
 			PUSH HL				; $856E
 			LD B,$04				; $856F
 L_8571:
@@ -4062,11 +4230,12 @@ L_8571:
 			DEC L				; $8585
 			DJNZ L_8571				; $8586
 			POP HL				; $8588
-			JR NC,$858D				; $8589
+			JR NC,L_858D				; $8589
 			SET 0,(HL)				; $858B
+L_858D:
 			CALL L_674C				; $858D
 			DEC D				; $8590
-			JP NZ,$856E				; $8591
+			JP NZ,L_856E				; $8591
 			POP HL				; $8594
 			POP DE				; $8595
 			POP BC				; $8596
@@ -4082,27 +4251,30 @@ L_85B0:
 			PUSH HL				; $85B0
 			LD HL,$859B				; $85B1
 			CP (HL)				; $85B4
-			JR NC,$85B8				; $85B5
+			JR NC,L_85B8				; $85B5
 			LD (HL),A				; $85B7
+L_85B8:
 			POP HL				; $85B8
 			RET				; $85B9
 
+L_85BA:
 			LD HL,$859A				; $85BA
 			LD A,($859B)				; $85BD
 			CP $FF				; $85C0
-			JR Z,$861D				; $85C2
+			JR Z,L_861D				; $85C2
 			LD C,A				; $85C4
 			LD A,$FF				; $85C5
 			LD ($859B),A				; $85C7
 			LD A,(HL)				; $85CA
 			AND A				; $85CB
-			JR Z,$85D1				; $85CC
+			JR Z,L_85D1				; $85CC
 			CP C				; $85CE
-			JR C,$861D				; $85CF
+			JR C,L_861D				; $85CF
+L_85D1:
 			LD (HL),C				; $85D1
 			LD A,C				; $85D2
 			AND A				; $85D3
-			JP Z,$870B				; $85D4
+			JP Z,L_870B				; $85D4
 			DEC A				; $85D7
 			RLCA				; $85D8
 			RLCA				; $85D9
@@ -4139,24 +4311,28 @@ L_85B0:
 			LD HL,$85A7				; $860E
 			LD E,L				; $8611
 			LD D,H				; $8612
-			JR Z,$8618				; $8613
+			JR Z,L_8618				; $8613
 			LD DE,$85A8				; $8615
+L_8618:
 			EXX				; $8618
 			LD B,$01				; $8619
 			JR L_862E				; $861B
 
+L_861D:
 			LD A,(HL)				; $861D
 			AND A				; $861E
-			JP Z,$870B				; $861F
+			JP Z,L_870B				; $861F
 			LD HL,($85AA)				; $8622
 			LD DE,($85AC)				; $8625
 			EXX				; $8629
 			LD BC,($85AE)				; $862A
 L_862E:
 			LD HL,($859C)				; $862E
+L_8631:
 			EXX				; $8631
 			LD C,$02				; $8632
 			LD A,$18				; $8634
+L_8636:
 			LD B,(HL)				; $8636
 			OUT ($FE),A				; $8637
 L_8639:
@@ -4167,12 +4343,12 @@ L_8639:
 			EX DE,HL				; $863E
 			LD A,$00				; $863F
 			DEC C				; $8641
-			JR NZ,$8636				; $8642
+			JR NZ,L_8636				; $8642
 			EXX				; $8644
 			BIT 7,H				; $8645
-			JR Z,$8631				; $8647
+			JR Z,L_8631				; $8647
 			BIT 7,C				; $8649
-			JR Z,$865D				; $864B
+			JR Z,L_865D				; $864B
 			LD HL,$85A7				; $864D
 			LD A,($859F)				; $8650
 			ADD A,(HL)				; $8653
@@ -4183,21 +4359,23 @@ L_8639:
 			LD (HL),A				; $865A
 			JR L_866F				; $865B
 
+L_865D:
 			LD HL,$85A7				; $865D
 			LD A,($859F)				; $8660
 			BIT 0,B				; $8663
-			JR NZ,$866D				; $8665
+			JR NZ,L_866D				; $8665
 			LD HL,$85A8				; $8667
 			LD A,($85A1)				; $866A
+L_866D:
 			ADD A,(HL)				; $866D
 			LD (HL),A				; $866E
 L_866F:
 			LD HL,$85A9				; $866F
 			DEC (HL)				; $8672
-			JP NZ,$86FE				; $8673
+			JP NZ,L_86FE				; $8673
 			LD HL,$85A3				; $8676
 			DEC (HL)				; $8679
-			JP Z,$870B				; $867A
+			JP Z,L_870B				; $867A
 			LD HL,$85A2				; $867D
 			LD E,(HL)				; $8680
 			LD HL,$859F				; $8681
@@ -4209,69 +4387,81 @@ L_866F:
 			ADD A,E				; $868B
 			LD (HL),A				; $868C
 			BIT 5,C				; $868D
-			JR Z,$8699				; $868F
+			JR Z,L_8699				; $868F
 			LD HL,$85A5				; $8691
 			DEC (HL)				; $8694
-			JR NZ,$8699				; $8695
+			JR NZ,L_8699				; $8695
 			LD (HL),$01				; $8697
+L_8699:
 			BIT 3,C				; $8699
-			JR Z,$86AC				; $869B
+			JR Z,L_86AC				; $869B
 			BIT 7,C				; $869D
-			JR NZ,$86A5				; $869F
+			JR NZ,L_86A5				; $869F
 			BIT 0,B				; $86A1
-			JR Z,$86AC				; $86A3
+			JR Z,L_86AC				; $86A3
+L_86A5:
 			LD HL,$859F				; $86A5
 			LD A,(HL)				; $86A8
 			NEG				; $86A9
 			LD (HL),A				; $86AB
+L_86AC:
 			BIT 4,C				; $86AC
-			JR Z,$86BF				; $86AE
+			JR Z,L_86BF				; $86AE
 			BIT 7,C				; $86B0
-			JR NZ,$86B8				; $86B2
+			JR NZ,L_86B8				; $86B2
 			BIT 0,B				; $86B4
-			JR Z,$86BF				; $86B6
+			JR Z,L_86BF				; $86B6
+L_86B8:
 			LD HL,$85A1				; $86B8
 			LD A,(HL)				; $86BB
 			NEG				; $86BC
 			LD (HL),A				; $86BE
+L_86BF:
 			BIT 6,C				; $86BF
-			JR Z,$86CF				; $86C1
+			JR Z,L_86CF				; $86C1
 			LD HL,$85A7				; $86C3
 			LD A,($859E)				; $86C6
 			LD (HL),A				; $86C9
 			INC HL				; $86CA
 			LD A,($85A0)				; $86CB
 			LD (HL),A				; $86CE
+L_86CF:
 			EXX				; $86CF
 			LD HL,$85A7				; $86D0
 			LD DE,$85A8				; $86D3
 			LD A,($85A5)				; $86D6
 			EXX				; $86D9
 			BIT 7,C				; $86DA
-			JR NZ,$86FB				; $86DC
+			JR NZ,L_86FB				; $86DC
 			LD A,($85A3)				; $86DE
 			LD B,C				; $86E1
 			SRL A				; $86E2
-			JR NC,$86EC				; $86E4
-			JR NZ,$86EA				; $86E6
+			JR NC,L_86EC				; $86E4
+			JR NZ,L_86EA				; $86E6
 			RR B				; $86E8
+L_86EA:
 			RR B				; $86EA
+L_86EC:
 			BIT 0,B				; $86EC
 			EXX				; $86EE
 			LD A,($85A5)				; $86EF
-			JR NZ,$86F8				; $86F2
+			JR NZ,L_86F8				; $86F2
 			EX DE,HL				; $86F4
 			LD A,($85A6)				; $86F5
+L_86F8:
 			LD E,L				; $86F8
 			LD D,H				; $86F9
 			EXX				; $86FA
+L_86FB:
 			LD ($85A9),A				; $86FB
+L_86FE:
 			LD ($85AE),BC				; $86FE
 			EXX				; $8702
 			LD ($85AA),HL				; $8703
 			LD ($85AC),DE				; $8706
 			RET				; $870A
 
+L_870B:
 			XOR A				; $870B
 			LD ($859A),A				; $870C
 			RET				; $870F
@@ -4306,27 +4496,29 @@ L_8751:
 			LD C,A				; $8751
 			LD A,(HL)				; $8752
 			CP $FF				; $8753
-			JP Z,$87A5				; $8755
+			JP Z,L_87A5				; $8755
 			LD A,C				; $8758
 			CP (HL)				; $8759
-			JR Z,$8762				; $875A
+			JR Z,L_8762				; $875A
 			LD BC,$0004				; $875C
 			ADD HL,BC				; $875F
 			JR L_8751				; $8760
 
+L_8762:
 			LD IX,$8814				; $8762
 L_8766:
 			BIT 7,(IX+$00)				; $8766
-			JR NZ,$87A5				; $876A
+			JR NZ,L_87A5				; $876A
 			EX AF,AF'				; $876C
 			LD A,(IX+$01)				; $876D
 			OR A				; $8770
-			JR Z,$877B				; $8771
+			JR Z,L_877B				; $8771
 			EX AF,AF'				; $8773
 			LD BC,$000A				; $8774
 			ADD IX,BC				; $8777
 			JR L_8766				; $8779
 
+L_877B:
 			EX AF,AF'				; $877B
 			PUSH HL				; $877C
 			CALL L_A539				; $877D
@@ -4347,6 +4539,7 @@ L_8766:
 			LD A,(HL)				; $879E
 			LD (IX+$08),A				; $879F
 			LD (IX+$09),A				; $87A2
+L_87A5:
 			POP IX				; $87A5
 			POP HL				; $87A7
 			POP DE				; $87A8
@@ -4369,24 +4562,25 @@ L_87B0:
 			LD E,C				; $87C0
 			LD A,(HL)				; $87C1
 			OR A				; $87C2
-			JP Z,$880C				; $87C3
+			JP Z,L_880C				; $87C3
 			LD D,(IX+$01)				; $87C6
 			LD B,D				; $87C9
 			LD A,(IX+$09)				; $87CA
 			OR A				; $87CD
-			JR NZ,$8809				; $87CE
+			JR NZ,L_8809				; $87CE
 			LD A,(IX+$08)				; $87D0
 			LD (IX+$09),A				; $87D3
 			LD L,(IX+$04)				; $87D6
 			LD H,(IX+$05)				; $87D9
 			LD A,(HL)				; $87DC
 			CP $FF				; $87DD
-			JR NZ,$87EE				; $87DF
+			JR NZ,L_87EE				; $87DF
 			LD L,(IX+$02)				; $87E1
 			LD H,(IX+$03)				; $87E4
 			LD (IX+$04),L				; $87E7
 			LD (IX+$05),H				; $87EA
 			LD A,(HL)				; $87ED
+L_87EE:
 			INC HL				; $87EE
 			LD (IX+$04),L				; $87EF
 			LD (IX+$05),H				; $87F2
@@ -4398,7 +4592,9 @@ L_87B0:
 			LD B,A				; $8804
 			CALL L_678F				; $8805
 			LD (HL),B				; $8808
+L_8809:
 			DEC (IX+$09)				; $8809
+L_880C:
 			LD DE,$000A				; $880C
 			ADD IX,DE				; $880F
 			JP L_87B0				; $8811
@@ -4453,17 +4649,19 @@ L_8895:
 			defb $00,$02,$A0,$3B,$00,$00,$00                    ; $88E3 ...;...
 
 L_88EA:
+L_88EA:
 			PUSH AF				; $88EA
 			PUSH BC				; $88EB
 			PUSH HL				; $88EC
 			LD HL,$896E				; $88ED
+L_88F0:
 			LD A,(HL)				; $88F0
 			CP $FF				; $88F1
-			JR Z,$891F				; $88F3
+			JR Z,L_891F				; $88F3
 			OR A				; $88F5
 			LD BC,$0005				; $88F6
 			ADD HL,BC				; $88F9
-			JR NZ,$88F0				; $88FA
+			JR NZ,L_88F0				; $88FA
 			SBC HL,BC				; $88FC
 			LD (HL),$09				; $88FE
 			INC HL				; $8900
@@ -4485,6 +4683,7 @@ L_88EA:
 			POP IX				; $891A
 			POP IY				; $891C
 			POP DE				; $891E
+L_891F:
 			POP HL				; $891F
 			POP BC				; $8920
 			POP AF				; $8921
@@ -4497,7 +4696,7 @@ L_8927:
 			CP $FF				; $892A
 			RET Z				; $892C
 			OR A				; $892D
-			JR Z,$895E				; $892E
+			JR Z,L_895E				; $892E
 			LD E,(IX+$01)				; $8930
 			LD D,(IX+$02)				; $8933
 			LD L,A				; $8936
@@ -4519,6 +4718,7 @@ L_8927:
 			ADD A,$41				; $8958
 			LD C,A				; $895A
 			CALL L_A446				; $895B
+L_895E:
 			LD DE,$0005				; $895E
 			ADD IX,DE				; $8961
 			JR L_8927				; $8963
@@ -4546,18 +4746,20 @@ L_89A1:
 L_89B1:
 			LD A,(IX+$00)				; $89B1
 			CP $FF				; $89B4
-			JR Z,$89D0				; $89B6
+			JR Z,L_89D0				; $89B6
 			OR A				; $89B8
-			JR Z,$89C0				; $89B9
+			JR Z,L_89C0				; $89B9
 			ADD IX,DE				; $89BB
 			JP L_89B1				; $89BD
 
+L_89C0:
 			EX AF,AF'				; $89C0
 			LD (IX+$00),A				; $89C1
 			LD (IX+$01),L				; $89C4
 			LD (IX+$02),H				; $89C7
 			LD (IX+$03),C				; $89CA
 			LD (IX+$04),B				; $89CD
+L_89D0:
 			POP IX				; $89D0
 			POP HL				; $89D2
 			POP DE				; $89D3
@@ -4572,12 +4774,13 @@ L_89DB:
 			CP $FF				; $89DE
 			RET Z				; $89E0
 			OR A				; $89E1
-			JR NZ,$89EC				; $89E2
+			JR NZ,L_89EC				; $89E2
 L_89E4:
 			LD DE,$0005				; $89E4
 			ADD IX,DE				; $89E7
 			JP L_89DB				; $89E9
 
+L_89EC:
 			DEC (IX+$00)				; $89EC
 			LD E,(IX+$01)				; $89EF
 			LD A,(IX+$03)				; $89F2
@@ -4607,16 +4810,17 @@ L_8A3E:
 			PUSH HL				; $8A41
 			LD HL,$8A96				; $8A42
 			LD C,A				; $8A45
+L_8A46:
 			LD A,(HL)				; $8A46
 			CP $FF				; $8A47
-			JP Z,$8A64				; $8A49
+			JP Z,L_8A64				; $8A49
 			INC HL				; $8A4C
 			INC HL				; $8A4D
 			INC HL				; $8A4E
 			LD A,(HL)				; $8A4F
 			INC HL				; $8A50
 			OR A				; $8A51
-			JR NZ,$8A46				; $8A52
+			JR NZ,L_8A46				; $8A52
 			DEC HL				; $8A54
 			LD (HL),$28				; $8A55
 			DEC HL				; $8A57
@@ -4628,6 +4832,7 @@ L_8A3E:
 			LD A,C				; $8A5D
 			LD HL,$C6F9				; $8A5E
 			CALL L_A4DB				; $8A61
+L_8A64:
 			POP HL				; $8A64
 			POP DE				; $8A65
 			POP BC				; $8A66
@@ -4636,6 +4841,7 @@ L_8A3E:
 
 L_8A69:
 			LD HL,$8A96				; $8A69
+L_8A6C:
 L_8A6C:
 			LD A,(HL)				; $8A6C
 			CP $FF				; $8A6D
@@ -4649,16 +4855,16 @@ L_8A6C:
 			LD A,(HL)				; $8A76
 			INC HL				; $8A77
 			OR A				; $8A78
-			JP Z,$8A6C				; $8A79
+			JP Z,L_8A6C				; $8A79
 			DEC HL				; $8A7C
 			DEC (HL)				; $8A7D
 			INC HL				; $8A7E
 			LD A,C				; $8A7F
 			PUSH HL				; $8A80
 			LD HL,$C6F9				; $8A81
-			CALL Z,$A4DB				; $8A84
+			CALL Z,L_A4DB				; $8A84
 			POP HL				; $8A87
-			LD A,($65EA)				; $8A88
+			LD A,(EventDelay)				; $8A88
 			AND $07				; $8A8B
 			OR $40				; $8A8D
 			LD C,A				; $8A8F
@@ -4673,29 +4879,33 @@ L_8A6C:
 			defb $00,$CF,$33,$FF                                ; $8ABB ..3.
 
 L_8ABF:
+L_8ABF:
 			BIT 7,E				; $8ABF
 			RET NZ				; $8AC1
 			PUSH HL				; $8AC2
 			LD HL,$8B16				; $8AC3
+L_8AC6:
 			BIT 7,(HL)				; $8AC6
-			JR NZ,$8AD8				; $8AC8
+			JR NZ,L_8AD8				; $8AC8
 			INC HL				; $8ACA
 			INC HL				; $8ACB
 			LD A,(HL)				; $8ACC
 			OR A				; $8ACD
 			INC HL				; $8ACE
-			JR NZ,$8AC6				; $8ACF
+			JR NZ,L_8AC6				; $8ACF
 			DEC HL				; $8AD1
 			LD (HL),$0A				; $8AD2
 			DEC HL				; $8AD4
 			LD (HL),D				; $8AD5
 			DEC HL				; $8AD6
 			LD (HL),E				; $8AD7
+L_8AD8:
 			POP HL				; $8AD8
 			RET				; $8AD9
 
 L_8ADA:
 			LD HL,$8B16				; $8ADA
+L_8ADD:
 L_8ADD:
 			LD E,(HL)				; $8ADD
 			BIT 7,E				; $8ADE
@@ -4706,7 +4916,7 @@ L_8ADD:
 			LD A,(HL)				; $8AE4
 			INC HL				; $8AE5
 			OR A				; $8AE6
-			JR Z,$8ADD				; $8AE7
+			JR Z,L_8ADD				; $8AE7
 			PUSH HL				; $8AE9
 			DEC HL				; $8AEA
 			DEC (HL)				; $8AEB
@@ -4751,7 +4961,7 @@ L_8B71:
 			LD L,E				; $8B76
 			AND A				; $8B77
 			SBC HL,BC				; $8B78
-			JR Z,$8BC5				; $8B7A
+			JR Z,L_8BC5				; $8B7A
 			LD H,E				; $8B7C
 			LD L,D				; $8B7D
 			LD A,B				; $8B7E
@@ -4760,15 +4970,17 @@ L_8B71:
 			LD DE,$0101				; $8B81
 			LD A,B				; $8B84
 			SUB H				; $8B85
-			JR NC,$8B8C				; $8B86
+			JR NC,L_8B8C				; $8B86
 			LD D,$FF				; $8B88
 			NEG				; $8B8A
+L_8B8C:
 			LD B,A				; $8B8C
 			LD A,C				; $8B8D
 			SUB L				; $8B8E
-			JR NC,$8B95				; $8B8F
+			JR NC,L_8B95				; $8B8F
 			LD E,$FF				; $8B91
 			NEG				; $8B93
+L_8B95:
 			LD C,A				; $8B95
 			OR B				; $8B96
 			RET Z				; $8B97
@@ -4781,11 +4993,12 @@ L_8B71:
 			LD (IX+$04),H				; $8BA2
 			LD (IX+$03),L				; $8BA5
 			LD L,$00				; $8BA8
-			JR C,$8BB0				; $8BAA
+			JR C,L_8BB0				; $8BAA
 			LD H,L				; $8BAC
 			LD L,E				; $8BAD
 			LD C,B				; $8BAE
 			LD B,A				; $8BAF
+L_8BB0:
 			LD (IX+$06),H				; $8BB0
 			LD (IX+$05),L				; $8BB3
 			LD (IX+$02),B				; $8BB6
@@ -4794,6 +5007,7 @@ L_8B71:
 			LD (IX+$07),A				; $8BBC
 			LD (IX+$09),B				; $8BBF
 			LD (IX+$08),C				; $8BC2
+L_8BC5:
 			POP HL				; $8BC5
 			POP DE				; $8BC6
 			POP BC				; $8BC7
@@ -4808,15 +5022,17 @@ L_8BCA:
 			LD L,(IX+$07)				; $8BD2
 			LD A,L				; $8BD5
 			ADD A,C				; $8BD6
-			JR C,$8BDC				; $8BD7
+			JR C,L_8BDC				; $8BD7
 			CP B				; $8BD9
-			JR C,$8BE8				; $8BDA
+			JR C,L_8BE8				; $8BDA
+L_8BDC:
 			SUB B				; $8BDC
 			LD (IX+$07),A				; $8BDD
 			LD D,(IX+$04)				; $8BE0
 			LD E,(IX+$03)				; $8BE3
 			JR L_8BF1				; $8BE6
 
+L_8BE8:
 			LD (IX+$07),A				; $8BE8
 			LD D,(IX+$06)				; $8BEB
 			LD E,(IX+$05)				; $8BEE
@@ -4868,16 +5084,17 @@ L_8C98:
 L_8CA3:
 			LD A,(IX+$00)				; $8CA3
 			CP $FF				; $8CA6
-			JR Z,$8CD0				; $8CA8
+			JR Z,L_8CD0				; $8CA8
 			LD A,(IX+$02)				; $8CAA
 			OR A				; $8CAD
-			JR Z,$8CBA				; $8CAE
+			JR Z,L_8CBA				; $8CAE
 			PUSH DE				; $8CB0
 			LD DE,$000E				; $8CB1
 			ADD IX,DE				; $8CB4
 			POP DE				; $8CB6
 			JP L_8CA3				; $8CB7
 
+L_8CBA:
 			EX AF,AF'				; $8CBA
 			LD (IX+$0B),L				; $8CBB
 			LD (IX+$0A),A				; $8CBE
@@ -4886,6 +5103,7 @@ L_8CA3:
 			CALL L_8B71				; $8CC7
 			LD A,(IX+$02)				; $8CCA
 			LD (IX+$0D),A				; $8CCD
+L_8CD0:
 			POP IX				; $8CD0
 			POP HL				; $8CD2
 			POP DE				; $8CD3
@@ -4901,12 +5119,13 @@ L_8CDB:
 			RET Z				; $8CE0
 			LD A,(IX+$02)				; $8CE1
 			OR A				; $8CE4
-			JR NZ,$8CEF				; $8CE5
+			JR NZ,L_8CEF				; $8CE5
 L_8CE7:
 			LD DE,$000E				; $8CE7
 			ADD IX,DE				; $8CEA
 			JP L_8CDB				; $8CEC
 
+L_8CEF:
 			LD E,(IX+$00)				; $8CEF
 			LD D,(IX+$01)				; $8CF2
 			LD A,(IX+$0A)				; $8CF5
@@ -4914,16 +5133,17 @@ L_8CE7:
 			LD B,(IX+$0B)				; $8CFB
 L_8CFE:
 			CALL L_8BCA				; $8CFE
-			JR Z,$8D32				; $8D01
+			JR Z,L_8D32				; $8D01
 			DJNZ L_8CFE				; $8D03
 			LD A,(IX+$0D)				; $8D05
 			SUB (IX+$02)				; $8D08
 			CP $14				; $8D0B
-			JR C,$8D16				; $8D0D
+			JR C,L_8D16				; $8D0D
 			CALL L_678F				; $8D0F
 			LD A,(HL)				; $8D12
 			OR A				; $8D13
-			JR NZ,$8D32				; $8D14
+			JR NZ,L_8D32				; $8D14
+L_8D16:
 			LD A,(IX+$0A)				; $8D16
 			CALL L_80BD				; $8D19
 			PUSH DE				; $8D1C
@@ -4940,6 +5160,7 @@ L_8CFE:
 			CALL L_A4AD				; $8D2C
 			JP L_8CE7				; $8D2F
 
+L_8D32:
 			LD (IX+$02),$00				; $8D32
 			CALL L_8ABF				; $8D36
 			JP L_8CE7				; $8D39
@@ -4958,26 +5179,29 @@ L_8D3F:
 			CALL L_678F				; $8D48
 			LD A,(HL)				; $8D4B
 			OR A				; $8D4C
-			JR NZ,$8D53				; $8D4D
+			JR NZ,L_8D53				; $8D4D
+L_8D4F:
 L_8D4F:
 			POP HL				; $8D4F
 			JP L_8D3F				; $8D50
 
+L_8D53:
 			LD ($8D7A),A				; $8D53
 			LD HL,$8D7B				; $8D56
 			LD C,A				; $8D59
 L_8D5A:
 			LD A,(HL)				; $8D5A
 			CP $FF				; $8D5B
-			JP Z,$8D4F				; $8D5D
+			JP Z,L_8D4F				; $8D5D
 			CP C				; $8D60
-			JR Z,$8D6C				; $8D61
+			JR Z,L_8D6C				; $8D61
 			PUSH BC				; $8D63
 			LD BC,$0005				; $8D64
 			ADD HL,BC				; $8D67
 			POP BC				; $8D68
 			JP L_8D5A				; $8D69
 
+L_8D6C:
 			INC HL				; $8D6C
 			LD A,(HL)				; $8D6D
 			ADD A,E				; $8D6E
@@ -5002,15 +5226,16 @@ L_8D5A:
 			LD A,$0C				; $8D95
 			CALL L_6679				; $8D97
 			OR A				; $8D9A
-			JP NZ,$8D4F				; $8D9B
+			JP NZ,L_8D4F				; $8D9B
 			LD BC,($6969)				; $8D9E
 			LD A,$1F				; $8DA2
 			CALL L_6679				; $8DA4
 			ADD A,C				; $8DA7
 			SUB $0C				; $8DA8
 			CP $7C				; $8DAA
-			JR NC,$8DAF				; $8DAC
+			JR NC,L_8DAF				; $8DAC
 			LD C,A				; $8DAE
+L_8DAF:
 			LD A,$3F				; $8DAF
 			CALL L_6679				; $8DB1
 			ADD A,B				; $8DB4
@@ -5027,15 +5252,16 @@ L_8D5A:
 			LD A,$06				; $8DC8
 			CALL L_6679				; $8DCA
 			OR A				; $8DCD
-			JP NZ,$8D4F				; $8DCE
+			JP NZ,L_8D4F				; $8DCE
 			LD BC,($6969)				; $8DD1
 			LD A,$1F				; $8DD5
 			CALL L_6679				; $8DD7
 			ADD A,C				; $8DDA
 			SUB $0C				; $8DDB
 			CP $7C				; $8DDD
-			JR NC,$8DE2				; $8DDF
+			JR NC,L_8DE2				; $8DDF
 			LD C,A				; $8DE1
+L_8DE2:
 			LD A,$3F				; $8DE2
 			CALL L_6679				; $8DE4
 			ADD A,B				; $8DE7
@@ -5050,7 +5276,7 @@ L_8D5A:
 			LD A,$16				; $8DF7
 			CALL L_6679				; $8DF9
 			OR A				; $8DFC
-			JP NZ,$8D4F				; $8DFD
+			JP NZ,L_8D4F				; $8DFD
 			LD C,$00				; $8E00
 L_8E02:
 			LD B,D				; $8E02
@@ -5063,7 +5289,7 @@ L_8E02:
 			LD A,$16				; $8E0F
 			CALL L_6679				; $8E11
 			OR A				; $8E14
-			JP NZ,$8D4F				; $8E15
+			JP NZ,L_8D4F				; $8E15
 			LD C,$7B				; $8E18
 			JR L_8E02				; $8E1A
 
@@ -5100,18 +5326,19 @@ L_8E31:
 L_8EDB:
 			LD A,($8F94)				; $8EDB
 			OR A				; $8EDE
-			JR NZ,$8F58				; $8EDF
+			JR NZ,L_8F58				; $8EDF
 			LD DE,($6969)				; $8EE1
 			LD HL,($71B2)				; $8EE5
 			DEC HL				; $8EE8
 			LD A,H				; $8EE9
 			OR L				; $8EEA
-			JP Z,$8F0C				; $8EEB
+			JP Z,L_8F0C				; $8EEB
 			LD ($71B2),HL				; $8EEE
 			LD A,($7E94)				; $8EF1
 			OR A				; $8EF4
 			RET NZ				; $8EF5
 			LD HL,$8E44				; $8EF6
+L_8EF9:
 			LD A,(HL)				; $8EF9
 			CP $FF				; $8EFA
 			RET Z				; $8EFC
@@ -5123,7 +5350,8 @@ L_8EDB:
 			CALL L_6802				; $8F04
 			INC HL				; $8F07
 			OR A				; $8F08
-			JP Z,$8EF9				; $8F09
+			JP Z,L_8EF9				; $8F09
+L_8F0C:
 			LD A,$64				; $8F0C
 			LD ($8F94),A				; $8F0E
 			LD A,E				; $8F11
@@ -5157,12 +5385,13 @@ L_8EDB:
 			CALL L_EF42				; $8F52
 			JP L_78C8				; $8F55
 
+L_8F58:
 			DEC A				; $8F58
 			LD ($8F94),A				; $8F59
 			RET NZ				; $8F5C
 			LD A,($78D3)				; $8F5D   ;load lives
 			OR A				; $8F60
-			JP Z,$8F95				; $8F61
+			JP Z,L_8F95				; $8F61
 			LD HL,$0753				; $8F64
 			LD ($71B2),HL				; $8F67
 			LD A,$32				; $8F6A
@@ -5180,6 +5409,7 @@ L_8EDB:
 			defb $45,$54,$20,$52,$45,$41,$44,$59				; $8F8B ET READY
 			defb $FF,$00                                        ; $8F93 ..
 
+L_8F95:
 			LD E,$22				; $8F95
 			CALL L_EF42				; $8F97
 			LD HL,$C2F1				; $8F9A
@@ -5200,9 +5430,10 @@ L_8FA9:
 			CALL L_671E				; $8FB9
 			LD BC,$0000				; $8FBC
 			LD A,$07				; $8FBF
+L_8FC1:
 			CALL L_676A				; $8FC1
 			DEC A				; $8FC4
-			JR NZ,$8FC1				; $8FC5
+			JR NZ,L_8FC1				; $8FC5
 			CALL L_954F				; $8FC7
 			JP L_9433				; $8FCA
 
@@ -5267,7 +5498,7 @@ L_9044:
 			RET Z				; $9049
 			LD A,(IX+$0A)				; $904A
 			CP $FF				; $904D
-			JP Z,$905D				; $904F
+			JP Z,L_905D				; $904F
 			JP L_90CA				; $9052
 
 L_9055:
@@ -5275,17 +5506,18 @@ L_9055:
 			ADD IX,DE				; $9058
 			JP L_9044				; $905A
 
+L_905D:
 			LD E,(IX+$00)				; $905D
 			LD D,(IX+$01)				; $9060
 			LD B,D				; $9063
 			LD C,E				; $9064
 			CALL L_69E6				; $9065
-			CALL NZ,$9137				; $9068
+			CALL NZ,L_9137				; $9068
 			LD A,(IX+$0A)				; $906B
 			ADD A,D				; $906E
 			LD D,A				; $906F
 			LD (IX+$01),D				; $9070
-			LD A,($65EA)				; $9073
+			LD A,(EventDelay)				; $9073
 			AND $03				; $9076
 			ADD A,(IX+$02)				; $9078
 			LD L,(IX+$03)				; $907B
@@ -5305,7 +5537,7 @@ L_9055:
 			ADD A,D				; $90A0
 			LD D,A				; $90A1
 			LD (IX+$06),D				; $90A2
-			LD A,($65EA)				; $90A5
+			LD A,(EventDelay)				; $90A5
 			AND $03				; $90A8
 			ADD A,(IX+$07)				; $90AA
 			LD L,(IX+$08)				; $90AD
@@ -5325,12 +5557,12 @@ L_90CA:
 			LD B,D				; $90D0
 			LD C,E				; $90D1
 			CALL L_69C4				; $90D2
-			CALL NZ,$9137				; $90D5
+			CALL NZ,L_9137				; $90D5
 			LD A,(IX+$0A)				; $90D8
 			ADD A,D				; $90DB
 			LD D,A				; $90DC
 			LD (IX+$06),D				; $90DD
-			LD A,($65EA)				; $90E0
+			LD A,(EventDelay)				; $90E0
 			AND $03				; $90E3
 			ADD A,(IX+$07)				; $90E5
 			LD L,(IX+$08)				; $90E8
@@ -5350,7 +5582,7 @@ L_90CA:
 			ADD A,D				; $910D
 			LD D,A				; $910E
 			LD (IX+$01),D				; $910F
-			LD A,($65EA)				; $9112
+			LD A,(EventDelay)				; $9112
 			AND $03				; $9115
 			ADD A,(IX+$02)				; $9117
 			LD L,(IX+$03)				; $911A
@@ -5364,6 +5596,7 @@ L_90CA:
 			CALL L_A47B				; $9131
 			JP L_9055				; $9134
 
+L_9137:
 			LD A,(IX+$0A)				; $9137
 			NEG				; $913A
 			LD (IX+$0A),A				; $913C
@@ -5452,100 +5685,113 @@ L_926B:
 			RET Z				; $9270
 			LD A,(IX+$02)				; $9271
 			OR A				; $9274
-			JR NZ,$927F				; $9275
+			JR NZ,L_927F				; $9275
 L_9277:
 			LD BC,$0007				; $9277
 			ADD IX,BC				; $927A
 			JP L_926B				; $927C
 
 L_927F:
+L_927F:
 			LD E,(IX+$00)				; $927F
 			LD D,(IX+$01)				; $9282
 			LD A,(IX+$04)				; $9285
 			OR A				; $9288
-			JP NZ,$9376				; $9289
+			JP NZ,L_9376				; $9289
 			LD A,(IX+$02)				; $928C
 			CP $01				; $928F
-			JR Z,$92B2				; $9291
+			JR Z,L_92B2				; $9291
 			CP $02				; $9293
-			JR Z,$92C9				; $9295
+			JR Z,L_92C9				; $9295
 			CP $03				; $9297
-			JR Z,$92E0				; $9299
+			JR Z,L_92E0				; $9299
 			CALL L_9421				; $929B
-			JR Z,$92A5				; $929E
+			JR Z,L_92A5				; $929E
 			LD A,$03				; $92A0
 			JP L_92F7				; $92A2
 
+L_92A5:
 			CALL L_93FC				; $92A5
 			LD A,$00				; $92A8
-			JP NZ,$92F7				; $92AA
+			JP NZ,L_92F7				; $92AA
 			LD A,$01				; $92AD
 			JP L_92F7				; $92AF
 
+L_92B2:
 			CALL L_93FC				; $92B2
-			JR Z,$92BC				; $92B5
+			JR Z,L_92BC				; $92B5
 			LD A,$04				; $92B7
 			JP L_92F7				; $92B9
 
+L_92BC:
 			CALL L_940F				; $92BC
 			LD A,$00				; $92BF
-			JP NZ,$92F7				; $92C1
+			JP NZ,L_92F7				; $92C1
 			LD A,$02				; $92C4
 			JP L_92F7				; $92C6
 
+L_92C9:
 			CALL L_940F				; $92C9
-			JR Z,$92D3				; $92CC
+			JR Z,L_92D3				; $92CC
 			LD A,$01				; $92CE
 			JP L_92F7				; $92D0
 
+L_92D3:
 			CALL L_93EA				; $92D3
 			LD A,$00				; $92D6
-			JP NZ,$92F7				; $92D8
+			JP NZ,L_92F7				; $92D8
 			LD A,$03				; $92DB
 			JP L_92F7				; $92DD
 
+L_92E0:
 			CALL L_93EA				; $92E0
-			JR Z,$92EA				; $92E3
+			JR Z,L_92EA				; $92E3
 			LD A,$02				; $92E5
 			JP L_92F7				; $92E7
 
+L_92EA:
 			CALL L_9421				; $92EA
 			LD A,$00				; $92ED
-			JP NZ,$92F7				; $92EF
+			JP NZ,L_92F7				; $92EF
 			LD A,$04				; $92F2
 			JP L_92F7				; $92F4
 
+L_92F7:
 L_92F7:
 			LD H,A				; $92F7
 			LD L,(IX+$02)				; $92F8
 			LD B,(IX+$03)				; $92FB
 			OR A				; $92FE
-			JR Z,$9304				; $92FF
+			JR Z,L_9304				; $92FF
 			LD (IX+$02),A				; $9301
+L_9304:
 			LD A,(IX+$02)				; $9304
 			CP $01				; $9307
-			JR NZ,$9312				; $9309
+			JR NZ,L_9312				; $9309
 			LD A,B				; $930B
 			NEG				; $930C
 			ADD A,E				; $930E
 			LD E,A				; $930F
 			JR L_932B				; $9310
 
+L_9312:
 			CP $02				; $9312
-			JR NZ,$931C				; $9314
+			JR NZ,L_931C				; $9314
 			LD A,B				; $9316
 			ADD A,A				; $9317
 			ADD A,D				; $9318
 			LD D,A				; $9319
 			JR L_932B				; $931A
 
+L_931C:
 			CP $03				; $931C
-			JR NZ,$9325				; $931E
+			JR NZ,L_9325				; $931E
 			LD A,B				; $9320
 			ADD A,E				; $9321
 			LD E,A				; $9322
 			JR L_932B				; $9323
 
+L_9325:
 			LD A,B				; $9325
 			NEG				; $9326
 			ADD A,A				; $9328
@@ -5554,18 +5800,19 @@ L_92F7:
 L_932B:
 			LD A,(IX+$04)				; $932B
 			OR A				; $932E
-			JR NZ,$9349				; $932F
+			JR NZ,L_9349				; $932F
 			LD A,H				; $9331
 			OR A				; $9332
-			JR Z,$9349				; $9333
+			JR Z,L_9349				; $9333
 			CALL L_93D0				; $9335
-			JR NZ,$9349				; $9338
+			JR NZ,L_9349				; $9338
 			LD (IX+$04),$01				; $933A
 			LD (IX+$02),L				; $933E
 			LD E,(IX+$00)				; $9341
 			LD D,(IX+$01)				; $9344
 			JR L_9376				; $9347
 
+L_9349:
 			LD C,(IX+$00)				; $9349
 			LD B,(IX+$01)				; $934C
 			LD (IX+$00),E				; $934F
@@ -5584,42 +5831,46 @@ L_932B:
 			JP L_9277				; $9373
 
 L_9376:
+L_9376:
 			LD A,(IX+$02)				; $9376
 			CP $01				; $9379
-			JP Z,$939A				; $937B
+			JP Z,L_939A				; $937B
 			CP $02				; $937E
-			JP Z,$93AC				; $9380
+			JP Z,L_93AC				; $9380
 			CP $03				; $9383
-			JP Z,$93BE				; $9385
+			JP Z,L_93BE				; $9385
 			CALL L_9421				; $9388
 			LD B,A				; $938B
 			CALL L_93FC				; $938C
 			OR B				; $938F
-			JP Z,$92F7				; $9390
+			JP Z,L_92F7				; $9390
 			LD (IX+$04),$00				; $9393
 			JP L_927F				; $9397
 
+L_939A:
 			CALL L_93FC				; $939A
 			LD B,A				; $939D
 			CALL L_940F				; $939E
 			OR B				; $93A1
-			JP Z,$92F7				; $93A2
+			JP Z,L_92F7				; $93A2
 			LD (IX+$04),$00				; $93A5
 			JP L_927F				; $93A9
 
+L_93AC:
 			CALL L_940F				; $93AC
 			LD B,A				; $93AF
 			CALL L_93EA				; $93B0
 			OR B				; $93B3
-			JP Z,$92F7				; $93B4
+			JP Z,L_92F7				; $93B4
 			LD (IX+$04),$00				; $93B7
 			JP L_927F				; $93BB
 
+L_93BE:
 			CALL L_93EA				; $93BE
 			LD B,A				; $93C1
 			CALL L_9421				; $93C2
 			OR B				; $93C5
-			JP Z,$92F7				; $93C6
+			JP Z,L_92F7				; $93C6
 			LD (IX+$04),$00				; $93C9
 			JP L_927F				; $93CD
 
@@ -5647,7 +5898,7 @@ L_93EA:
 			PUSH DE				; $93EA
 			LD A,E				; $93EB
 			CP $78				; $93EC
-			JR NC,$93F9				; $93EE
+			JR NC,L_93F9				; $93EE
 			INC E				; $93F0
 			INC E				; $93F1
 			INC D				; $93F2
@@ -5655,6 +5906,7 @@ L_93EA:
 			INC D				; $93F4
 			INC D				; $93F5
 			CALL L_8115				; $93F6
+L_93F9:
 			OR A				; $93F9
 			POP DE				; $93FA
 			RET				; $93FB
@@ -5664,7 +5916,7 @@ L_93FC:
 			LD A,E				; $93FD
 			OR A				; $93FE
 			LD A,$01				; $93FF
-			JR Z,$940C				; $9401
+			JR Z,L_940C				; $9401
 			INC E				; $9403
 			INC E				; $9404
 			INC D				; $9405
@@ -5672,6 +5924,7 @@ L_93FC:
 			INC D				; $9407
 			INC D				; $9408
 			CALL L_8139				; $9409
+L_940C:
 			OR A				; $940C
 			POP DE				; $940D
 			RET				; $940E
@@ -5680,7 +5933,7 @@ L_940F:
 			PUSH DE				; $940F
 			LD A,D				; $9410
 			CP $B0				; $9411
-			JR NC,$941E				; $9413
+			JR NC,L_941E				; $9413
 			INC E				; $9415
 			INC E				; $9416
 			INC D				; $9417
@@ -5688,6 +5941,7 @@ L_940F:
 			INC D				; $9419
 			INC D				; $941A
 			CALL L_815D				; $941B
+L_941E:
 			OR A				; $941E
 			POP DE				; $941F
 			RET				; $9420
@@ -5696,7 +5950,7 @@ L_9421:
 			PUSH DE				; $9421
 			LD A,D				; $9422
 			CP $20				; $9423
-			JR C,$9430				; $9425
+			JR C,L_9430				; $9425
 			INC E				; $9427
 			INC E				; $9428
 			INC D				; $9429
@@ -5704,6 +5958,7 @@ L_9421:
 			INC D				; $942B
 			INC D				; $942C
 			CALL L_8181				; $942D
+L_9430:
 			OR A				; $9430
 			POP DE				; $9431
 			RET				; $9432
@@ -5732,9 +5987,10 @@ L_9452:
 			INC D				; $945B
 			LD E,$08				; $945C
 			DJNZ L_944F				; $945E
+L_9460:
 			CALL L_6672				; $9460
-			CALL NZ,$84F5				; $9463
-			JP NZ,$9460				; $9466
+			CALL NZ,L_84F5				; $9463
+			JP NZ,L_9460				; $9466
 			LD BC,$00AF				; $9469
 L_946C:
 			PUSH BC				; $946C
@@ -5781,16 +6037,17 @@ L_954F:
 			LD IX,$949C				; $954F
 L_9553:
 			BIT 7,(IX+$00)				; $9553
-			JP NZ,$9648				; $9557
+			JP NZ,L_9648				; $9557
 			PUSH IX				; $955A
 			LD DE,$000A				; $955C
 			ADD IX,DE				; $955F
 			LD HL,$78F9				; $9561
 			LD B,$06				; $9564
+L_9566:
 			LD A,(IX+$00)				; $9566
 			CP (HL)				; $9569
-			JP Z,$9637				; $956A
-			JP NC,$963E				; $956D
+			JP Z,L_9637				; $956A
+			JP NC,L_963E				; $956D
 			POP HL				; $9570
 			PUSH HL				; $9571
 			LD A,$FF				; $9572
@@ -5828,42 +6085,48 @@ L_9553:
 			LD DE,$0F0C				; $95BB
 			LD HL,$96D0				; $95BE
 L_95C1:
+L_95C1:
 			LD C,$44				; $95C1
 			LD A,$3F				; $95C3
 			CALL L_6C4A				; $95C5
+L_95C8:
 			LD BC,$03E8				; $95C8
 			CALL L_676A				; $95CB
+L_95CE:
 			CALL L_6672				; $95CE
-			CALL NZ,$84F5				; $95D1
-			JR NZ,$95CE				; $95D4
+			CALL NZ,L_84F5				; $95D1
+			JR NZ,L_95CE				; $95D4
 			PUSH DE				; $95D6
+L_95D7:
 L_95D7:
 			CALL L_662B				; $95D7
 			OR A				; $95DA
-			CALL Z,$84F5				; $95DB
-			JR Z,$95D7				; $95DE
+			CALL Z,L_84F5				; $95DB
+			JR Z,L_95D7				; $95DE
 			POP DE				; $95E0
 			CP $0D				; $95E1
-			JR Z,$961F				; $95E3
+			JR Z,L_961F				; $95E3
 			CP $01				; $95E5
-			JR Z,$95F0				; $95E7
+			JR Z,L_95F0				; $95E7
 			CP $02				; $95E9
-			JR NZ,$9610				; $95EB
+			JR NZ,L_9610				; $95EB
 			PUSH DE				; $95ED
 			JR L_95D7				; $95EE
 
+L_95F0:
 			LD A,E				; $95F0
 			CP $13				; $95F1
-			JR NZ,$95FE				; $95F3
+			JR NZ,L_95FE				; $95F3
 			LD A,(HL)				; $95F5
 			CP $20				; $95F6
-			JR Z,$95FE				; $95F8
+			JR Z,L_95FE				; $95F8
 			LD (HL),$20				; $95FA
 			JR L_95C1				; $95FC
 
+L_95FE:
 			LD A,E				; $95FE
 			CP $0C				; $95FF
-			JR Z,$95C1				; $9601
+			JR Z,L_95C1				; $9601
 			LD A,$2D				; $9603
 			LD C,$47				; $9605
 			CALL L_6C4A				; $9607
@@ -5872,48 +6135,55 @@ L_95D7:
 			DEC E				; $960D
 			JR L_95C1				; $960E
 
+L_9610:
 			LD (HL),A				; $9610
 			LD C,$46				; $9611
 			CALL L_6C4A				; $9613
 			LD A,E				; $9616
 			CP $13				; $9617
-			JR Z,$95C8				; $9619
+			JR Z,L_95C8				; $9619
 			INC HL				; $961B
 			INC E				; $961C
 			JR L_95C1				; $961D
 
+L_961F:
 			POP DE				; $961F
 			LD HL,$96D0				; $9620
 			LD BC,$0008				; $9623
 			LDIR				; $9626
+L_9628:
 			CALL L_6672				; $9628
-			CALL NZ,$84F5				; $962B
-			JP NZ,$9628				; $962E
+			CALL NZ,L_84F5				; $962B
+			JP NZ,L_9628				; $962E
 			CALL L_9433				; $9631
 			JP L_6504				; $9634
 
+L_9637:
 			INC HL				; $9637
 			INC IX				; $9638
 			DEC B				; $963A
-			JP NZ,$9566				; $963B
+			JP NZ,L_9566				; $963B
+L_963E:
 			POP IX				; $963E
 			LD DE,$0010				; $9640
 			ADD IX,DE				; $9643
 			JP L_9553				; $9645
 
+L_9648:
 			CALL L_6672				; $9648
-			JP NZ,$9648				; $964B
+			JP NZ,L_9648				; $964B
 			LD BC,$0352				; $964E
+L_9651:
 			HALT				; $9651
 			PUSH BC				; $9652
 			CALL L_662B				; $9653
 			POP BC				; $9656
 			OR A				; $9657
-			JP NZ,$6504				; $9658
+			JP NZ,L_6504				; $9658
 			DEC BC				; $965B
 			LD A,B				; $965C
 			OR C				; $965D
-			JP NZ,$9651				; $965E
+			JP NZ,L_9651				; $965E
 			JP L_6504				; $9661
 
 			defb $EB,$00,$DF,$09,$08,$E0,$46                    ; $9664 ......F
@@ -5941,13 +6211,14 @@ L_96DD:
 			RET Z				; $96E2
 			LD A,(IX+$02)				; $96E3
 			OR A				; $96E6
-			JR Z,$96F3				; $96E7
+			JR Z,L_96F3				; $96E7
 			PUSH BC				; $96E9
 			LD BC,$0008				; $96EA
 			ADD IX,BC				; $96ED
 			POP BC				; $96EF
 			JP L_96DD				; $96F0
 
+L_96F3:
 			LD (IX+$00),E				; $96F3
 			LD (IX+$01),D				; $96F6
 			LD (IX+$02),H				; $96F9
@@ -5967,12 +6238,13 @@ L_9713:
 			RET Z				; $9718
 			LD A,(IX+$02)				; $9719
 			OR A				; $971C
-			JP NZ,$9728				; $971D
+			JP NZ,L_9728				; $971D
 L_9720:
 			LD BC,$0008				; $9720
 			ADD IX,BC				; $9723
 			JP L_9713				; $9725
 
+L_9728:
 			LD E,(IX+$00)				; $9728
 			LD D,(IX+$01)				; $972B
 			LD B,D				; $972E
@@ -5981,19 +6253,20 @@ L_9720:
 			LD H,(IX+$04)				; $9733
 			LD A,(IX+$05)				; $9736
 			AND $80				; $9739
-			JR NZ,$974C				; $973B
+			JR NZ,L_974C				; $973B
 			LD A,D				; $973D
 			CP $B0				; $973E
-			JP Z,$9787				; $9740
+			JP Z,L_9787				; $9740
 			CALL L_69C4				; $9743
-			JP NZ,$9787				; $9746
+			JP NZ,L_9787				; $9746
 			JP L_9758				; $9749
 
+L_974C:
 			LD A,D				; $974C
 			CP $20				; $974D
-			JP Z,$9787				; $974F
+			JP Z,L_9787				; $974F
 			CALL L_69E6				; $9752
-			JP NZ,$9787				; $9755
+			JP NZ,L_9787				; $9755
 L_9758:
 			LD A,(IX+$05)				; $9758
 			ADD A,D				; $975B
@@ -6018,6 +6291,7 @@ L_9758:
 			CALL L_A47B				; $9781
 			JP L_9720				; $9784
 
+L_9787:
 			XOR A				; $9787
 			LD (IX+$02),A				; $9788
 			CALL L_A4DB				; $978B
@@ -6057,20 +6331,23 @@ L_97F3:
 			CALL L_678F				; $97FC
 			LD A,(HL)				; $97FF
 			OR A				; $9800
-			JR NZ,$9807				; $9801
+			JR NZ,L_9807				; $9801
+L_9803:
 L_9803:
 			POP HL				; $9803
 			JP L_97F3				; $9804
 
+L_9807:
 			LD ($9825),A				; $9807
 			LD BC,$0005				; $980A
 			LD HL,$9826				; $980D
 L_9810:
 			CP (HL)				; $9810
-			JR Z,$9817				; $9811
+			JR Z,L_9817				; $9811
 			ADD HL,BC				; $9813
 			JP L_9810				; $9814
 
+L_9817:
 			INC HL				; $9817
 			LD A,(HL)				; $9818
 			ADD A,E				; $9819
@@ -6091,7 +6368,7 @@ L_9810:
 
 			LD A,($6969)				; $9831
 			CP E				; $9834
-			JP NZ,$9803				; $9835
+			JP NZ,L_9803				; $9835
 			LD A,($9825)				; $9838
 			LD HL,$C6F9				; $983B
 			CALL L_A4DB				; $983E
@@ -6105,7 +6382,7 @@ L_9810:
 
 			LD A,($6969)				; $9855
 			CP E				; $9858
-			JP NZ,$9803				; $9859
+			JP NZ,L_9803				; $9859
 			LD A,($9825)				; $985C
 			LD HL,$C6F9				; $985F
 			CALL L_A4DB				; $9862
@@ -6135,10 +6412,11 @@ L_989A:
 			LD H,(IX+$01)				; $989D
 			AND A				; $98A0
 			SBC HL,DE				; $98A1
-			JR Z,$98AA				; $98A3
+			JR Z,L_98AA				; $98A3
 			ADD IX,BC				; $98A5
 			JP L_989A				; $98A7
 
+L_98AA:
 			LD (IX+$04),$00				; $98AA
 			POP HL				; $98AE
 			POP IX				; $98AF
@@ -6153,7 +6431,7 @@ L_98B8:
 			CP $FF				; $98BB
 			RET Z				; $98BD
 			OR A				; $98BE
-			JP Z,$999B				; $98BF
+			JP Z,L_999B				; $98BF
 			LD E,(IX+$01)				; $98C2
 			LD D,(IX+$02)				; $98C5
 			PUSH DE				; $98C8
@@ -6161,15 +6439,15 @@ L_98B8:
 			LD B,(IX+$06)				; $98CC
 			LD A,(IX+$07)				; $98CF
 			OR A				; $98D2
-			JR NZ,$98F5				; $98D3
+			JR NZ,L_98F5				; $98D3
 L_98D5:
 			LD A,(BC)				; $98D5
 			CP $E2				; $98D6
-			JP Z,$9902				; $98D8
+			JP Z,L_9902				; $98D8
 			CP $E1				; $98DB
-			JP Z,$9911				; $98DD
+			JP Z,L_9911				; $98DD
 			CP $E0				; $98E0
-			JP Z,$9920				; $98E2
+			JP Z,L_9920				; $98E2
 			ADD A,E				; $98E5
 			LD E,A				; $98E6
 			INC BC				; $98E7
@@ -6182,6 +6460,7 @@ L_98D5:
 			JP L_9939				; $98F2
 
 L_98F5:
+L_98F5:
 			DEC (IX+$07)				; $98F5
 			LD A,(BC)				; $98F8
 			ADD A,E				; $98F9
@@ -6192,6 +6471,7 @@ L_98F5:
 			LD D,A				; $98FE
 			JP L_9939				; $98FF
 
+L_9902:
 			INC BC				; $9902
 			LD A,(BC)				; $9903
 			DEC A				; $9904
@@ -6201,12 +6481,14 @@ L_98F5:
 			LD (IX+$06),B				; $990C
 			JR L_98F5				; $990F
 
+L_9911:
 			LD C,(IX+$03)				; $9911
 			LD B,(IX+$04)				; $9914
 			LD (IX+$05),C				; $9917
 			LD (IX+$06),B				; $991A
 			JP L_98D5				; $991D
 
+L_9920:
 			INC BC				; $9920
 			LD (IX+$05),C				; $9921
 			LD (IX+$06),B				; $9924
@@ -6223,10 +6505,11 @@ L_9939:
 			POP BC				; $9939
 			LD A,(IX+$0B)				; $993A
 			CP $14				; $993D
-			JR NC,$9947				; $993F
+			JR NC,L_9947				; $993F
 			INC (IX+$0B)				; $9941
 			JP L_996E				; $9944
 
+L_9947:
 			CALL L_678F				; $9947
 			LD A,(HL)				; $994A
 			INC L				; $994B
@@ -6238,17 +6521,17 @@ L_9939:
 			OR (HL)				; $9953
 			INC L				; $9954
 			OR (HL)				; $9955
-			CALL NZ,$88EA				; $9956
-			JP NZ,$99A3				; $9959
+			CALL NZ,L_88EA				; $9956
+			JP NZ,L_99A3				; $9959
 			LD A,E				; $995C
 			ADD A,$08				; $995D
 			CP $87				; $995F
-			JP NC,$99A3				; $9961
+			JP NC,L_99A3				; $9961
 			LD A,D				; $9964
 			CP $11				; $9965
-			JP C,$99A3				; $9967
+			JP C,L_99A3				; $9967
 			CP $C0				; $996A
-			JR NC,$99A3				; $996C
+			JR NC,L_99A3				; $996C
 L_996E:
 			LD (IX+$01),E				; $996E
 			LD (IX+$02),D				; $9971
@@ -6271,10 +6554,12 @@ L_996E:
 			LD C,(IX+$08)				; $9995
 			CALL L_A446				; $9998
 L_999B:
+L_999B:
 			LD DE,$000C				; $999B
 			ADD IX,DE				; $999E
 			JP L_98B8				; $99A0
 
+L_99A3:
 			XOR A				; $99A3
 			LD (IX+$00),A				; $99A4
 			LD L,(IX+$09)				; $99A7
@@ -6307,13 +6592,14 @@ L_9A31:
 			CP $FF				; $9A34
 			RET Z				; $9A36
 			OR A				; $9A37
-			JR Z,$9A44				; $9A38
+			JR Z,L_9A44				; $9A38
 			PUSH BC				; $9A3A
 			LD BC,$000C				; $9A3B
 			ADD IX,BC				; $9A3E
 			POP BC				; $9A40
 			JP L_9A31				; $9A41
 
+L_9A44:
 			LD (IX+$00),C				; $9A44
 			LD (IX+$01),E				; $9A47
 			LD (IX+$02),D				; $9A4A
@@ -6342,13 +6628,15 @@ L_9A75:
 L_9A7D:
 			LD A,(HL)				; $9A7D
 			CP $FF				; $9A7E
-			JP Z,$9AC2				; $9A80
+			JP Z,L_9AC2				; $9A80
 			OR A				; $9A83
-			JR NZ,$9A8D				; $9A84
+			JR NZ,L_9A8D				; $9A84
+L_9A86:
 			LD DE,$000C				; $9A86
 			ADD HL,DE				; $9A89
 			JP L_9A7D				; $9A8A
 
+L_9A8D:
 			PUSH HL				; $9A8D
 			INC HL				; $9A8E
 			LD E,(HL)				; $9A8F
@@ -6357,7 +6645,7 @@ L_9A7D:
 			CALL L_6802				; $9A92
 			POP HL				; $9A95
 			OR A				; $9A96
-			JP Z,$9A86				; $9A97
+			JP Z,L_9A86				; $9A97
 			LD A,(HL)				; $9A9A
 			LD (HL),$00				; $9A9B
 			LD HL,$C6F9				; $9A9D
@@ -6366,15 +6654,17 @@ L_9A7D:
 			LD A,$01				; $9AA6
 			CALL L_6679				; $9AA8
 			OR A				; $9AAB
-			JP Z,$9AB8				; $9AAC
+			JP Z,L_9AB8				; $9AAC
 			LD A,$0A				; $9AAF
 			CALL L_6679				; $9AB1
 			INC A				; $9AB4
 			CALL L_9FA2				; $9AB5
+L_9AB8:
 			LD DE,$7904				; $9AB8
 			CALL L_78D4				; $9ABB
 			CALL L_788E				; $9ABE
 			XOR A				; $9AC1
+L_9AC2:
 			INC A				; $9AC2
 			POP HL				; $9AC3
 			POP DE				; $9AC4
@@ -6388,11 +6678,12 @@ L_9AD0:
 			CALL L_678F				; $9AD0
 			LD A,(HL)				; $9AD3
 			OR A				; $9AD4
-			JR NZ,$9AE0				; $9AD5
+			JR NZ,L_9AE0				; $9AD5
 			LD (IX+$00),D				; $9AD7
 			INC IX				; $9ADA
 			LD HL,$9B47				; $9ADC
 			INC (HL)				; $9ADF
+L_9AE0:
 			LD A,D				; $9AE0
 			ADD A,$08				; $9AE1
 			LD D,A				; $9AE3
@@ -6406,11 +6697,12 @@ L_9AF0:
 			CALL L_678F				; $9AF0
 			LD A,(HL)				; $9AF3
 			OR A				; $9AF4
-			JR NZ,$9B00				; $9AF5
+			JR NZ,L_9B00				; $9AF5
 			LD (IX+$00),D				; $9AF7
 			INC IX				; $9AFA
 			LD HL,$9B47				; $9AFC
 			INC (HL)				; $9AFF
+L_9B00:
 			LD A,D				; $9B00
 			ADD A,$08				; $9B01
 			LD D,A				; $9B03
@@ -6424,11 +6716,12 @@ L_9B10:
 			CALL L_678F				; $9B10
 			LD A,(HL)				; $9B13
 			OR A				; $9B14
-			JR NZ,$9B20				; $9B15
+			JR NZ,L_9B20				; $9B15
 			LD (IX+$00),E				; $9B17
 			INC IX				; $9B1A
 			LD HL,$9B47				; $9B1C
 			INC (HL)				; $9B1F
+L_9B20:
 			LD A,E				; $9B20
 			ADD A,$04				; $9B21
 			LD E,A				; $9B23
@@ -6448,11 +6741,12 @@ L_9B51:
 			CALL L_678F				; $9B51
 			LD A,(HL)				; $9B54
 			OR A				; $9B55
-			JR NZ,$9B61				; $9B56
+			JR NZ,L_9B61				; $9B56
 			LD (IX+$00),E				; $9B58
 			INC IX				; $9B5B
 			LD HL,$9B47				; $9B5D
 			INC (HL)				; $9B60
+L_9B61:
 			LD A,E				; $9B61
 			ADD A,$04				; $9B62
 			LD E,A				; $9B64
@@ -6544,37 +6838,40 @@ L_9BE2:
 			LD A,($9BD1)				; $9C04
 			OR A				; $9C07
 			LD A,($9BD2)				; $9C08
-			JR Z,$9C30				; $9C0B
+			JR Z,L_9C30				; $9C0B
 			LD D,(HL)				; $9C0D
 			LD E,A				; $9C0E
 			LD A,($9BD5)				; $9C0F
 			OR A				; $9C12
 			LD A,($6969)				; $9C13
-			JR Z,$9C24				; $9C16
+			JR Z,L_9C24				; $9C16
 			CP $10				; $9C18
 			RET C				; $9C1A
 			LD HL,($9BD6)				; $9C1B
 			LD A,($9C55)				; $9C1E
 			JP L_9A2C				; $9C21
 
+L_9C24:
 			CP $68				; $9C24
 			RET NC				; $9C26
 			LD HL,($9BD6)				; $9C27
 			LD A,($9C55)				; $9C2A
 			JP L_9A2C				; $9C2D
 
+L_9C30:
 			LD E,(HL)				; $9C30
 			LD D,A				; $9C31
 			LD A,($9BD5)				; $9C32
 			CP $01				; $9C35
 			LD A,($696A)				; $9C37
-			JP Z,$9C49				; $9C3A
+			JP Z,L_9C49				; $9C3A
 			CP $40				; $9C3D
 			RET C				; $9C3F
 			LD HL,($9BD6)				; $9C40
 			LD A,($9C55)				; $9C43
 			JP L_9A2C				; $9C46
 
+L_9C49:
 			CP $90				; $9C49
 			RET NC				; $9C4B
 			LD HL,($9BD6)				; $9C4C
@@ -6697,7 +6994,7 @@ L_9FA2:
 			LD C,A				; $9FA8
 			LD A,E				; $9FA9
 			CP $79				; $9FAA
-			JP NC,$9FFB				; $9FAC
+			JP NC,L_9FFB				; $9FAC
 			LD A,D				; $9FAF
 			AND $F8				; $9FB0
 			LD D,A				; $9FB2
@@ -6712,20 +7009,21 @@ L_9FA2:
 			OR (HL)				; $9FBF
 			INC L				; $9FC0
 			OR (HL)				; $9FC1
-			JP NZ,$9FFB				; $9FC2
+			JP NZ,L_9FFB				; $9FC2
 			LD IX,$A002				; $9FC5
 L_9FC9:
 			LD A,(IX+$00)				; $9FC9
 			CP $FF				; $9FCC
-			JP Z,$9FFB				; $9FCE
+			JP Z,L_9FFB				; $9FCE
 			OR A				; $9FD1
-			JR Z,$9FDE				; $9FD2
+			JR Z,L_9FDE				; $9FD2
 			PUSH BC				; $9FD4
 			LD BC,$0006				; $9FD5
 			ADD IX,BC				; $9FD8
 			POP BC				; $9FDA
 			JP L_9FC9				; $9FDB
 
+L_9FDE:
 			LD A,C				; $9FDE
 			CALL L_A03F				; $9FDF
 			LD (IX+$00),C				; $9FE2
@@ -6738,6 +7036,7 @@ L_9FC9:
 			LD DE,$C6F9				; $9FF2
 			LD (IX+$04),E				; $9FF5
 			LD (IX+$05),D				; $9FF8
+L_9FFB:
 			POP IX				; $9FFB
 			POP HL				; $9FFD
 			POP DE				; $9FFE
@@ -6776,12 +7075,13 @@ L_A051:
 			CP $FF				; $A052
 			RET Z				; $A054
 			OR A				; $A055
-			JR NZ,$A05F				; $A056
+			JR NZ,L_A05F				; $A056
 L_A058:
 			LD BC,$0006				; $A058
 			ADD HL,BC				; $A05B
 			JP L_A051				; $A05C
 
+L_A05F:
 			PUSH HL				; $A05F
 			INC HL				; $A060
 			LD C,(HL)				; $A061
@@ -6790,7 +7090,7 @@ L_A058:
 			INC HL				; $A064
 			LD D,(HL)				; $A065
 			CALL L_69C4				; $A066
-			JR NZ,$A082				; $A069
+			JR NZ,L_A082				; $A069
 			LD B,D				; $A06B
 			INC D				; $A06C
 			LD (HL),D				; $A06D
@@ -6806,6 +7106,7 @@ L_A058:
 			PUSH IX				; $A07A
 			LD (IX+$04),L				; $A07C
 			LD (IX+$05),H				; $A07F
+L_A082:
 			POP HL				; $A082
 			JP L_A058				; $A083
 
@@ -6818,20 +7119,21 @@ L_A08F:
 			CP $FF				; $A092
 			RET Z				; $A094
 			OR A				; $A095
-			JR NZ,$A0A0				; $A096
+			JR NZ,L_A0A0				; $A096
 			LD BC,$0006				; $A098
 			ADD IX,BC				; $A09B
 			JP L_A08F				; $A09D
 
+L_A0A0:
 			LD E,(IX+$02)				; $A0A0
 			LD D,(IX+$03)				; $A0A3
 			LD B,A				; $A0A6
 			LD A,D				; $A0A7
 			CP $C0				; $A0A8
 			LD A,B				; $A0AA
-			JP NC,$A0F6				; $A0AB
+			JP NC,L_A0F6				; $A0AB
 			CALL L_A03F				; $A0AE
-			JP NC,$A0D4				; $A0B1
+			JP NC,L_A0D4				; $A0B1
 			LD A,(HL)				; $A0B4
 			INC HL				; $A0B5
 			LD C,(HL)				; $A0B6
@@ -6840,15 +7142,17 @@ L_A08F:
 			CALL L_A47B				; $A0B9
 			LD A,($8F94)				; $A0BC
 			OR A				; $A0BF
-			JR NZ,$A0CC				; $A0C0
+			JR NZ,L_A0CC				; $A0C0
 			LD BC,($6969)				; $A0C2
 			CALL L_6802				; $A0C6
 			OR A				; $A0C9
-			JR NZ,$A0D4				; $A0CA
+			JR NZ,L_A0D4				; $A0CA
+L_A0CC:
 			LD BC,$0006				; $A0CC
 			ADD IX,BC				; $A0CF
 			JP L_A08F				; $A0D1
 
+L_A0D4:
 			INC HL				; $A0D4
 			LD E,(HL)				; $A0D5
 			INC HL				; $A0D6
@@ -6871,6 +7175,7 @@ L_A08F:
 			LD L,A				; $A0F4
 			JP (HL)				; $A0F5
 L_A0F6:
+L_A0F6:
 			LD (IX+$00),$00				; $A0F6
 			LD C,(IX+$02)				; $A0FA
 			LD B,(IX+$03)				; $A0FD
@@ -6884,7 +7189,7 @@ L_A0F6:
 
 			LD A,($6AEE)				; $A112
 			OR A				; $A115
-			JP NZ,$A0F6				; $A116
+			JP NZ,L_A0F6				; $A116
 			LD A,$01				; $A119
 			LD ($6AEE),A				; $A11B
 			LD DE,($6969)				; $A11E
@@ -6910,7 +7215,7 @@ L_A0F6:
 			INC HL				; $A13D
 			LD A,(HL)				; $A13E
 			CP C				; $A13F
-			JP C,$A0F6				; $A140
+			JP C,L_A0F6				; $A140
 			DEC HL				; $A143
 			DEC HL				; $A144
 			DEC HL				; $A145
@@ -6921,7 +7226,7 @@ L_A0F6:
 
 			LD A,($6AF3)				; $A14E
 			OR A				; $A151
-			JP NZ,$A0F6				; $A152
+			JP NZ,L_A0F6				; $A152
 			LD A,$01				; $A155
 			LD ($6AF3),A				; $A157
 			JP L_A0F6				; $A15A
@@ -6952,17 +7257,19 @@ L_A1D6:
 			PUSH HL				; $A1DC
 			LD HL,$A1F6				; $A1DD
 			LD C,A				; $A1E0
+L_A1E1:
 			LD A,(HL)				; $A1E1
 			CP $FF				; $A1E2
-			JR Z,$A1F1				; $A1E4
+			JR Z,L_A1F1				; $A1E4
 			INC HL				; $A1E6
 			INC HL				; $A1E7
 			CP C				; $A1E8
-			JR NZ,$A1E1				; $A1E9
+			JR NZ,L_A1E1				; $A1E9
 			DEC HL				; $A1EB
 			LD A,(HL)				; $A1EC
 			DEC D				; $A1ED
 			CALL L_9FA2				; $A1EE
+L_A1F1:
 			POP HL				; $A1F1
 			POP DE				; $A1F2
 			POP BC				; $A1F3
@@ -6983,10 +7290,10 @@ L_A1FD:
 			LD L,A				; $A202
 			LD A,E				; $A203
 			CP $AA				; $A204
-			JP NC,$A367				; $A206
+			JP NC,L_A367				; $A206
 			LD A,C				; $A209
 			CP $AA				; $A20A
-			JP NC,$A367				; $A20C
+			JP NC,L_A367				; $A20C
 			LD A,E				; $A20F
 			CP $79				; $A210
 			JP NC,$A29C				; $A212
@@ -7136,19 +7443,20 @@ L_A25F:
 			LD ($A338),A				; $A2D5
 			LD A,E				; $A2D8
 			CP $79				; $A2D9
-			JR C,$A2F3				; $A2DB
+			JR C,L_A2F3				; $A2DB
 			XOR A				; $A2DD
 			LD ($A342),A				; $A2DE
 			LD A,E				; $A2E1
 			CP $7C				; $A2E2
-			JR C,$A2F3				; $A2E4
+			JR C,L_A2F3				; $A2E4
 			XOR A				; $A2E6
 			LD ($A33D),A				; $A2E7
 			LD A,E				; $A2EA
 			CP $80				; $A2EB
-			JR C,$A2F3				; $A2ED
+			JR C,L_A2F3				; $A2ED
 			XOR A				; $A2EF
 			LD ($A338),A				; $A2F0
+L_A2F3:
 			EXX				; $A2F3
 			POP DE				; $A2F4
 			LD A,$77				; $A2F5
@@ -7157,19 +7465,20 @@ L_A25F:
 			LD ($A351),A				; $A2FD
 			LD A,E				; $A300
 			CP $79				; $A301
-			JR C,$A31B				; $A303
+			JR C,L_A31B				; $A303
 			XOR A				; $A305
 			LD ($A35B),A				; $A306
 			LD A,E				; $A309
 			CP $7C				; $A30A
-			JR C,$A31B				; $A30C
+			JR C,L_A31B				; $A30C
 			XOR A				; $A30E
 			LD ($A356),A				; $A30F
 			LD A,E				; $A312
 			CP $80				; $A313
-			JR C,$A31B				; $A315
+			JR C,L_A31B				; $A315
 			XOR A				; $A317
 			LD ($A351),A				; $A318
+L_A31B:
 			LD A,E				; $A31B
 			AND $7C				; $A31C
 			RRCA				; $A31E
@@ -7234,6 +7543,7 @@ L_A32C:
 			POP AF				; $A365
 			RET				; $A366
 
+L_A367:
 			LD H,L				; $A367
 			LD L,$00				; $A368
 			SRL H				; $A36A
@@ -7276,21 +7586,22 @@ L_A32C:
 			LD ($A421),A				; $A3A2
 			LD A,E				; $A3A5
 			CP $80				; $A3A6
-			JR C,$A3C8				; $A3A8
+			JR C,L_A3C8				; $A3A8
 			XOR A				; $A3AA
 			LD ($A412),A				; $A3AB
 			LD HL,$0000				; $A3AE
 			LD ($A417),HL				; $A3B1
 			LD A,E				; $A3B4
 			CP $FC				; $A3B5
-			JR NC,$A3C8				; $A3B7
+			JR NC,L_A3C8				; $A3B7
 			LD HL,$0000				; $A3B9
 			LD ($A41C),HL				; $A3BC
 			LD A,E				; $A3BF
 			CP $F8				; $A3C0
-			JR NC,$A3C8				; $A3C2
+			JR NC,L_A3C8				; $A3C2
 			XOR A				; $A3C4
 			LD ($A421),A				; $A3C5
+L_A3C8:
 			EXX				; $A3C8
 			POP DE				; $A3C9
 			LD A,E				; $A3CA
@@ -7305,21 +7616,22 @@ L_A32C:
 			LD ($A43A),A				; $A3DC
 			LD A,E				; $A3DF
 			CP $80				; $A3E0
-			JR C,$A402				; $A3E2
+			JR C,L_A402				; $A3E2
 			XOR A				; $A3E4
 			LD ($A42B),A				; $A3E5
 			LD HL,$0000				; $A3E8
 			LD ($A430),HL				; $A3EB
 			LD A,E				; $A3EE
 			CP $FC				; $A3EF
-			JR NC,$A402				; $A3F1
+			JR NC,L_A402				; $A3F1
 			LD HL,$0000				; $A3F3
 			LD ($A435),HL				; $A3F6
 			LD A,E				; $A3F9
 			CP $F8				; $A3FA
-			JR NC,$A402				; $A3FC
+			JR NC,L_A402				; $A3FC
 			XOR A				; $A3FE
 			LD ($A43A),A				; $A3FF
+L_A402:
 			LD C,D				; $A402
 			POP DE				; $A403
 			EXX				; $A404
@@ -7387,8 +7699,9 @@ L_A446:
 			LD B,$03				; $A44A
 			LD A,E				; $A44C
 			CP $80				; $A44D
-			JR C,$A453				; $A44F
+			JR C,L_A453				; $A44F
 			LD E,$00				; $A451
+L_A453:
 			CALL L_6799				; $A453
 L_A456:
 			PUSH HL				; $A456
@@ -7398,20 +7711,23 @@ L_A456:
 			POP HL				; $A45C
 			LD A,(DE)				; $A45D
 			OR A				; $A45E
-			JR NZ,$A462				; $A45F
+			JR NZ,L_A462				; $A45F
 			LD (HL),C				; $A461
+L_A462:
 			INC HL				; $A462
 			INC DE				; $A463
 			LD A,(DE)				; $A464
 			OR A				; $A465
-			JR NZ,$A469				; $A466
+			JR NZ,L_A469				; $A466
 			LD (HL),C				; $A468
+L_A469:
 			INC HL				; $A469
 			INC DE				; $A46A
 			LD A,(DE)				; $A46B
 			OR A				; $A46C
-			JR NZ,$A470				; $A46D
+			JR NZ,L_A470				; $A46D
 			LD (HL),C				; $A46F
+L_A470:
 			LD DE,$001E				; $A470
 			ADD HL,DE				; $A473
 			DJNZ L_A456				; $A474
@@ -7428,10 +7744,12 @@ L_A47B:
 			PUSH HL				; $A47E
 			LD A,E				; $A47F
 			CP $80				; $A480
-			JR C,$A486				; $A482
+			JR C,L_A486				; $A482
 			LD E,$00				; $A484
+L_A486:
 			LD A,$03				; $A486
 			CALL L_6799				; $A488
+L_A48B:
 			EX AF,AF'				; $A48B
 			PUSH HL				; $A48C
 			LD DE,$0300				; $A48D
@@ -7440,19 +7758,21 @@ L_A47B:
 			POP HL				; $A492
 			LD A,(DE)				; $A493
 			OR A				; $A494
-			JR NZ,$A498				; $A495
+			JR NZ,L_A498				; $A495
 			LD (HL),C				; $A497
+L_A498:
 			INC HL				; $A498
 			INC DE				; $A499
 			LD A,(DE)				; $A49A
 			OR A				; $A49B
-			JR NZ,$A49F				; $A49C
+			JR NZ,L_A49F				; $A49C
 			LD (HL),B				; $A49E
+L_A49F:
 			LD DE,$001F				; $A49F
 			ADD HL,DE				; $A4A2
 			EX AF,AF'				; $A4A3
 			DEC A				; $A4A4
-			JP NZ,$A48B				; $A4A5
+			JP NZ,L_A48B				; $A4A5
 			POP HL				; $A4A8
 			POP DE				; $A4A9
 			POP BC				; $A4AA
@@ -7467,8 +7787,9 @@ L_A4AD:
 			LD B,$02				; $A4B1
 			LD A,E				; $A4B3
 			CP $80				; $A4B4
-			JR C,$A4BA				; $A4B6
+			JR C,L_A4BA				; $A4B6
 			LD E,$00				; $A4B8
+L_A4BA:
 			CALL L_6799				; $A4BA
 L_A4BD:
 			PUSH HL				; $A4BD
@@ -7478,14 +7799,16 @@ L_A4BD:
 			POP HL				; $A4C3
 			LD A,(DE)				; $A4C4
 			OR A				; $A4C5
-			JR NZ,$A4C9				; $A4C6
+			JR NZ,L_A4C9				; $A4C6
 			LD (HL),C				; $A4C8
+L_A4C9:
 			INC L				; $A4C9
 			INC E				; $A4CA
 			LD A,(DE)				; $A4CB
 			OR A				; $A4CC
-			JR NZ,$A4D0				; $A4CD
+			JR NZ,L_A4D0				; $A4CD
 			LD (HL),C				; $A4CF
+L_A4D0:
 			LD DE,$001F				; $A4D0
 			ADD HL,DE				; $A4D3
 			DJNZ L_A4BD				; $A4D4
@@ -7495,6 +7818,7 @@ L_A4BD:
 			POP AF				; $A4D9
 			RET				; $A4DA
 
+L_A4DB:
 L_A4DB:
 			PUSH AF				; $A4DB
 			PUSH BC				; $A4DC
@@ -10041,6 +10365,7 @@ L_EF38:
 			JP L_EFE5				; $EF38  ; self modifying, replaced with RET
 
 L_EF3B:
+L_EF3B:
 			JP L_EF93				; $EF3B
 
 			LD E,$01				; $EF3E
@@ -10050,24 +10375,27 @@ L_EF42:
 			CALL L_EFC1				; $EF43
 			LD A,(HL)				; $EF46
 			CP $09				; $EF47
-			JP NC,$EF4E				; $EF49
+			JP NC,L_EF4E				; $EF49
 			LD C,A				; $EF4C
 			INC HL				; $EF4D
+L_EF4E:
 			LD A,C				; $EF4E
 			LD IX,$F214				; $EF4F
 			DEC A				; $EF53
-			JP Z,$EF63				; $EF54
+			JP Z,L_EF63				; $EF54
 			LD IX,$F237				; $EF57
 			DEC A				; $EF5B
-			JP Z,$EF63				; $EF5C
+			JP Z,L_EF63				; $EF5C
 			LD IX,$F25A				; $EF5F
+L_EF63:
 			LD A,(HL)				; $EF63
 			CP $F4				; $EF64
 			LD A,$0A				; $EF66
-			JP NZ,$EF6E				; $EF68
+			JP NZ,L_EF6E				; $EF68
 			INC HL				; $EF6B
 			LD A,(HL)				; $EF6C
 			INC HL				; $EF6D
+L_EF6E:
 			CP (IX+$10)				; $EF6E
 			RET C				; $EF71
 			LD (IX+$10),A				; $EF72
@@ -10097,6 +10425,7 @@ L_EF93:
 L_EFAB:
 			LD HL,$F203				; $EFAB
 			LD E,$0D				; $EFAE
+L_EFB0:
 			LD BC,$FFFD				; $EFB0
 			OUT (C),E				; $EFB3	; AY chip
 			LD BC,$BFFD				; $EFB5
@@ -10104,7 +10433,7 @@ L_EFAB:
 			DEC HL				; $EFB9
 			OUT (C),A				; $EFBA	; AY chip
 			DEC E				; $EFBC
-			JP P,$EFB0				; $EFBD
+			JP P,L_EFB0				; $EFBD
 			RET				; $EFC0
 
 L_EFC1:
@@ -10164,11 +10493,12 @@ L_F01B:
 			OR A				; $F021
 			RET Z				; $F022
 			DEC (IX+$11)				; $F023
-			JP NZ,$F162				; $F026
+			JP NZ,L_F162				; $F026
 			LD (IX+$1E),$14				; $F029
 L_F02D:
 			LD H,(IX+$13)				; $F02D
 			LD L,(IX+$12)				; $F030
+L_F033:
 L_F033:
 			LD A,(HL)				; $F033
 			INC HL				; $F034
@@ -10179,85 +10509,96 @@ L_F033:
 			DEC (IX+$1E)				; $F03D
 			RET Z				; $F040
 			CP $00				; $F041
-			JP Z,$F116				; $F043
+			JP Z,L_F116				; $F043
 			CP $09				; $F046
-			JP C,$F089				; $F048
+			JP C,L_F089				; $F048
 			CP $65				; $F04B
-			JP C,$F113				; $F04D
+			JP C,L_F113				; $F04D
 			CP $E4				; $F050
-			JP Z,$F093				; $F052
+			JP Z,L_F093				; $F052
 			CP $E3				; $F055
-			JP Z,$F111				; $F057
+			JP Z,L_F111				; $F057
 			CP $E1				; $F05A
-			JP Z,$F0E6				; $F05C
+			JP Z,L_F0E6				; $F05C
 			CP $E9				; $F05F
-			JP Z,$F0A4				; $F061
+			JP Z,L_F0A4				; $F061
 			CP $E8				; $F064
-			JP Z,$F0B0				; $F066
+			JP Z,L_F0B0				; $F066
 			CP $EA				; $F069
-			JP Z,$F0BC				; $F06B
+			JP Z,L_F0BC				; $F06B
 			CP $E2				; $F06E
-			JP Z,$F0F9				; $F070
+			JP Z,L_F0F9				; $F070
 			CP $E5				; $F073
-			JP Z,$F0C6				; $F075
+			JP Z,L_F0C6				; $F075
 			CP $E6				; $F078
-			JP Z,$F09E				; $F07A
+			JP Z,L_F09E				; $F07A
 			CP $F0				; $F07D
-			JP Z,$F0F3				; $F07F		 ; sound
+			JP Z,L_F0F3				; $F07F		 ; sound
 			CP $FF				; $F082
-			JP Z,$F0D2				; $F084
+			JP Z,L_F0D2				; $F084
 			JR L_F033				; $F087
 
+L_F089:
 			PUSH IX				; $F089
 			CALL L_EF42				; $F08B
 			POP IX				; $F08E
 			JP L_F02D				; $F090
 
+L_F093:
 			LD A,E				; $F093
 			LD ($F1FC),A				; $F094
 			LD (IX+$19),$01				; $F097
 			JP L_F033				; $F09B
 
+L_F09E:
 			LD (IX+$18),E				; $F09E
 			JP L_F033				; $F0A1
 
+L_F0A4:
 			CALL L_EFD2				; $F0A4
 			LD (IX+$0E),C				; $F0A7
 			LD (IX+$0F),B				; $F0AA
 			JP L_F033				; $F0AD
 
+L_F0B0:
 			CALL L_EFD2				; $F0B0
 			LD (IX+$0C),C				; $F0B3
 			LD (IX+$0D),B				; $F0B6
 			JP L_F033				; $F0B9
 
+L_F0BC:
 			CALL L_EFD2				; $F0BC
 			LD ($F212),BC				; $F0BF
 			JP L_F033				; $F0C3
 
+L_F0C6:
 			LD (IX+$15),H				; $F0C6
 			LD (IX+$14),L				; $F0C9
 			CALL L_EFC1				; $F0CC
 			JP L_F033				; $F0CF
 
+L_F0D2:
 			LD H,(IX+$15)				; $F0D2
 			LD L,(IX+$14)				; $F0D5
 			LD A,(HL)				; $F0D8
 			INC A				; $F0D9
-			JP NZ,$F033				; $F0DA
+			JP NZ,L_F033				; $F0DA
 			LD H,(IX+$17)				; $F0DD
 			LD L,(IX+$16)				; $F0E0
 			JP L_F033				; $F0E3
 
+L_F0E6:
 			LD (IX+$10),$00				; $F0E6
 			LD H,(IX+$1D)				; $F0EA
 			LD L,(IX+$1C)				; $F0ED
 			LD (HL),$00				; $F0F0
 			RET				; $F0F2
 
+L_F0F3:
 			LD (IX+$20),E				; $F0F3
 			JP L_F033				; $F0F6
 
+L_F0F9:
 			LD HL,$28B2				; $F0F9
 			LD C,L				; $F0FC
 			LD B,H				; $F0FD
@@ -10275,8 +10616,11 @@ L_F033:
 			LD ($F112),A				; $F10B
 			JP L_F02D				; $F10E
 
+L_F111:
 			LD A,$2A				; $F111
+L_F113:
 			ADD A,(IX+$18)				; $F113
+L_F116:
 			LD (IX+$11),E				; $F116
 			LD (IX+$21),A				; $F119
 			CALL L_F1A1				; $F11C
@@ -10298,16 +10642,18 @@ L_F033:
 			DEC (IX+$19)				; $F13E
 			LD (IX+$19),$00				; $F141
 			LD L,(IX+$1A)				; $F145
-			JR NZ,$F156				; $F148
+			JR NZ,L_F156				; $F148
 			LD HL,($F212)				; $F14A
 			LD ($F20A),HL				; $F14D
 			LD HL,$0000				; $F150
 			LD ($F206),HL				; $F153
+L_F156:
 			LD A,($F1FD)				; $F156
 			AND (IX+$1B)				; $F159
 			OR L				; $F15C
 			AND $3F				; $F15D
 			LD ($F1FD),A				; $F15F
+L_F162:
 			CALL L_F1C9				; $F162
 			LD H,(IX+$1D)				; $F165
 			LD L,(IX+$1C)				; $F168
@@ -10321,7 +10667,7 @@ L_F033:
 			RET Z				; $F175
 			LD A,(IX+$20)				; $F176
 			OR A				; $F179
-			JP NZ,$F192				; $F17A
+			JP NZ,L_F192				; $F17A
 			INC IX				; $F17D
 			INC IX				; $F17F
 			CALL L_F1C9				; $F181
@@ -10333,11 +10679,13 @@ L_F033:
 			LD ($F204),HL				; $F18E
 			RET				; $F191
 
+L_F192:
 			DEC (IX+$22)				; $F192
 			LD A,(IX+$21)				; $F195
-			JR Z,$F1A1				; $F198
+			JR Z,L_F1A1				; $F198
 			ADD A,(IX+$20)				; $F19A
 			LD (IX+$22),$01				; $F19D
+L_F1A1:
 L_F1A1:
 			ADD A,A				; $F1A1
 			ADD A,$8E				; $F1A2
@@ -10390,9 +10738,10 @@ L_F1C9:
 			INC DE				; $F1E3
 			LD A,(DE)				; $F1E4
 			INC A				; $F1E5
-			JP NZ,$F1EF				; $F1E6
+			JP NZ,L_F1EF				; $F1E6
 			LD D,(IX+$0D)				; $F1E9
 			LD E,(IX+$0C)				; $F1EC
+L_F1EF:
 			LD (IX+$05),D				; $F1EF
 			LD (IX+$04),E				; $F1F2
 			RET				; $F1F5
@@ -10464,6 +10813,9 @@ L_F1C9:
 			defb $08,$94,$08,$A7,$08,$C5,$08,$E2				; $F3F3 ........
 			defb $08,$4A,$1A,$58,$1A,$62,$1A,$AE				; $F3FB .J.X.b..
 			defb $1A,$CA,$1A,$E5,$1A,$00,$00,$C8				; $F403 ........
+
+; MUSIC 
+
 			defb $80,$C8,$FF,$01,$81,$0D,$09,$7F				; $F40B ........
 			defb $09,$C8,$80,$C8,$FF,$01,$8D,$01				; $F413 ........
 			defb $01,$7F,$04,$01,$77,$01,$FF,$FF				; $F41B ....w...
@@ -10749,9 +11101,10 @@ L_FB97:
 			LD HL,($FC47)				; $FBD3
 			LD A,(HL)				; $FBD6
 			CP $FF				; $FBD7
-			JP NZ,$FBE0				; $FBD9
+			JP NZ,L_FBE0				; $FBD9
 			LD HL,$FC4E				; $FBDC
 			LD A,(HL)				; $FBDF
+L_FBE0:
 			LD ($FC45),A				; $FBE0
 			INC HL				; $FBE3
 			LD A,(HL)				; $FBE4
@@ -10771,8 +11124,9 @@ L_FB97:
 			LD A,($FC45)				; $FBFC
 			OR A				; $FBFF
 			LD A,C				; $FC00
-			JR Z,$FC05				; $FC01
+			JR Z,L_FC05				; $FC01
 			OR $10				; $FC03
+L_FC05:
 			LD ($FC44),A				; $FC05
 			LD HL,$FC45				; $FC08
 L_FC0B:
@@ -10781,7 +11135,7 @@ L_FC0C:
 			DEC DE				; $FC0C
 			LD A,D				; $FC0D
 			OR E				; $FC0E
-			JP Z,$FC40				; $FC0F
+			JP Z,L_FC40				; $FC0F
 			DJNZ L_FC0C				; $FC12
 			LD A,($FC43)				; $FC14
 			OUT ($FE),A				; $FC17
@@ -10790,27 +11144,30 @@ L_FC1A:
 			DEC DE				; $FC1A
 			LD A,D				; $FC1B
 			OR E				; $FC1C
-			JP Z,$FC40				; $FC1D
+			JP Z,L_FC40				; $FC1D
 			DJNZ L_FC1A				; $FC20
 			LD A,($FC44)				; $FC22
 			OUT ($FE),A				; $FC25
 			LD A,($FC49)				; $FC27
 			INC A				; $FC2A
 			CP $08				; $FC2B
-			JR Z,$FC38				; $FC2D
+			JR Z,L_FC38				; $FC2D
 			CP $10				; $FC2F
-			JR Z,$FC3B				; $FC31
+			JR Z,L_FC3B				; $FC31
 L_FC33:
 			LD ($FC49),A				; $FC33
 			JR L_FC0B				; $FC36
 
+L_FC38:
 			INC HL				; $FC38
 			JR L_FC33				; $FC39
 
+L_FC3B:
 			DEC HL				; $FC3B
 			LD A,$00				; $FC3C
 			JR L_FC33				; $FC3E
 
+L_FC40:
 			JP L_FB8D				; $FC40
 
 			defb $07,$17,$49,$4A,$08,$FD,$09,$00				; $FC43 ..IJ....
@@ -10907,22 +11264,23 @@ L_FE62:
 			PUSH AF				; $FE84
 			LD D,$40				; $FE85
 L_FE87:
+L_FE87:
 			CALL L_FF67				; $FE87
 			LD A,E				; $FE8A
 			CP $B4				; $FE8B
-			JR Z,$FEBC				; $FE8D
+			JR Z,L_FEBC				; $FE8D
 			CP $BA				; $FE8F
-			JP Z,$FF2D				; $FE91
+			JP Z,L_FF2D				; $FE91
 			CP $B8				; $FE94
-			JR Z,$FEE2				; $FE96
+			JR Z,L_FEE2				; $FE96
 			CP $B9				; $FE98
-			JR Z,$FEEA				; $FE9A
+			JR Z,L_FEEA				; $FE9A
 			CP $B7				; $FE9C
-			JR Z,$FED8				; $FE9E
+			JR Z,L_FED8				; $FE9E
 			CP $B6				; $FEA0
-			JR Z,$FEF2				; $FEA2
+			JR Z,L_FEF2				; $FEA2
 			CP $B5				; $FEA4
-			JR NZ,$FE87				; $FEA6
+			JR NZ,L_FE87				; $FEA6
 			CALL L_FF67				; $FEA8
 			LD H,E				; $FEAB
 			CALL L_FF67				; $FEAC
@@ -10932,6 +11290,7 @@ L_FE87:
 			LD ($FF60),HL				; $FEB6
 			JP L_FF43				; $FEB9
 
+L_FEBC:
 			CALL L_FF67				; $FEBC
 			LD H,E				; $FEBF
 			CALL L_FF67				; $FEC0
@@ -10941,28 +11300,33 @@ L_FE87:
 			CALL L_FF67				; $FEC8
 			LD C,E				; $FECB
 L_FECC:
+L_FECC:
 			CALL L_FF67				; $FECC
 			LD (HL),E				; $FECF
 			INC HL				; $FED0
 			DEC BC				; $FED1
 			LD A,B				; $FED2
 			OR C				; $FED3
-			JR NZ,$FECC				; $FED4
+			JR NZ,L_FECC				; $FED4
 			JR L_FE87				; $FED6
 
+L_FED8:
 			CALL L_FF67				; $FED8
 			LD BC,$7FFD				; $FEDB
 			OUT (C),E				; $FEDE
 			JR L_FE87				; $FEE0
 
+L_FEE2:
 			LD HL,$FF88				; $FEE2
 			LD BC,$001A				; $FEE5
 			JR L_FF02				; $FEE8
 
+L_FEEA:
 			LD HL,$FF88				; $FEEA
 			LD BC,$001A				; $FEED
 			JR L_FECC				; $FEF0
 
+L_FEF2:
 			CALL L_FF67				; $FEF2
 			LD H,E				; $FEF5
 			CALL L_FF67				; $FEF6
@@ -10972,10 +11336,11 @@ L_FECC:
 			CALL L_FF67				; $FEFE
 			LD C,E				; $FF01
 L_FF02:
+L_FF02:
 			IN A,($3F)				; $FF02
 			XOR D				; $FF04
 			RRCA				; $FF05
-			JR C,$FF02				; $FF06
+			JR C,L_FF02				; $FF06
 			LD A,$FF				; $FF08
 			OUT ($5F),A				; $FF0A
 			INC A				; $FF0C
@@ -10983,13 +11348,14 @@ L_FF02:
 			LD A,D				; $FF0F
 			XOR $41				; $FF10
 			LD D,A				; $FF12
+L_FF13:
 			LD A,(HL)				; $FF13
 			CALL L_FF77				; $FF14
 			INC HL				; $FF17
 			DEC BC				; $FF18
 			LD A,B				; $FF19
 			OR C				; $FF1A
-			JR NZ,$FF13				; $FF1B
+			JR NZ,L_FF13				; $FF1B
 			DEC A				; $FF1D
 			OUT ($5F),A				; $FF1E
 			OUT ($5F),A				; $FF20
@@ -11000,6 +11366,7 @@ L_FF02:
 			LD D,A				; $FF29
 			JP L_FE87				; $FF2A
 
+L_FF2D:
 			CALL L_FF67				; $FF2D
 			LD L,E				; $FF30
 			CALL L_FF67				; $FF31
@@ -11034,12 +11401,11 @@ L_FF43:
 			NOP				; $FF60
 			CALL L_6501				; $FF61
 			JP L_FE62				; $FF64
-
 L_FF67:
 			IN A,($3F)				; $FF67
 			XOR D				; $FF69
 			RRCA				; $FF6A
-			JR C,$FF67				; $FF6B
+			JR C,L_FF67				; $FF6B
 			IN A,($1F)				; $FF6D
 			LD E,A				; $FF6F
 			LD A,D				; $FF70
@@ -11054,10 +11420,11 @@ L_FF77:
 			OUT ($3F),A				; $FF7A
 			XOR $81				; $FF7C
 			LD D,A				; $FF7E
+L_FF7F:
 			IN A,($3F)				; $FF7F
 			XOR D				; $FF81
 			RRCA				; $FF82
-			JR NC,$FF7F				; $FF83
+			JR NC,L_FF7F				; $FF83
 			RET				; $FF85
 
 			defb $AF,$FE,$44,$00,$75                            ; $FF86 0....D.u

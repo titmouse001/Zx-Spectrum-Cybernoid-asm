@@ -6,71 +6,94 @@ def process_file(input_filename, output_filename):
     with open(input_filename, 'r') as f:
         lines = f.readlines()
 
-    print("[INFO] Reading input file...")
-
-    # Mapping comment address like "; $XXXX"
+    # Mapping comment addresses in code lines only
     addr_to_index = {}
     for idx, line in enumerate(lines):
-        m = re.search(r";\s*\$([0-9A-Fa-f]+)", line)
-        if m:
+        # Split into code and comment parts
+        code_part, _, comment_part = line.partition(';')
+        
+        # Only process lines with actual code (non-empty code part)
+        if not code_part.strip():
+            continue
+            
+        # Look for address markers in comments of code-bearing lines
+        if m := re.search(r"\$([0-9A-Fa-f]{4})\b", comment_part):
             addr = m.group(1).upper()
-            if addr not in addr_to_index:
-                addr_to_index[addr] = idx
+            addr_to_index.setdefault(addr, idx)
 
-    print(f"[INFO] Found {len(addr_to_index)} commented addresses.")
-
-    target_addresses = {}  # key "674C" -> value "L_674C"
+    # Track targets and warnings
+    target_addresses = {}
+    all_targets = set()
     jump_pattern = re.compile(
-        r"\b(CALL|JP|JR|DJNZ)"       # instruction
-        r"(?:\s+[A-Z]+,)?\s+"        # "NZ," or "Z,"
-        r"\$([0-9A-Fa-f]+)\b"        # address
+        r"\b(CALL|JP|JR|DJNZ)\s*(?:([A-Z]+),\s*)?\$([0-9A-Fa-f]{4})\b"
     )
 
-    # First pass: replace operands with references
     new_lines = []
     for line in lines:
+        # Skip processing comment-only lines
+        if line.lstrip().startswith(';'):
+            new_lines.append(line)
+            continue
+            
+        # Process code portion
+        code_part, sep, comment_part = line.partition(';')
+        missing_in_line = []
+        
         def repl(match):
-            inst = match.group(1)  # e.g. CALL, JP, etc.
-            target = match.group(2).upper()
-            label = f"L_{target}"
-            target_addresses[target] = label  # Keep for later
-            print(f"[DEBUG] Replacing {inst} ${target} -> {inst} {label}")
-            return f"{inst} {label}"
+            inst, cond, target = match.groups()
+            target = target.upper()
+            all_targets.add(target)
+            
+            if target in addr_to_index:
+                label = f"L_{target}"
+                target_addresses[target] = label
+                replacement = f"{inst} {cond + ',' if cond else ''}{label}".replace(" ,", ",")
+                return replacement
+            return match.group(0)
+            
+        processed_code = jump_pattern.sub(repl, code_part)
+        
+        # Add warnings for unresolved targets
+        if missing_in_line:
+            warnings = "".join([f" ; WARNING: No label for ${t}" for t in missing_in_line])
+            processed_code += warnings
+        
+        new_lines.append(processed_code + sep + comment_part)
 
-        new_line = jump_pattern.sub(repl, line)
-        new_lines.append(new_line)
-
-    print(f"[INFO] Identified {len(target_addresses)} unique jump targets.")
-
-    # Second pass: insert labels
+    # Insert labels only before code-bearing lines
     insertions = []
     for target, label in target_addresses.items():
         if target in addr_to_index:
             insertions.append((addr_to_index[target], label))
-        else:
-            sys.stderr.write(f"[WARNING] Target address ${target} not found in comments!\n")
-
     insertions.sort()
 
-    print(f"[INFO] Preparing to insert {len(insertions)} labels.")
-
-    # Insert labels in sorted order
     offset = 0
     for idx, label in insertions:
-        insert_index = idx + offset
-        # Check if a label with the same name is already present.
-        if not re.match(r"^\s*" + re.escape(label) + r":", new_lines[insert_index]):
-            new_lines.insert(insert_index, f"{label}:\n")
-            offset += 1
-            print(f"[DEBUG] Inserted label {label} at line {insert_index}")
+        insert_idx = idx + offset
+        # Verify we're inserting before a code line
+        if insert_idx < len(new_lines) and not new_lines[insert_idx].lstrip().startswith(';'):
+            if not re.match(rf"^\s*{label}:", new_lines[insert_idx]):
+                new_lines.insert(insert_idx, f"{label}:\n")
+                offset += 1
 
-    print(f"[INFO] Successfully inserted {offset} labels.")
-
-    # Write results
+    # Write output
     with open(output_filename, 'w') as f:
         f.writelines(new_lines)
 
-    print(f"[INFO] Done writing {output_filename}")
+    # Generate report
+    missing_targets = all_targets - addr_to_index.keys()
+    print(f"""
+==== SUMMARY ====
+Valid code lines with address comments: {len(addr_to_index)}
+Jump targets replaced with labels: {len(target_addresses)}
+Labels inserted: {offset}
+Unresolved targets needing attention: {len(missing_targets)}
+""")
+
+    if missing_targets:
+        print("Unresolved targets (check code lines with WARNING comments):")
+        for t in sorted(missing_targets):
+            print(f"  • ${t}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
