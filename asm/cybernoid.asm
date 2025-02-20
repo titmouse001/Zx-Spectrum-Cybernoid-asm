@@ -9,7 +9,7 @@
 #include "constants.asm"
 
 ; BASIC Program Header
-#code				PROG_HEADER,0,17,HEADERFLAG	; declare code segment
+#code		PROG_HEADER,0,17,HEADERFLAG	; declare code segment
 
 			defb 0							; Program
 			defm "cybernoid "				; Pad to 10 chars
@@ -18,7 +18,7 @@
 			defw PROGRAM1END    			; length of BASIC program without variables
 
 ; BASIC Program
-#code				PROG_DATA,0,*,DATAFLAG	; declare code segment
+#code		PROG_DATA,0,*,DATAFLAG	; declare code segment
 
 ; 10 BORDER 0: PAPER 0: INK 7: CLEAR 24835	; $6103
 			defb 0,10   					; line number
@@ -66,7 +66,7 @@ L40END		defb $0D                    ; line end marker
 PROGRAM1END equ $
 
 ; Code Block 1 Header - loading screen header
-#code				CODE_HEADER,0,17,HEADERFLAG	; declare code segment
+#code		CODE_HEADER,0,17,HEADERFLAG	; declare code segment
 
 CODE1START	equ $4000					; $4000, 16384
 
@@ -78,7 +78,7 @@ CODE1START	equ $4000					; $4000, 16384
 
 ;-----------------------------------------------------------------------------
 ; Code Block 1 Data - loading screen data
-#code				CODE_DATA,CODE1START,$1B00,DATAFLAG	; declare code segment
+#code		CODE_DATA,CODE1START,$1B00,DATAFLAG	; declare code segment
 #include "loading-screen.asm"  ; uses 0x4000 -> 0x5AFF
 CODE1END equ $ ; Marker to show end of object code
 ;-----------------------------------------------------------------------------
@@ -87,7 +87,7 @@ CODE1END equ $ ; Marker to show end of object code
 
 ;-----------------------------------------------------------------------------
 ; Code Block 2 Header - game code
-#code				header2,0,17,HEADERFLAG	; declare code segment
+#code		header2,0,17,HEADERFLAG	; declare code segment
 CODE2START	equ $6103					; 24835
 
 			defb 3             			; Code
@@ -98,7 +98,7 @@ CODE2START	equ $6103					; 24835
 
 ; Code Block 2 Data - game code 
 
-#code				codeblock2,CODE2START,*,DATAFLAG	; declare code segment
+#code		codeblock2,CODE2START,*,DATAFLAG	; declare code segment
 
 			defb $3E,$00,$00,$00,$00,$00,$00,$00				; $6103
 			defs $6193-$610B,0
@@ -151,7 +151,7 @@ L_653F:
 			CALL L_81A6				; $654E
 			CALL L_66E7				; $6551
 			LD A,$04				; $6554	 	; starting lives)
-			LD ($78D3),A			; $6556		; store lives
+			LD (LIVES),A			; $6556		; store lives
 			LD HL,$78F9				; $6559
 			LD DE,$78FA				; $655C
 			LD BC,$0005				; $655F
@@ -857,7 +857,7 @@ L_6A03:
 			NOP				; $6A09
 
 L_6A0A:
-			LD A,($6AEE)			; $6A0A
+			LD A,($6AEE)			; $6A0A  ; Immediate Backshot
 			OR A					; $6A0D
 			JP Z,L_6A46				; $6A0E
 			LD HL,($6AEF)			; $6A11
@@ -2404,7 +2404,7 @@ L_7676:
 			LDIR				; $769E
 			LD HL,$76CC				; $76A0
 			CALL L_6B29				; $76A3
-			LD HL,$78D3				; $76A6	; load lives
+			LD HL,LIVES				; $76A6	; load lives
 			INC (HL)				; $76A9	; bonus life
 			LD DE,$7972				; $76AA
 			CALL L_78D4				; $76AD
@@ -2531,12 +2531,12 @@ L_78BF:
 
 ; === DISPLAY LIVES ===												
 L_78C8:
-			LD A,($78D3)			; $78C8	; load lives;
+			LD A,(LIVES)			; $78C8	; load lives;
 			LD DE,$0203				; $78CB	; char_y=02,char_x=03
 			LD C,$46				; $78CE	; colour FBPPPIII, bright yellow
 			JP Display3DigitNumber	; $78D0	; display score
 
-VAR_LIVES:	defb $0					; $78D3	; LIVES
+LIVES:		defb $0					; $78D3	
 
 L_78D4:
 			PUSH AF				; $78D4
@@ -2982,18 +2982,63 @@ L_7B8D:
 			LD E,$15				; $7BA5
 			JP Display3DigitNumber				; $7BA7
 
-			defb $42                                            ; $7BAA B
-			defb $4F,$4D,$42,$53,$20,$20,$20,$20				; $7BAB OMBS    
-			defb $20,$20,$00,$5C,$7C,$14,$14,$4D				; $7BB3   .\|..M
-			defb $49,$4E,$45,$53,$20,$20,$20,$20				; $7BBB INES    
-			defb $20,$20,$00,$CE,$7D,$14,$14,$53				; $7BC3   ..}..S
-			defb $48,$49,$45,$4C,$44,$20,$20,$20				; $7BCB HIELD   
-			defb $20,$20,$00,$76,$7E,$01,$01,$42				; $7BD3   .v~..B
-			defb $4F,$55,$4E,$43,$45,$20,$20,$20				; $7BDB OUNCE   
-			defb $20,$20,$00,$95,$7E,$05,$05,$53				; $7BE3   ..~..S
-			defb $45,$45,$4B,$45,$52,$20,$20,$20				; $7BEB EEKER   
-			defb $20,$20,$00,$0E,$80,$05,$05,$00				; $7BF3   ......
-			defb $00                                            ; $7BFB .
+	
+BOMBS_LABEL:    defb "BOMBS      "      ; $7BAA  "BOMBS" (11 chars)
+    			defb $00           		; $7BB5
+    			defb $5C, $7C      		; $7BB6 
+BOMBS_MAX:      defb $14               	; $7BB8 - Maximum bombs allowed
+BOMBS_USED:     defb $14               	; $7BB9 - Bombs currently used
+MINES_LABEL:    defb "MINES      "      ; $7BBA  "MINES"
+    			defb $00           		; $7BC5
+    			defb $CE, $7D      		; $7BC6 
+MINES_MAX:      defb $14               	; $7BC8 - Maximum mines allowed
+MINES_USED:     defb $14               	; $7BC9 - Mines currently used
+SHIELD_LABEL:   defb "SHIELD     "      ; $7BCA  "SHIELD"
+    			defb $00           		; $7BD4
+    			defb $76, $7E      		; $7BD5 
+SHIELD_MAX:     defb $01               	; $7BD8 - Maximum shield allowed
+SHIELD_USED:    defb $01               	; $7BD9 - Shield currently used
+BOUNCE_LABEL:   defb "BOUNCE     "    	; $7BDA  "BOUNCE"
+    			defb $00           		; $7BE4
+    			defb $95, $7E      		; $7BE5 
+BOUNCE_MAX:     defb $05               	; $7BE8 - Maximum bounce allowed
+BOUNCE_USED:    defb $05               	; $7BE9 - Bounce currently used
+SEEKER_LABEL:   defb "SEEKER     "      ; $7BEA  "SEEKER"W
+    			defb $00           		; $7BF4
+    			defb $0E, $80      		; $7BF5 
+SEEKER_MAX:     defb $05               	; $7BF8 - Maximum seeker allowed
+SEEKER_USED:    defb $05               	; $7BF9 - Seeker currently used
+
+			; defb $42,$4F,$4D,$42,$53							; $7BAA ;"BOMBS"    
+			; defb $20,$20,$20,$20								; $7BBF 
+			; defb $20,$20,$00,$5C,$7C							; $7BB3 
+			; defb $14											; $7BB8 ;bombs max
+			; defb $14											; $7BB9 ;bombs used
+
+			; defb $4D,$49,$4E,$45,$53							; $7BBA ;"MINES"
+			; defb $20,$20,$20,$20								; $7BBF
+			; defb $20,$20,$00,$CE,$7D							; $7BC3
+			; defb $14											; $7BC8 ; mines max
+			; defb $14											; $7BC9 ; mines used
+
+			; defb $53,$48,$49,$45,$4C							; $7BCA ; "SHIELD"
+			; defb $44,$20,$20,$20								; $7BCF
+			; defb $20,$20,$00,$76,$7E							; $7BD3
+			; defb $01											; $7BD8 ; shield max
+			; defb $01											; $7BD9 ; shiled used
+			
+			; defb $42,$4F,$55,$4E,$43,$45,$20,$20,$20			; $7BDA ; "BOUNCE"
+			; defb $20,$20,$00,$95,$7E							; $7BE3
+			; defb $05											; $7BE8 ; bounce max
+			; defb $05											; $7BE9 ; bounce used
+			
+			; defb $53,$45,$45,$4B,$45,$52,$20,$20,$20			; $7BEA ; "SEEKER"
+			; defb $20,$20,$00,$0E,$80							; $7BF3 
+			; defb $05											; $7BF8 ; seeker max
+			; defb $05											; $7BF9 ; seeker used
+
+
+			defb $00,$00                                        ; $7BFA
 
 L_7BFC:
 			LD DE,$0010				; $7BFC
@@ -3954,7 +3999,7 @@ L_82E5:
 			LD HL,$83FA				; $8316
 			CALL L_6B29				; $8319
 			LD IX,$681D				; $831C
-			LD IY,$83F1				; $8320
+			LD IY,$83F1				; $8320  ; stores x4 redefined keys
 			LD DE,$0C0F				; $8324
 			LD B,$04				; $8327
 L_8329:
@@ -3999,25 +4044,26 @@ L_8375:
 			LD ($83C1),A				; $8375
 			LD C,$44				; $8378
 			CALL L_6B29				; $837A
-			POP BC				; $837D
+			POP BC					; $837D
 			DJNZ L_8329				; $837E
 			LD BC,$C350				; $8380
 			CALL L_676A				; $8383
 			CALL L_676A				; $8386
 			LD HL,$83F1				; $8389
-			LD DE,$83F6				; $838C
+
+			LD DE,CHEAT_KEYS		; $838C  ; load cheat keys
 			LD B,$04				; $838F
-L_8391:
-			LD A,(DE)				; $8391
-			CP (HL)				; $8392
-			JP NZ,L_81A6				; $8393
-			INC HL				; $8396
-			INC DE				; $8397
+L_8391: 	LD A,(DE)				; $8391
+			CP (HL)					; $8392
+			JP NZ,L_81A6			; $8393
+			INC HL					; $8396
+			INC DE					; $8397  ; look at next cheat key
 			DJNZ L_8391				; $8398
-			LD A,($8F4F)				; $839A
-			XOR $35				; $839D
-			LD ($8F4F),A				; $839F
-			JP NZ,L_81A6				; $83A2
+
+			LD A,($8F4F)			; $839A
+			XOR $35					; $839D
+			LD ($8F4F),A			; $839F
+			JP NZ,L_81A6			; $83A2
 			LD A,$04				; $83A5
 			CALL L_85B0				; $83A7
 			LD E,$22				; $83AA
@@ -4031,25 +4077,30 @@ L_83B1:
 			CALL L_EF42				; $83BB
 			JP L_81A6				; $83BE
 
-			defb $3F,$7A                                        ; $83C1 ?z
-			defb $FF,$FF,$53,$50,$41,$43,$45,$7A				; $83C3 ..SPACEz
-			defb $FB,$FF,$45,$4E,$54,$45,$52,$7A				; $83CB ..ENTERz
-			defb $FB,$FF,$43,$41,$50,$53,$20,$53				; $83D3 ..CAPS S
-			defb $48,$49,$46,$54,$7A,$F6,$FF,$53				; $83DB HIFTz..S
-			defb $59,$4D,$42,$4F,$4C,$20,$53,$48				; $83E3 YMBOL SH
-			defb $49,$46,$54,$7A,$F4,$FF,$00,$00				; $83EB IFTz....
-			defb $00,$00,$00,$59,$58,$45,$53,$E0				; $83F3 ...YXES.
-			defb $43,$DF,$09,$07,$E6,$F1,$C2,$53				; $83FB C......S
-			defb $45,$4C,$45,$43,$54,$20,$4B,$45				; $8403 ELECT KE
-			defb $59,$20,$46,$4F,$52,$2E,$2E,$2E				; $840B Y FOR...
-			defb $2E,$DC,$7B,$EE,$4C,$45,$46,$54				; $8413 ..{.LEFT
-			defb $7A,$FC,$52,$49,$47,$48,$54,$7A				; $841B z.RIGHTz
-			defb $FB,$55,$50,$20,$20,$7A,$FC,$46				; $8423 .UP  z.F
-			defb $49,$52,$45,$70,$04,$E5,$09,$20				; $842B IREp... 
-			defb $DF,$14,$04,$D9,$43,$59,$42,$45				; $8433 ....CYBE
-			defb $52,$4E,$4F,$49,$44,$20,$2A,$20				; $843B RNOID * 
-			defb $31,$39,$38,$38,$20,$48,$45,$57				; $8443 1988 HEW
-			defb $53,$4F,$4E,$FF                                ; $844B SON.
+				defb $3F,$7A                                        ; $83C1 ?z
+				defb $FF,$FF,$53,$50,$41,$43,$45,$7A				; $83C3 ..SPACEz
+				defb $FB,$FF,$45,$4E,$54,$45,$52,$7A				; $83CB ..ENTERz
+				defb $FB,$FF,$43,$41,$50,$53,$20,$53				; $83D3 ..CAPS S
+				defb $48,$49,$46,$54,$7A,$F6,$FF,$53				; $83DB HIFTz..S
+				defb $59,$4D,$42,$4F,$4C,$20,$53,$48				; $83E3 YMBOL SH
+				defb $49,$46,$54,$7A,$F4,$FF						; $83EB IFTz..
+
+DEFINE_KEYS:	defb $00,$00,$00,$00								; $83E1	x4 keys saved here
+				defb $00											; $83F3
+CHEAT_KEYS:		defb $59,$58,$45,$53								; $83F6 YXES
+
+				defb $E0											; 83FA
+				defb $43,$DF,$09,$07,$E6,$F1,$C2,$53				; $83FB C......S
+				defb $45,$4C,$45,$43,$54,$20,$4B,$45				; $8403 ELECT KE
+				defb $59,$20,$46,$4F,$52,$2E,$2E,$2E				; $840B Y FOR...
+				defb $2E,$DC,$7B,$EE,$4C,$45,$46,$54				; $8413 ..{.LEFT
+				defb $7A,$FC,$52,$49,$47,$48,$54,$7A				; $841B z.RIGHTz
+				defb $FB,$55,$50,$20,$20,$7A,$FC,$46				; $8423 .UP  z.F
+				defb $49,$52,$45,$70,$04,$E5,$09,$20				; $842B IREp... 
+				defb $DF,$14,$04,$D9,$43,$59,$42,$45				; $8433 ....CYBE
+				defb $52,$4E,$4F,$49,$44,$20,$2A,$20				; $843B RNOID * 
+				defb $31,$39,$38,$38,$20,$48,$45,$57				; $8443 1988 HEW
+				defb $53,$4F,$4E,$FF                                ; $844B SON.
 
 L_844F:
 			LD DE,$0000				; $844F
@@ -5377,9 +5428,9 @@ L_8F0C:
 			LD ($6AEF),HL				; $8F3F
 			LD ($6AF4),HL				; $8F42
 			XOR A				; $8F45
-			LD ($6AEE),A			; $8F46  ; NInfinite Backshot, Z 8 36680 0 0
-			LD ($6AF3),A			; $8F49  ; NEternal Satellite, M 8 36683 0 0
-			LD HL,$78D3				; $8F4C  ; load lives
+			LD ($6AEE),A			; $8F46  ; Backshot
+			LD ($6AF3),A			; $8F49  ; mace
+			LD HL,LIVES				; $8F4C  ; lives location
 			DEC (HL)				; $8F4F  ; lose life
 			LD E,$20				; $8F50
 			CALL L_EF42				; $8F52
@@ -5389,7 +5440,7 @@ L_8F58:
 			DEC A				; $8F58
 			LD ($8F94),A				; $8F59
 			RET NZ				; $8F5C
-			LD A,($78D3)				; $8F5D   ;load lives
+			LD A,(LIVES)				; $8F5D   ;load lives
 			OR A				; $8F60
 			JP Z,L_8F95				; $8F61
 			LD HL,$0753				; $8F64
@@ -6308,8 +6359,11 @@ L_9787:
 			defb $00,$00,$00,$00                                ; $979F ....
 			defb $CF,$CF,$45,$CF,$CF,$CF,$45,$33				; $97A3 ..E...E3
 			defb $CF,$8B,$45,$33,$CF,$8B,$45,$8A				; $97AB ..E3..E.
-			defb $CF,$8B,$45,$00,$CF,$8B,$45,$33				; $97B3 ..E...E3
-			defb $CF,$03,$45,$33,$45,$03,$45,$33				; $97BB ..E3E.E3
+			defb $CF,$8B,$45,$00,$CF							; $97B3 ..E...E3
+			defb $8B											; $97B8	
+			defb $45,$33										; $97B9
+			defb $CF											; 
+			defb $03,$45,$33,$45,$03,$45,$33					; $97BC
 			defb $01,$56,$45,$33,$01,$56,$45,$33				; $97C3 .VE3.VE3
 			defb $00,$FC,$45,$33,$00,$FC,$45,$33				; $97CB ..E3..E3
 			defb $00,$54,$45,$8A,$00,$54,$45,$00				; $97D3 .TE..TE.
