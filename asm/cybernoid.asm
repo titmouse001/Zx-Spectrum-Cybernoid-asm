@@ -113,35 +113,41 @@ L_6501:
 			defb $00                                            ; $6452 
 			defb $00                                            ; $6453 
 
-L_6504:
+MAIN:
 			DI                      ; $6504        ; <- CALLED BY BASIC
 			LD SP,$0000				; $6505
 			; setup IM2
 			CALL L_70B4				; $6508
+			
 			; Zero memory top - $5B00 to $6503 (after screen)					 
 			LD HL,$5B00				; $650B
 			LD DE,$5B01				; $650E
 			LD (HL),$00				; $6511
 			LD BC,$0A03				; $6513
 			LDIR					; $6516
+
 			XOR A					; $6518
 			LD ($81A5),A			; $6519
 			LD ($7BFA),A			; $651C
-			OUT ($FE),A				; $651F
-			LD A,($386E)			; $6521
-			SUB $FF					; $6524
-			JR Z,L_652A				; $6526
-			LD A,$01				; $6528
-L_652A:
-			LD ($8599),A			; $652A
+			OUT ($FE),A				; $651F ; boarder black
+
+			; Check speccy model, 48K or 128K to enable AY music flag.
+			LD A,($386E)			; $6521	; 48k ROM: holds $FF here
+			SUB $FF					; $6524 ; later logic will use 0 or 1
+			JR Z,IS_48K_ROM			; $6526
+			LD A,$01				; $6528	; Not a 48K rom, assumes it's 128 speccy with AY chip
+IS_48K_ROM:	LD (SpeccyModel),A		; $652A ; Model type flag
 			OR A					; $652D
-			JP NZ,L_653F			; $652E
-			LD A,$C9				; $6531
-			LD ($EF38),A			; $6533
-			LD ($EF3B),A			; $6536
-			LD ($EF42),A			; $6539
-			CALL L_8738				; $653C
-L_653F:
+			JP NZ,SKIP_MODIFY		; $652E  ; 0=48k, 1=128k
+			; 48K Speccy setup
+			LD A,$C9				; $6531  ; $C9 is "RET" for self modifying code
+			LD ($EF38),A			; $6533	 ; change code to use "RET"
+			LD ($EF3B),A			; $6536  ; change code to use "RET"
+			LD ($EF42),A			; $6539	 ; change code to use "RET"
+
+			CALL L_8738				; $653C  ; 48k setup .. inits vars ..to do
+
+SKIP_MODIFY:
 			CALL L_EF3B				; $653F
 			LD E,$01				; $6542
 			CALL L_EF42				; $6544
@@ -158,18 +164,14 @@ L_653F:
 			LD (HL),$30				; $6562
 			LDIR					; $6564
 			XOR A					; $6566
-			CALL L_7465				; $6567
+			CALL RESET_GAME			; $6567
 
-INGAME_LOOP:
-			; clamp frame rate - 25fps (interrupt updates FrameCounter)
+INGAME_LOOP: 
 			LD A,(FrameCounter) 	; ($711A) ; $656A	
-			CP $02					; $656D 
-			JR NC,L_6574			; $656F
+			CP $02					; $656D  ;interrupt updates FrameCounter
+			JR NC,GO_25FPS			; $656F
 			JP INGAME_LOOP			; $6571
-
-			; frame count is a byte - reset 
-L_6574:
-			XOR A					; $6574
+GO_25FPS:	XOR A					; $6574  ; frame count is a byte - reset 
 			LD (FrameCounter),A  	; ($711A),A	; $6575
 
 			LD HL,EventDelay		; $6578
@@ -179,9 +181,9 @@ L_6574:
 			LD (HL),$FF				; $657F	; reset about to die flag
 			LD ($8E42),HL			; $6581 ; ?????????????
 
-			CALL L_688F				; $6584 ; user input
+			CALL USER_INPUT			; $6584 ; User controlls
 
-			CALL L_68AC				; $6587
+			CALL MOVE_SHIP		; $6587
 
 			CALL L_75B8				; $658A
 
@@ -216,62 +218,94 @@ L_6574:
 			CALL L_8EDB				; $65D8		; Immunity
 			CALL L_7E27				; $65DB
 			CALL L_79FE				; $65DE
-			CALL L_660B				; $65E1
-			CALL L_65EB				; $65E4
-			JP INGAME_LOOP			; $65E7
+			CALL INGAME_RESET		; $65E1
+			CALL PAUSE_GAME			; $65E4
+		JP INGAME_LOOP			; $65E7
 
 EventDelay:	defb 0					; $65EA  ; timing (hold delay when firing missiles)
 
-L_65EB:
-			LD A,$FE				; $65EB
+; This pause section confused me, then I read the 1988 game manual :)
+; (btw: original disasembly used hex for the AND test, changed to binary)
+; Games Manual Says:
+;"Pause - Press CAPS SHIFT & SYMBOL SHIFT" 
+PAUSE_GAME: LD A,$FE				; $65EB
 			IN A,($FE)				; $65ED
-			AND $01				; $65EF
-			RET NZ				; $65F1
+			AND %00000001			; $65EF  ; shift key
+			RET NZ					; $65F1
 			LD A,$7F				; $65F2
-			IN A,($FE)				; $65F4
-			AND $02				; $65F6
-			RET NZ				; $65F8
-			LD BC,$01F4				; $65F9
-			CALL L_676A				; $65FC
-L_65FF:
-			CALL L_6672				; $65FF
-			JR NZ,L_65FF				; $6602
-L_6604:
-			CALL L_662B				; $6604
-			OR A				; $6607
-			JR Z,L_6604				; $6608
-			RET				; $660A
+			IN A,($FE)				; $65F4  
+			AND %00000010			; $65F6  ; Symbol shift key
+			RET NZ					; $65F8
 
-L_660B:
+			; This next WAIT_21xBC is not really needed here
+			LD BC,$01F4				; $65F9  
+			CALL WAIT_21xBC			; $65FC
+
+L_65FF:		CALL L_6672				; $65FF  ; are the keys released
+			JR NZ,L_65FF			; $6602
+	
+L_6604:		CALL GET_KEY			; $6604  ; pause - wait for key press
+			OR A					; $6607
+			JR Z,L_6604				; $6608
+			RET						; $660A
+
+;----------------------------------------------------
+INGAME_RESET:	; press "1,2,3,4,5" to reset ingame
 			LD A,$F7				; $660B
 			IN A,($FE)				; $660D
-			AND $1F				; $660F
-			RET NZ				; $6611
-			JP L_6504				; $6612
+			AND $1F					; $660F
+			RET NZ					; $6611
+			JP MAIN					; $6612
+;----------------------------------------------------
 
 			defb $E6,$F1,$C2,$DF,$0A,$0A                        ; $6615 ......
 			defb $E0,$45,$57,$48,$49,$43,$48,$20				; $661B .EWHICH 
 			defb $4C,$45,$56,$45,$4C,$20,$3F,$FF				; $6623 LEVEL ?.
-L_662B:
-			defb $C5,$E5,$21,$49,$66,$16,$FE,$7A				; $662B ..!If..z
-			defb $DB,$FE,$1E,$01,$06,$05,$0F,$30				; $6633 .......0
-			defb $09,$23,$CB,$23,$10,$F8,$CB,$02				; $663B .#.#....
-			defb $38,$ED,$7E,$E1,$C1,$C9,$01,$5A				; $6643 8.~....Z
-			defb $58,$43,$56,$41,$53,$44,$46,$47				; $664B XCVASDFG
-			defb $51,$57,$45,$52,$54,$31,$32,$33				; $6653 QWERT123
-			defb $34,$35,$30,$39,$38,$37,$36,$50				; $665B 4509876P
-			defb $4F,$49,$55,$59,$0D,$4C,$4B,$4A				; $6663 OIUY.LKJ
-			defb $48,$20,$02,$4D,$4E,$42,$00                    ; $666B H .MNB.
 
-L_6672:
-			XOR A				; $6672
-			IN A,($FE)				; $6673
-			CPL				; $6675
+
+; NOTE: Reading Keyboard Ports, for example "A=$FE then IN A,($FE)"
+; 		A zero in one of the five lowest bits means that the corresponding key is pressed.
+GET_KEY:    PUSH    BC            
+            PUSH    HL              
+            LD      HL, KeyTable    
+            LD      D, $FE          ; 1st Port to read
+LoopSetup:  LD      A, D            
+Loop:       IN      A, ($FE)        ; Read key state
+            LD      E, $01          ; Bitmask for key check
+            LD      B, $05          ; 5 bits (keys) in each row
+
+CheckKey:   RRCA                    ; 
+            JR      NC, KeyPressed  ; key down (bit checked is zero)
+            INC     HL              ; next lookup
+			SLA     E         		; move test mask
+            DJNZ    CheckKey        
+
+            RLC     D               ; next port row to read ($FD,$FB...)
+            JR      C, LoopSetup
+KeyPressed: LD      A, (HL)         ; get char value from table
+            POP     HL            
+            POP     BC              
+            RET                  
+
+KeyTable:	; Key row mapping  ; $6649
+			; $01=shift, ; $0D=enter, $20=space, $02=sym shft
+			defb $01,"ZXCV"			
+			defb "ASDFG"
+			defb "QWERT"
+			defb "12345"
+			defb "09876"
+			defb "POIUY"
+			defb $0D,"LKJH"   		
+			defb $20,$02,"MNB" 
+			defb $0	; tables end marker
+
+L_6672:		XOR A				; $6672
+			IN A,($FE)			; $6673
+			CPL					; $6675
 			AND $1F				; $6676
-			RET				; $6678
+			RET					; $6678
 
-L_6679:
-			PUSH HL				; $6679
+L_6679:		PUSH HL				; $6679
 			PUSH DE				; $667A
 			PUSH BC				; $667B
 			INC A				; $667C
@@ -431,17 +465,17 @@ L_675B:
 			LD H,A				; $6768
 			RET				; $6769
 
-L_676A:
+WAIT_21xBC:   ; 21cycles x BC  (ignoring setup cost)
 			PUSH BC				; $676A
 			PUSH DE				; $676B
 			PUSH HL				; $676C
-			LD HL,$0000				; $676D
-			LD DE,$0000				; $6770
+			LD HL,$0000			; $676D
+			LD DE,$0000			; $6770
 			LDIR				; $6773
 			POP HL				; $6775
 			POP DE				; $6776
 			POP BC				; $6777
-			RET				; $6778
+			RET					; $6778
 
 L_6779:
 			PUSH AF				; $6779
@@ -534,240 +568,262 @@ L_6802:
 			SUB C				; $6803
 			SUB $08				; $6804
 			CP $F0				; $6806
-			LD A,$00				; $6808
+			LD A,$00			; $6808
 			RET C				; $680A
 			LD A,D				; $680B
 			SUB B				; $680C
 			SUB $10				; $680D
 			CP $E0				; $680F
-			LD A,$00				; $6811
+			LD A,$00			; $6811
 			RET C				; $6813
 			INC A				; $6814
-			RET				; $6815
+			RET					; $6815
 
-L_6816:
-			LD D,$01				; $6816
-			LD HL,$68A6				; $6818
-			LD C,$FE				; $681B
+DEFAULT_KEYS:
+			LD D,$01			; $6816 
+			LD HL,$68A6			; $6818
+			LD C,$FE			; $681B
 			INC HL				; $681D
-			LD B,$DF				; $681E
-			IN A,(C)				; $6820
-			AND $02				; $6822
-			JR NZ,L_6827				; $6824
-			LD (HL),D				; $6826
+			LD B,$DF			; $681E	
+			IN A,(C)			; $6820  ; Port $DFFE (Y, U, I, O, P)
+			AND $02				; $6822  ; bit 1, "O" key
+			JR NZ,L_6827		; $6824
+			LD (HL),D			; $6826
 L_6827:
 			INC HL				; $6827
-			LD B,$DF				; $6828
-			IN A,(C)				; $682A
-			AND $01				; $682C
-			JR NZ,L_6831				; $682E
-			LD (HL),D				; $6830
+			LD B,$DF			; $6828 
+			IN A,(C)			; $682A  ; Port $DFFE (Y, U, I, O, P):
+			AND $01				; $682C  ; bit 0, "P" key. 
+			JR NZ,L_6831		; $682E
+			LD (HL),D			; $6830
 L_6831:
 			INC HL				; $6831
-			LD B,$FB				; $6832
-			IN A,(C)				; $6834
-			AND $01				; $6836
-			JR NZ,L_683B				; $6838
-			LD (HL),D				; $683A
+			LD B,$FB			; $6832  
+			IN A,(C)			; $6834  ; Port $FBFE (Q, W, E, R, T)
+			AND $01				; $6836  ; bit 0, "Q" key
+			JR NZ,L_683B		; $6838
+			LD (HL),D			; $683A
 L_683B:
 			INC HL				; $683B
-			LD B,$7F				; $683C
-			IN A,(C)				; $683E
-			AND $01				; $6840
+			LD B,$7F			; $683C
+			IN A,(C)			; $683E  ; Port $7FFE (B, N, M, Symbol Shift, Space)
+			AND $01				; $6840  ; bit 0, Space key.
 			RET NZ				; $6842
-			LD (HL),D				; $6843
-			RET				; $6844
+			LD (HL),D			; $6843
+			RET					; $6844
 
-L_6845:
-			LD BC,$EFFE				; $6845
-			IN A,(C)				; $6848
-			CPL				; $684A
+INTERFACE2_JOY:
+			LD BC,$EFFE			; $6845
+			IN A,(C)			; $6848		 ; Port $EFFE keys 6, 7, 8, 9, 0 
+			CPL					; $684A
 			AND $1F				; $684B
 			LD D,A				; $684D
-			CALL L_688A				; $684E
-			LD ($68AA),A				; $6851
-			CALL L_688A				; $6854
-			LD ($68A9),A				; $6857
-			CALL L_688A				; $685A
-			CALL L_688A				; $685D
-			LD ($68A8),A				; $6860
-			CALL L_688A				; $6863
-			LD ($68A7),A				; $6866
-			RET				; $6869
+			CALL GET_LSB		; $684E
+			LD (FIRE_BUTTON),A	; $6851		; key "0"
+			CALL GET_LSB		; $6854
+			LD (UP_BUTTON),A	; $6857		; key "9"
+			CALL GET_LSB		; $685A		; ignore down bit
+			CALL GET_LSB		; $685D
+			LD (RIGHT_BUTTON),A	; $6860		; key "7"
+			CALL GET_LSB		; $6863
+			LD (LEFT_BUTTON),A	; $6866		; key "6"
+			RET					; $6869
 
-L_686A:
+; -----------------------------------------------------------------
+; Kempston Joystick - Cybernoid does not use down.
+;  7 6 5 4 3 2 1 0
+;  0 0 0 1 1 1 1 1 (i.e $1F)
+;  x x x F U D L R (fire,up,down,left,right)
+KEMPSTON_JOYSTICK:		
 			LD C,$1F				; $686A
 			IN D,(C)				; $686C
-			CALL L_688A				; $686E
-			LD ($68A8),A				; $6871
-			CALL L_688A				; $6874
-			LD ($68A7),A				; $6877
-			CALL L_688A				; $687A
-			CALL L_688A				; $687D
-			LD ($68A9),A				; $6880
-			CALL L_688A				; $6883
-			LD ($68AA),A				; $6886
-			RET				; $6889
+			CALL GET_LSB				; $686E
+			LD (RIGHT_BUTTON),A			; $6871
+			CALL GET_LSB				; $6874
+			LD (LEFT_BUTTON),A			; $6877
+			CALL GET_LSB				; $687A
+			CALL GET_LSB				; $687D
+			LD (UP_BUTTON),A			; $6880
+			CALL GET_LSB				; $6883
+			LD (FIRE_BUTTON),A			; $6886
+			RET						; $6889
 
-L_688A:
-			XOR A				; $688A
-			SRL D				; $688B
-			RLA				; $688D
-			RET				; $688E
+; ------------------------
+; GET_LSB - Helper Routine 
+; Shifts D right, returns LSB in A.
+; ------------------------
+GET_LSB:	XOR A					; $688A
+			SRL D					; $688B
+			RLA						; $688D
+			RET						; $688E
+; ------------------------
 
-L_688F:
-			LD HL,$0000				; $688F
-			LD ($68A7),HL				; $6892
-			LD ($68A9),HL				; $6895
-			LD A,($68AB)				; $6898
-			OR A				; $689B
-			JP Z,L_6816				; $689C
-			CP $01				; $689F
-			JP Z,L_6845				; $68A1
-			JP L_686A				; $68A4
+USER_INPUT:	LD HL,$0000				; $688F
+			LD (LEFT_BUTTON),HL		; $6892 ; clear keys
+			LD (UP_BUTTON),HL		; $6895	; clear keys
+			LD A,(INPUT_TYPE)		; $6898 
+			OR A					; $689B
+			JP Z,DEFAULT_KEYS		; $689C
+			CP $01					; $689F
+			JP Z,INTERFACE2_JOY		; $68A1 ; Alt Keys, $68AB = 1
+			JP KEMPSTON_JOYSTICK	; $68A4
 
-			NOP				; $68A7
-			NOP				; $68A8
-			NOP				; $68A9
-			NOP				; $68AA
-			NOP				; $68AB
+; ---------------------------------------------------------------------
+; Games inputs via memory addresses
+LEFT_BUTTON:	defb $0					; $68A7 ; Left 
+RIGHT_BUTTON:	defb $0					; $68A8 ; Right 
+UP_BUTTON		defb $0					; $68A9 ; Up 
+FIRE_BUTTON:	defb $0					; $68AA ; Fire 
+				; Stores 3 input methods - Keys, INTERFACE2 or joy
+INPUT_TYPE:		defb $0					; $68AB ; 0,1 or joy
+; ---------------------------------------------------------------------
 
-L_68AC:
-			LD A,($8F94)				; $68AC
-			OR A				; $68AF
-			RET NZ				; $68B0
-			LD ($696F),A				; $68B1
-			LD DE,($6969)				; $68B4
-			LD ($6A08),DE				; $68B8
-			LD HL,($68A7)				; $68BC
-			LD A,H				; $68BF
-			XOR L				; $68C0
-			JR Z,L_690E				; $68C1
-			BIT 0,L				; $68C3
-			JR NZ,L_68EC				; $68C5
-			LD A,($696B)				; $68C7
-			CP $FF				; $68CA
+MOVE_SHIP:  LD A,(InputOff)			; $68AC
+			OR A					; $68AF
+			RET NZ					; $68B0
+
+			LD ($696F),A			; $68B1 ; zero
+			LD DE,(POS_XY)			; $68B4 ; get x,y coords
+			LD ($6A08),DE			; $68B8 ; take copy  ? BUT NOT USED ?
+			LD HL,(LEFT_BUTTON)		; $68BC ; get left and right
+
+			LD A,H					; $68BF
+			XOR L					; $68C0	 ; Check Left or Right pressed
+			JR Z,DONE_X				; $68C1
+			BIT 0,L					; $68C3
+			JR NZ,L_68EC			; $68C5  ; moves ship left
+
+			LD A,($696B)			; $68C7 ; block move
+			CP $FF					; $68CA
 			LD A,$01				; $68CC
-			LD ($696B),A				; $68CE
-			JR NZ,L_68D9				; $68D1
-			LD ($696F),A				; $68D3
-			JP L_690E				; $68D6
+			LD ($696B),A			; $68CE ; set as 1
+			JR NZ,L_68D9			; $68D1 ; moves ship right
+			LD ($696F),A			; $68D3
+			JP DONE_X				; $68D6
 
-L_68D9:
-			LD A,E				; $68D9
-			CP $78				; $68DA
-			CALL Z,L_71B4				; $68DC
-			CALL L_6972				; $68DF
-			JR NZ,L_690E				; $68E2
-			INC E				; $68E4
+; moves ship right
+L_68D9:		LD A,E					; $68D9
+			CP $78					; $68DA
+			CALL Z,L_71B4			; $68DC
+			CALL L_6972				; $68DF  ; move ship X
+			JR NZ,DONE_X			; $68E2
+			INC E					; $68E4  ; xpos+=1 
 			LD A,$01				; $68E5
-			LD ($696F),A				; $68E7
-			JR L_690E				; $68EA
-L_68EC:
-			LD A,($696B)				; $68EC
-			CP $01				; $68EF
-			LD A,$FF				; $68F1
-			LD ($696B),A				; $68F3
-			JR NZ,L_68FE				; $68F6
-			LD ($696F),A				; $68F8
-			JP L_690E				; $68FB
+			LD ($696F),A			; $68E7  ; set as 1
+			JR DONE_X				; $68EA
 
-L_68FE:
-			LD A,E				; $68FE
-			OR A				; $68FF
-			CALL Z,L_71B4				; $6900
+; moves ship left
+L_68EC:		LD A,($696B)			; $68EC
+			CP $01					; $68EF
+			LD A,$FF				; $68F1
+			LD ($696B),A			; $68F3 ; set as $ff
+			JR NZ,L_68FE			; $68F6
+			LD ($696F),A			; $68F8
+			JP DONE_X				; $68FB
+
+L_68FE:		LD A,E					; $68FE
+			OR A					; $68FF
+			CALL Z,L_71B4			; $6900 ; move ship X
 			CALL L_699C				; $6903
-			JR NZ,L_690E				; $6906
-			DEC E				; $6908
+			JR NZ,DONE_X			; $6906
+			DEC E					; $6908	; xpos-=1; 
 			LD A,$01				; $6909
-			LD ($696F),A				; $690B
-L_690E:
-L_690E:
-			LD A,($68A9)				; $690E
+			LD ($696F),A			; $690B
+
+DONE_X: 	LD A,(UP_BUTTON)	; $690E	; get only up
 			OR A				; $6911
-			JR Z,L_692D				; $6912
-			LD A,$FE				; $6914
-			LD ($696C),A				; $6916
+			JR Z,DONE_Y			; $6912
+			LD A,$FE			; $6914
+			LD ($696C),A		; $6916
 			LD A,D				; $6919
 			CP $20				; $691A
-			CALL Z,L_71B4				; $691C
-			CALL L_69E6				; $691F
-			JR NZ,L_6944				; $6922
-			DEC D				; $6924
-			DEC D				; $6925
-			LD A,$01				; $6926
-			LD ($696F),A				; $6928
-			JR L_6944				; $692B
-L_692D:
-			LD A,$02				; $692D
-			LD ($696C),A				; $692F
-			LD A,D				; $6932
-			CP $B0				; $6933
-			CALL Z,L_71B4				; $6935
-			CALL L_69C4				; $6938
-			JR NZ,L_6944				; $693B
-			INC D				; $693D
-			INC D				; $693E
-			LD A,$01				; $693F
-			LD ($696F),A				; $6941
-L_6944:
-L_6944:
-			LD A,($696F)				; $6944
+			CALL Z,L_71B4		; $691C
+			CALL L_69E6			; $691F  ; move ship Y
+			JR NZ,NO_GRAV		; $6922
+			DEC D				; $6924	 ; move y
+			DEC D				; $6925	 ; ypos-=2 (UP)
+			LD A,$01			; $6926
+			LD ($696F),A		; $6928  ; set as 1 
+			JR NO_GRAV			; $692B
+
+DONE_Y:		LD A,$02			; $692D
+			LD ($696C),A		; $692F
+			LD A,D				; $6932 ; copy ypos
+			CP $B0				; $6933	; = y176 (going into next screen)
+			CALL Z,L_71B4		; $6935
+			CALL L_69C4			; $6938
+			JR NZ,NO_GRAV		; $693B
+			INC D				; $693D ; apply gravity
+			INC D				; $693E ; ypos+=1  TL(0,0)BR(256,192)
+			LD A,$01			; $693F
+			LD ($696F),A		; $6941
+			
+NO_GRAV:	LD A,($696F)		; $6944
 			OR A				; $6947
-			JP Z,L_6A46				; $6948
-			LD BC,($6969)				; $694B
-			LD ($6969),DE				; $694F
-L_6953:
-			LD A,($696B)				; $6953
-			LD L,$01				; $6956
+			JP Z,L_6A46			; $6948
+			LD BC,(POS_XY)		; $694B
+			LD (POS_XY),DE		; $694F
+
+L_6953:		LD A,($696B)		; $6953    ; this is called from else where also
+			LD L,$01			; $6956
 			INC A				; $6958
-			JR NZ,L_695C				; $6959
+			JR NZ,L_695C		; $6959
 			INC L				; $695B
-L_695C:
-			LD A,L				; $695C
-			LD HL,($696D)				; $695D
-			CALL L_A1FD				; $6960
-			LD ($696D),HL				; $6963
-			JP L_6A0A				; $6966
 
-			defb $40,$58                                        ; $6969 @X
-			defb $01,$02,$F9,$C6,$01,$00,$00                    ; $696B .......
+L_695C:		LD A,L				; $695C
+			LD HL,($696D)		; $695D
+			CALL L_A1FD			; $6960
+			LD ($696D),HL		; $6963  ; keep old coords to delete next frame?
 
-L_6972:
-			PUSH BC				; $6972
+			JP L_6A0A			; $6966
+
+POS_XY		defb $40,$58        ; $6969 ; ships current X,Y pos
+			
+
+			defb $01 		    ; $696B ;  block‐move ????
+			defb $02      		; $696C ;  vertical movement flag ???
+
+			defb $F9      		; $696D ;   old coords to clear last draw????
+			defb $C6      		; $696E ;  
+
+			defb $01	      	; $696F ; dirty update flag ????
+
+			defb $00   		   	; $6970
+			defb $00   	    	; $6981
+
+L_6972:		PUSH BC				; $6972
 			PUSH DE				; $6973
 			PUSH HL				; $6974
 			LD A,E				; $6975
 			AND $03				; $6976
-			LD A,$00				; $6978
-			JR NZ,L_6997				; $697A
+			LD A,$00			; $6978
+			JR NZ,L_6997		; $697A
 			LD A,E				; $697C
 			CP $78				; $697D
-			LD A,$00				; $697F
-			JR NC,L_6997				; $6981
-			CALL L_678F				; $6983
+			LD A,$00			; $697F
+			JR NC,L_6997		; $6981
+			CALL L_678F			; $6983
 			INC L				; $6986
 			INC L				; $6987
-			LD BC,$0020				; $6988
-			LD A,(HL)				; $698B
-			ADD HL,BC				; $698C
+			LD BC,$0020			; $6988
+			LD A,(HL)			; $698B
+			ADD HL,BC			; $698C
 			OR (HL)				; $698D
 			LD E,A				; $698E
 			LD A,D				; $698F
 			AND $07				; $6990
 			LD A,E				; $6992
-			JR Z,L_6997				; $6993
-			ADD HL,BC				; $6995
+			JR Z,L_6997			; $6993
+			ADD HL,BC			; $6995
 			OR (HL)				; $6996
-L_6997:
-			OR A				; $6997
+
+L_6997:		OR A				; $6997
 			POP HL				; $6998
 			POP DE				; $6999
 			POP BC				; $699A
 			RET				; $699B
 
-L_699C:
-			PUSH BC				; $699C
+L_699C:		PUSH BC				; $699C
 			PUSH DE				; $699D
 			PUSH HL				; $699E
 			LD A,E				; $699F
@@ -791,15 +847,14 @@ L_699C:
 			JR Z,L_69BF				; $69BB
 			ADD HL,BC				; $69BD
 			OR (HL)				; $69BE
-L_69BF:
-			OR A				; $69BF
+
+L_69BF:		OR A				; $69BF
 			POP HL				; $69C0
 			POP DE				; $69C1
 			POP BC				; $69C2
 			RET				; $69C3
 
-L_69C4:
-			PUSH BC				; $69C4
+L_69C4:		PUSH BC				; $69C4
 			PUSH DE				; $69C5
 			PUSH HL				; $69C6
 			LD A,D				; $69C7
@@ -825,44 +880,42 @@ L_69E1:
 			POP DE				; $69E3
 			POP BC				; $69E4
 			RET				; $69E5
-L_69E6:
-			PUSH BC				; $69E6
+
+L_69E6:		PUSH BC				; $69E6
 			PUSH DE				; $69E7
 			PUSH HL				; $69E8
 			LD A,D				; $69E9
 			AND $07				; $69EA
-			LD A,$00				; $69EC
-			JR NZ,L_6A03				; $69EE
-			CALL L_678F				; $69F0
-			LD BC,$FFE0				; $69F3
-			ADD HL,BC				; $69F6
-			LD A,(HL)				; $69F7
+			LD A,$00			; $69EC
+			JR NZ,L_6A03		; $69EE
+			CALL L_678F			; $69F0
+			LD BC,$FFE0			; $69F3
+			ADD HL,BC			; $69F6
+			LD A,(HL)			; $69F7
 			INC L				; $69F8
 			OR (HL)				; $69F9
 			LD D,A				; $69FA
 			LD A,E				; $69FB
 			AND $03				; $69FC
 			LD A,D				; $69FE
-			JR Z,L_6A03				; $69FF
+			JR Z,L_6A03			; $69FF
 			INC L				; $6A01
 			OR (HL)				; $6A02
-L_6A03:
-			OR A				; $6A03
+L_6A03:		OR A				; $6A03
 			POP HL				; $6A04
 			POP DE				; $6A05
 			POP BC				; $6A06
-			RET				; $6A07
+			RET					; $6A07
 
-			NOP				; $6A08
+			NOP				; $6A08   ; copy of ship cords  ? NOT USED ?
 			NOP				; $6A09
 
-L_6A0A:
-			LD A,($6AEE)			; $6A0A  ; Immediate Backshot
+L_6A0A:		LD A,($6AEE)			; $6A0A  ; Immediate Backshot
 			OR A					; $6A0D
 			JP Z,L_6A46				; $6A0E
 			LD HL,($6AEF)			; $6A11
 			LD BC,($6AF1)			; $6A14
-			LD DE,($6969)			; $6A18
+			LD DE,(POS_XY)			; $6A18
 			LD A,($696B)			; $6A1C
 			CP $FF					; $6A1F
 			JR Z,L_6A36				; $6A21
@@ -875,8 +928,7 @@ L_6A0A:
 			LD ($6AEF),HL			; $6A30
 			JP L_6A46				; $6A33
 
-L_6A36:
-			LD A,E					; $6A36
+L_6A36:		LD A,E					; $6A36
 			ADD A,$08				; $6A37
 			LD E,A					; $6A39
 			LD ($6AF1),DE			; $6A3A
@@ -889,7 +941,7 @@ L_6A46:
 			JR Z,L_6ABA				; $6A4A  ; Enable Mace
 
 			LD DE,($6AF6)			; $6A4C
-			LD A,($8F94)			; $6A50
+			LD A,(InputOff)			; $6A50
 			OR A					; $6A53
 			JP NZ,L_6A87				; $6A54
 			LD A,($696B)			; $6A57
@@ -916,7 +968,7 @@ L_6A71:
 			LD H,$00				; $6A76
 			LD BC,$6AF9				; $6A78
 			ADD HL,BC				; $6A7B
-			LD DE,($6969)				; $6A7C
+			LD DE,(POS_XY)				; $6A7C
 			LD A,(HL)				; $6A80
 			ADD A,E				; $6A81
 			LD E,A				; $6A82
@@ -962,7 +1014,7 @@ L_6ABA:
 			OR $40				; $6ACB
 			LD C,A				; $6ACD
 L_6ACE:
-			LD DE,($6969)				; $6ACE
+			LD DE,(POS_XY)				; $6ACE
 			CALL L_A446				; $6AD2
 			LD A,($6AEE)				; $6AD5
 			OR A				; $6AD8
@@ -1687,6 +1739,7 @@ L_70B4:
 			LD I,A				; $70D0
 			RET				; $70D2
 
+; =================================================================
 ; === INTERRUPT ROUTINE, called 50pfs  ===
 L_70D3:					 
 			PUSH AF				; $70D3
@@ -1695,47 +1748,52 @@ L_70D3:
 			PUSH HL				; $70D6
 			PUSH IX				; $70D7
 			PUSH IY				; $70D9
-			EXX				; $70DB
-			EX AF,AF'				; $70DC
+			EXX					; $70DB
+			EX AF,AF'			; $70DC
 			PUSH AF				; $70DD
 			PUSH BC				; $70DE
 			PUSH DE				; $70DF
 			PUSH HL				; $70E0
-			LD HL,FrameCounter ; $711A				; $70E1
-			INC (HL)				; $70E4
-			LD A,($830A)				; $70E5
-			OR A				; $70E8
-			CALL Z,L_EF3B				; $70E9
-			LD A,($830A)				; $70EC
-			OR A				; $70EF
-			JR Z,L_7109				; $70F0
-			LD A,($8599)				; $70F2
-			OR A				; $70F5
-			JR NZ,L_7106				; $70F6
-			LD A,($711B)				; $70F8
-			XOR $01				; $70FB
-			LD ($711B),A				; $70FD
-			CALL Z,L_85BA				; $7100
-			JP SKIP_AY_MUSIC				; $7103
 
-L_7106:
-			CALL L_EF38				; $7106
-SKIP_AY_MUSIC:
-L_7109:
-			POP HL				; $7109
+			LD HL,FrameCounter 		; $70E1
+			INC (HL)				; $70E4
+			
+			LD A,($830A)			; $70E5
+			OR A					; $70E8
+			CALL Z,L_EF3B			; $70E9  ; play AY music
+
+			LD A,($830A)			; $70EC
+			OR A					; $70EF
+			JR Z,EXIT_IM2			; $70F0
+
+			LD A,(SpeccyModel)			; $70F2
+			OR A					; $70F5
+			JR NZ,USE_AY			; $70F6
+
+			LD A,($711B)			; $70F8
+			XOR $01					; $70FB
+			LD ($711B),A			; $70FD
+			CALL Z,L_85BA			; $7100
+
+			JP EXIT_IM2			; $7103
+USE_AY:		CALL AY_MUSIC		; $7106	
+
+EXIT_IM2:	POP HL				; $7109
 			POP DE				; $710A
 			POP BC				; $710B
 			POP AF				; $710C
-			EX AF,AF'				; $710D
-			EXX				; $710E
+			EX AF,AF'			; $710D
+			EXX					; $710E
 			POP IY				; $710F
 			POP IX				; $7111
 			POP HL				; $7113
 			POP DE				; $7114
 			POP BC				; $7115
 			POP AF				; $7116
-			EI				; $7117
+			EI					; $7117
 			RETI				; $7118
+
+; =================================================================
 
 FrameCounter: defb $00                                            ; $711A
 			defb $00,$AA,$A5,$25,$A6,$82,$A6,$D3				; $711B ...%....
@@ -1820,7 +1878,7 @@ L_7204:
 			NEG				; $720A
 			LD D,$B0				; $720C
 L_720E:
-			LD ($6969),DE				; $720E
+			LD (POS_XY),DE				; $720E
 			LD ($6970),DE				; $7212
 			LD DE,($744B)				; $7216
 			ADD A,E				; $721A
@@ -1959,7 +2017,7 @@ L_730E:
 			CALL L_9BD8				; $7315
 			LD A,$01				; $7318
 			LD ($9BD3),A				; $731A
-			LD DE,($6969)				; $731D
+			LD DE,(POS_XY)				; $731D
 			LD ($6AF1),DE				; $7321
 			LD B,D				; $7325
 			LD C,E				; $7326
@@ -2131,21 +2189,21 @@ L_7457:
 			LDIR				; $7462
 			RET				; $7464
 
-L_7465:
-L_7465:
-			LD ($74E1),A				; $7465
+
+RESET_GAME:
+			LD ($74E1),A		; $7465
 			ADD A,A				; $7468
 			ADD A,A				; $7469
 			ADD A,A				; $746A
 			LD L,A				; $746B
 			LD H,$00				; $746C
-			LD BC,$74C9				; $746E
+			LD BC,START_POS				; $746E
 			ADD HL,BC				; $7471
 			LD E,(HL)				; $7472
 			INC HL				; $7473
 			LD D,(HL)				; $7474
 			INC HL				; $7475
-			LD ($6969),DE				; $7476
+			LD (POS_XY),DE				; $7476
 			LD ($6970),DE				; $747A
 			LD A,(HL)				; $747E
 			LD ($744C),A				; $747F
@@ -2166,7 +2224,7 @@ L_7465:
 			LD ($7643),A				; $749C
 			LD ($6AEE),A				; $749F
 			LD ($6AF3),A				; $74A2
-			LD ($8F94),A				; $74A5
+			LD (InputOff),A				; $74A5
 			LD (FrameCounter),A ;  ($711A),A				; $74A8
 			LD HL,$0000				; $74AB
 			LD ($7973),HL				; $74AE
@@ -2174,13 +2232,13 @@ L_7465:
 			CALL L_66AA				; $74B4
 			CALL L_77FF				; $74B7
 			CALL L_721E				; $74BA
-			LD DE,($6969)				; $74BD
+			LD DE,(POS_XY)				; $74BD
 			LD B,D				; $74C1
 			LD C,E				; $74C2
 			CALL L_6953				; $74C3
 			JP L_66E7				; $74C6
 
-			defb $20,$90                                        ; $74C9  .
+START_POS:	defb $20,$90                                        ; $74C9  ; ships starting x,y on screen
 			defb $06,$00,$F4,$01,$01,$00,$60,$50				; $74CB ......`P
 			defb $06,$15,$EE,$02,$FF,$00,$60,$60				; $74D3 ......``
 			defb $08,$2B,$84,$03,$FF,$00,$00                    ; $74DB .+.....
@@ -2297,11 +2355,11 @@ L_75B8:
 			LD A,($74E1)				; $75CF
 			INC A				; $75D2
 			CP $03				; $75D3
-			JP NZ,L_7465				; $75D5
+			JP NZ,RESET_GAME				; $75D5
 			XOR A				; $75D8
-			JP L_7465				; $75D9
+			JP RESET_GAME				; $75D9
 L_75DC:
-			LD HL,($6969)				; $75DC
+			LD HL,(POS_XY)				; $75DC
 			LD A,D				; $75DF
 			SUB $10				; $75E0
 			CP H				; $75E2
@@ -2340,10 +2398,10 @@ L_75DC:
 			LD A,$0E				; $7617
 			CALL L_9FA2				; $7619
 			LD A,$FF				; $761C
-			LD ($8F94),A				; $761E
+			LD (InputOff),A				; $761E
 			LD A,$40				; $7621
 			LD ($7643),A				; $7623
-			LD DE,($6969)				; $7626
+			LD DE,(POS_XY)				; $7626
 			LD B,D				; $762A
 			LD C,E				; $762B
 			LD HL,$C6F9				; $762C
@@ -2409,8 +2467,8 @@ L_7676:
 			LD DE,$7972				; $76AA
 			CALL L_78D4				; $76AD
 L_76B0:
-			CALL L_688F				; $76B0
-			LD A,($68AA)				; $76B3
+			CALL USER_INPUT				; $76B0
+			LD A,(FIRE_BUTTON)				; $76B3
 			OR A				; $76B6
 			JP Z,L_76B0				; $76B7
 			RET				; $76BA
@@ -2419,8 +2477,8 @@ L_76BB:
 			LD HL,$7730				; $76BB
 			CALL L_6B29				; $76BE
 L_76C1:
-			CALL L_688F				; $76C1
-			LD A,($68AA)				; $76C4
+			CALL USER_INPUT				; $76C1
+			LD A,(FIRE_BUTTON)				; $76C4
 			OR A				; $76C7
 			JP Z,L_76C1				; $76C8
 			RET				; $76CB
@@ -2762,10 +2820,10 @@ L_7A48:
 			JR NC,L_7A5B				; $7A4D
 			INC BC				; $7A4F
 L_7A50:
-			LD A,($8F94)				; $7A50
+			LD A,(InputOff)				; $7A50
 			OR A				; $7A53
 			RET NZ				; $7A54
-			LD A,($68AA)				; $7A55
+			LD A,(FIRE_BUTTON)				; $7A55
 			OR A				; $7A58
 			JR NZ,L_7A5F				; $7A59
 L_7A5B:
@@ -2784,7 +2842,7 @@ L_7A5F:
 L_7A6B:
 			INC A				; $7A6B
 			LD ($7AE9),A				; $7A6C
-			LD DE,($6969)				; $7A6F
+			LD DE,(POS_XY)				; $7A6F
 			LD A,($7AB4)				; $7A73
 			XOR $04				; $7A76
 			LD ($7AB4),A				; $7A78
@@ -2805,7 +2863,7 @@ L_7A88:
 			LD A,($6AEE)				; $7A92
 			OR A				; $7A95
 			RET Z				; $7A96
-			LD DE,($6969)				; $7A97
+			LD DE,(POS_XY)				; $7A97
 			LD A,($696B)				; $7A9B
 			CP $FF				; $7A9E
 			LD A,$0E				; $7AA0
@@ -3009,36 +3067,9 @@ SEEKER_LABEL:   defb "SEEKER     "      ; $7BEA  "SEEKER"W
 SEEKER_MAX:     defb $05               	; $7BF8 - Maximum seeker allowed
 SEEKER_USED:    defb $05               	; $7BF9 - Seeker currently used
 
-			; defb $42,$4F,$4D,$42,$53							; $7BAA ;"BOMBS"    
-			; defb $20,$20,$20,$20								; $7BBF 
-			; defb $20,$20,$00,$5C,$7C							; $7BB3 
-			; defb $14											; $7BB8 ;bombs max
-			; defb $14											; $7BB9 ;bombs used
+	
 
-			; defb $4D,$49,$4E,$45,$53							; $7BBA ;"MINES"
-			; defb $20,$20,$20,$20								; $7BBF
-			; defb $20,$20,$00,$CE,$7D							; $7BC3
-			; defb $14											; $7BC8 ; mines max
-			; defb $14											; $7BC9 ; mines used
-
-			; defb $53,$48,$49,$45,$4C							; $7BCA ; "SHIELD"
-			; defb $44,$20,$20,$20								; $7BCF
-			; defb $20,$20,$00,$76,$7E							; $7BD3
-			; defb $01											; $7BD8 ; shield max
-			; defb $01											; $7BD9 ; shiled used
-			
-			; defb $42,$4F,$55,$4E,$43,$45,$20,$20,$20			; $7BDA ; "BOUNCE"
-			; defb $20,$20,$00,$95,$7E							; $7BE3
-			; defb $05											; $7BE8 ; bounce max
-			; defb $05											; $7BE9 ; bounce used
-			
-			; defb $53,$45,$45,$4B,$45,$52,$20,$20,$20			; $7BEA ; "SEEKER"
-			; defb $20,$20,$00,$0E,$80							; $7BF3 
-			; defb $05											; $7BF8 ; seeker max
-			; defb $05											; $7BF9 ; seeker used
-
-
-			defb $00,$00                                        ; $7BFA
+				defb $00,$00            ; $7BFA
 
 L_7BFC:
 			LD DE,$0010				; $7BFC
@@ -3052,10 +3083,10 @@ L_7C05:
 			RET				; $7C0F
 
 L_7C10:
-			LD A,($8F94)				; $7C10
+			LD A,(InputOff)				; $7C10
 			OR A				; $7C13
 			RET NZ				; $7C14
-			LD DE,($6969)				; $7C15
+			LD DE,(POS_XY)				; $7C15
 			LD A,E				; $7C19
 			CP $79				; $7C1A
 			RET NC				; $7C1C
@@ -3255,7 +3286,7 @@ L_7D58:
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $7DC3 ........
 			defb $00,$00,$FF                                    ; $7DCB ...
 
-			LD DE,($6969)				; $7DCE
+			LD DE,(POS_XY)				; $7DCE
 			INC D				; $7DD2
 			INC D				; $7DD3
 			INC D				; $7DD4
@@ -3376,7 +3407,7 @@ L_7E31:
 			LD E,$1C				; $7EA7
 			CALL L_EF42				; $7EA9
 			POP DE				; $7EAC
-			LD DE,($6969)				; $7EAD
+			LD DE,(POS_XY)				; $7EAD
 			LD A,E				; $7EB1
 			AND $FC				; $7EB2
 			LD E,A				; $7EB4
@@ -3625,7 +3656,7 @@ L_8049:
 			LD HL,$C6F9				; $8049
 			LD (IX+$0A),L				; $804C
 			LD (IX+$0B),H				; $804F
-			LD DE,($6969)				; $8052
+			LD DE,(POS_XY)				; $8052
 			CALL L_8B71				; $8056
 			LD A,$01				; $8059
 			LD ($7C54),A				; $805B
@@ -3846,9 +3877,9 @@ L_8181:
 			LD A,D				; $8184
 			CP $20				; $8185
 			JR C,L_81A0				; $8187
-			AND $07				; $8189
+			AND $07					; $8189
 			LD A,$00				; $818B
-			JR NZ,L_81A0				; $818D
+			JR NZ,L_81A0			; $818D
 			CALL L_678F				; $818F
 			LD BC,$FFE0				; $8192
 			ADD HL,BC				; $8195
@@ -3857,88 +3888,77 @@ L_8181:
 			LD A,E				; $8198
 			AND $03				; $8199
 			LD A,D				; $819B
-			JR Z,L_81A0				; $819C
+			JR Z,L_81A0			; $819C
 			INC L				; $819E
 			OR (HL)				; $819F
-L_81A0:
-			OR A				; $81A0
+L_81A0:		OR A				; $81A0
 			POP HL				; $81A1
 			POP DE				; $81A2
 			POP BC				; $81A3
-			RET				; $81A4
-
-			NOP				; $81A5
-L_81A6:
-L_81A6:
-			CALL L_66AA				; $81A6
+			RET					; $81A4
+			NOP					; $81A5
+L_81A6:		CALL L_66AA				; $81A6
 			CALL L_844F				; $81A9
 			LD HL,$8235				; $81AC
 			CALL L_6B29				; $81AF
-			LD A,($8599)				; $81B2
-			OR A				; $81B5
-			JR NZ,L_81CB				; $81B6
-			LD A,($81A5)				; $81B8
-			OR A				; $81BB
-			JR NZ,L_81CB				; $81BC
-			DI				; $81BE
-			CALL L_FB86				; $81BF
-			CALL L_FB8D				; $81C2
-			EI				; $81C5
+			LD A,(SpeccyModel)			; $81B2
+			OR A					; $81B5
+			JR NZ,L_81CB			; $81B6
+			LD A,($81A5)			; $81B8
+			OR A					; $81BB
+			JR NZ,L_81CB			; $81BC
+			DI						; $81BE
+			CALL START_BEEP_MUSIC	; $81BF
+			CALL BEEP_MUSIC_LOOP	; $81C2
+			EI						; $81C5
 			LD A,$01				; $81C6
-			LD ($81A5),A				; $81C8
-L_81CB:
-			CALL L_6672				; $81CB
-			JP NZ,L_81CB				; $81CE
+			LD ($81A5),A			; $81C8
+L_81CB:		CALL L_6672				; $81CB
+			JP NZ,L_81CB			; $81CE
 			LD BC,$01F4				; $81D1
-L_81D4:
-			PUSH BC				; $81D4
+L_81D4:		PUSH BC					; $81D4
 			CALL L_84F5				; $81D5
 			CALL L_82E5				; $81D8
-			CALL L_662B				; $81DB
-			POP BC				; $81DE
-			CP $31				; $81DF
+			CALL GET_KEY				; $81DB
+			POP BC					; $81DE
+			CP $31					; $81DF
 			JR C,L_8229				; $81E1
-			CP $37				; $81E3
-			JR NC,L_8229				; $81E5
-			CP $31				; $81E7
-			RET Z				; $81E9
-			CP $32				; $81EA
+			CP $37					; $81E3
+			JR NC,L_8229			; $81E5
+			CP $31					; $81E7
+			RET Z					; $81E9
+			CP $32					; $81EA
 			JP Z,$830C				; $81EC
-			CP $36				; $81EF
-			JR NZ,L_8214				; $81F1
-			LD A,($830A)				; $81F3
-			XOR $01				; $81F6
-			LD ($830A),A				; $81F8
-			PUSH BC				; $81FB
+			CP $36					; $81EF
+			JR NZ,L_8214			; $81F1
+			LD A,($830A)			; $81F3
+			XOR $01					; $81F6
+			LD ($830A),A			; $81F8
+			PUSH BC					; $81FB
 			CALL L_EF3B				; $81FC
 			LD E,$01				; $81FF
 			CALL L_EF42				; $8201
-			POP BC				; $8204
-L_8205:
-			CALL L_82E5				; $8205
+			POP BC					; $8204
+L_8205:		CALL L_82E5				; $8205
 			CALL L_6672				; $8208
-			CALL NZ,L_84F5				; $820B
-			JP NZ,L_8205				; $820E
+			CALL NZ,L_84F5			; $820B
+			JP NZ,L_8205			; $820E
 			JP L_8229				; $8211
-
-L_8214:
-			SUB $33				; $8214
-			LD E,A				; $8216
-			LD A,($68AB)				; $8217
-			CP E				; $821A
+L_8214:		SUB $33					; $8214
+			LD E,A					; $8216
+			LD A,(INPUT_TYPE)			; $8217
+			CP E					; $821A
 			JR Z,L_8229				; $821B
-			LD A,E				; $821D
-			LD ($68AB),A				; $821E
-			PUSH BC				; $8221
+			LD A,E					; $821D
+			LD (INPUT_TYPE),A			; $821E
+			PUSH BC					; $8221
 			LD HL,$8235				; $8222
 			CALL L_6B29				; $8225
-			POP BC				; $8228
-L_8229:
-L_8229:
-			DEC BC				; $8229
-			LD A,B				; $822A
-			OR C				; $822B
-			JP NZ,L_81D4				; $822C
+			POP BC					; $8228
+L_8229:		DEC BC					; $8229
+			LD A,B					; $822A
+			OR C					; $822B
+			JP NZ,L_81D4			; $822C
 			CALL L_9433				; $822F
 			JP L_81A6				; $8232
 
@@ -3968,7 +3988,7 @@ L_8229:
 
 L_82E5:
 			PUSH BC				; $82E5
-			LD A,($68AB)				; $82E6
+			LD A,(INPUT_TYPE)				; $82E6
 			ADD A,$0F				; $82E9
 			ADD A,A				; $82EB
 			ADD A,A				; $82EC
@@ -3995,7 +4015,7 @@ L_82E5:
 			LD H,(HL)				; $830E
 			CALL L_844F				; $830F
 			XOR A				; $8312
-			LD ($68AB),A				; $8313
+			LD (INPUT_TYPE),A				; $8313
 			LD HL,$83FA				; $8316
 			CALL L_6B29				; $8319
 			LD IX,$681D				; $831C
@@ -4013,7 +4033,7 @@ L_8332:
 			CALL NZ,L_84F5				; $8335
 			JP NZ,L_8332				; $8338
 L_833B:
-			CALL L_662B				; $833B
+			CALL GET_KEY				; $833B
 			OR A				; $833E
 			CALL Z,L_84F5				; $833F
 			JP Z,L_833B				; $8342
@@ -4047,8 +4067,8 @@ L_8375:
 			POP BC					; $837D
 			DJNZ L_8329				; $837E
 			LD BC,$C350				; $8380
-			CALL L_676A				; $8383
-			CALL L_676A				; $8386
+			CALL WAIT_21xBC				; $8383
+			CALL WAIT_21xBC				; $8386
 			LD HL,$83F1				; $8389
 
 			LD DE,CHEAT_KEYS		; $838C  ; load cheat keys
@@ -4293,10 +4313,11 @@ L_858D:
 			POP AF				; $8597
 			RET				; $8598
 
-			defb $01,$00                                        ; $8599 ..
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $859B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $85A3 ........
-			defb $00,$00,$00,$00,$00                            ; $85AB .....
+SpeccyModel defb $01									; $8599 ; 0=48k, 1=128k
+			defb $00                                    ; $859A
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $859B
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $85A3
+			defb $00,$00,$00,$00,$00                    ; $85AB
 
 L_85B0:
 			PUSH HL				; $85B0
@@ -4524,17 +4545,17 @@ L_870B:
 			defb $FA,$00,$05,$14,$13,$32,$FE,$00				; $872B .....2..
 			defb $00,$00                                        ; $8733 ..
 
-			DEC B				; $8735
-			RLCA				; $8736
+			DEC B					; $8735
+			RLCA					; $8736
 			LD (BC),A				; $8737
-L_8738:
-			LD HL,$0190				; $8738
-			LD ($859C),HL				; $873B
+
+L_8738:		LD HL,$0190				; $8738
+			LD ($859C),HL			; $873B
 			LD A,$FF				; $873E
-			LD ($859B),A				; $8740
-			INC A				; $8743
-			LD ($859A),A				; $8744
-			RET				; $8747
+			LD ($859B),A			; $8740
+			INC A					; $8743
+			LD ($859A),A			; $8744
+			RET						; $8747
 
 L_8748:
 			PUSH AF				; $8748
@@ -5278,7 +5299,7 @@ L_8D6C:
 			CALL L_6679				; $8D97
 			OR A				; $8D9A
 			JP NZ,L_8D4F				; $8D9B
-			LD BC,($6969)				; $8D9E
+			LD BC,(POS_XY)				; $8D9E
 			LD A,$1F				; $8DA2
 			CALL L_6679				; $8DA4
 			ADD A,C				; $8DA7
@@ -5304,7 +5325,7 @@ L_8DAF:
 			CALL L_6679				; $8DCA
 			OR A				; $8DCD
 			JP NZ,L_8D4F				; $8DCE
-			LD BC,($6969)				; $8DD1
+			LD BC,(POS_XY)				; $8DD1
 			LD A,$1F				; $8DD5
 			CALL L_6679				; $8DD7
 			ADD A,C				; $8DDA
@@ -5375,10 +5396,10 @@ L_8E31:
 			defb $A0,$A0,$00,$20,$A0,$00,$00,$FF				; $8ED3 ... ....
 
 L_8EDB:
-			LD A,($8F94)				; $8EDB
+			LD A,(InputOff)				; $8EDB
 			OR A				; $8EDE
 			JR NZ,L_8F58				; $8EDF
-			LD DE,($6969)				; $8EE1
+			LD DE,(POS_XY)				; $8EE1
 			LD HL,($71B2)				; $8EE5
 			DEC HL				; $8EE8
 			LD A,H				; $8EE9
@@ -5404,7 +5425,7 @@ L_8EF9:
 			JP Z,L_8EF9				; $8F09
 L_8F0C:
 			LD A,$64				; $8F0C
-			LD ($8F94),A				; $8F0E
+			LD (InputOff),A				; $8F0E
 			LD A,E				; $8F11
 			SUB $08				; $8F12
 			LD E,A				; $8F14
@@ -5415,7 +5436,7 @@ L_8F0C:
 			LD A,$14				; $8F1C
 			CALL L_89A1				; $8F1E
 			CALL L_89A1				; $8F21
-			LD DE,($6969)				; $8F24
+			LD DE,(POS_XY)				; $8F24
 			LD B,D				; $8F28
 			LD C,E				; $8F29
 			LD HL,$C6F9				; $8F2A
@@ -5438,7 +5459,7 @@ L_8F0C:
 
 L_8F58:
 			DEC A				; $8F58
-			LD ($8F94),A				; $8F59
+			LD (InputOff),A				; $8F59
 			RET NZ				; $8F5C
 			LD A,(LIVES)				; $8F5D   ;load lives
 			OR A				; $8F60
@@ -5450,15 +5471,16 @@ L_8F58:
 			CALL L_7BFC				; $8F6F
 			CALL L_7B72				; $8F72
 			LD DE,($6970)				; $8F75
-			LD ($6969),DE				; $8F79
+			LD (POS_XY),DE				; $8F79
 			LD B,D				; $8F7D
 			LD C,E				; $8F7E
 			JP L_6953				; $8F7F
 
-			defb $E6                                            ; $8F82 .
-			defb $F1,$C2,$DF,$0A,$0A,$E0,$46,$47				; $8F83 ......FG
-			defb $45,$54,$20,$52,$45,$41,$44,$59				; $8F8B ET READY
-			defb $FF,$00                                        ; $8F93 ..
+			defb $E6                                        ; $8F82 .
+			defb $F1,$C2,$DF,$0A,$0A,$E0,$46,$47			; $8F83 ......FG
+			defb $45,$54,$20,$52,$45,$41,$44,$59			; $8F8B ET READY
+			defb $FF 										; $8F93
+InputOff:	defb $00                ; $8F94  
 
 L_8F95:
 			LD E,$22				; $8F95
@@ -5475,14 +5497,14 @@ L_8FA9:
 			INC HL				; $8FAE
 			INC E				; $8FAF
 			LD BC,$2710				; $8FB0
-			CALL L_676A				; $8FB3
+			CALL WAIT_21xBC				; $8FB3
 			POP BC				; $8FB6
 			DJNZ L_8FA9				; $8FB7
 			CALL L_671E				; $8FB9
 			LD BC,$0000				; $8FBC
 			LD A,$07				; $8FBF
 L_8FC1:
-			CALL L_676A				; $8FC1
+			CALL WAIT_21xBC				; $8FC1
 			DEC A				; $8FC4
 			JR NZ,L_8FC1				; $8FC5
 			CALL L_954F				; $8FC7
@@ -6046,7 +6068,7 @@ L_9460:
 L_946C:
 			PUSH BC				; $946C
 			CALL L_84F5				; $946D
-			CALL L_662B				; $9470
+			CALL GET_KEY				; $9470
 			OR A				; $9473
 			POP BC				; $9474
 			RET NZ				; $9475
@@ -6142,7 +6164,7 @@ L_95C1:
 			CALL L_6C4A				; $95C5
 L_95C8:
 			LD BC,$03E8				; $95C8
-			CALL L_676A				; $95CB
+			CALL WAIT_21xBC				; $95CB
 L_95CE:
 			CALL L_6672				; $95CE
 			CALL NZ,L_84F5				; $95D1
@@ -6150,7 +6172,7 @@ L_95CE:
 			PUSH DE				; $95D6
 L_95D7:
 L_95D7:
-			CALL L_662B				; $95D7
+			CALL GET_KEY				; $95D7
 			OR A				; $95DA
 			CALL Z,L_84F5				; $95DB
 			JR Z,L_95D7				; $95DE
@@ -6207,7 +6229,7 @@ L_9628:
 			CALL NZ,L_84F5				; $962B
 			JP NZ,L_9628				; $962E
 			CALL L_9433				; $9631
-			JP L_6504				; $9634
+			JP MAIN				; $9634
 
 L_9637:
 			INC HL				; $9637
@@ -6227,15 +6249,15 @@ L_9648:
 L_9651:
 			HALT				; $9651
 			PUSH BC				; $9652
-			CALL L_662B				; $9653
+			CALL GET_KEY				; $9653
 			POP BC				; $9656
 			OR A				; $9657
-			JP NZ,L_6504				; $9658
+			JP NZ,MAIN				; $9658
 			DEC BC				; $965B
 			LD A,B				; $965C
 			OR C				; $965D
 			JP NZ,L_9651				; $965E
-			JP L_6504				; $9661
+			JP MAIN				; $9661
 
 			defb $EB,$00,$DF,$09,$08,$E0,$46                    ; $9664 ......F
 			defb $E6,$F1,$C2,$43,$4F,$4E,$47,$52				; $966B ...CONGR
@@ -6420,7 +6442,7 @@ L_9817:
 			defb $00,$46,$00,$00,$31,$98                        ; $9825 .F..1.
 			defb $47,$00,$00,$55,$98,$FF                        ; $982B G..U..
 
-			LD A,($6969)				; $9831
+			LD A,(POS_XY)				; $9831
 			CP E				; $9834
 			JP NZ,L_9803				; $9835
 			LD A,($9825)				; $9838
@@ -6434,7 +6456,7 @@ L_9817:
 			CALL L_96D8				; $984F
 			JP L_9803				; $9852
 
-			LD A,($6969)				; $9855
+			LD A,(POS_XY)				; $9855
 			CP E				; $9858
 			JP NZ,L_9803				; $9859
 			LD A,($9825)				; $985C
@@ -6547,7 +6569,7 @@ L_9920:
 			LD (IX+$05),C				; $9921
 			LD (IX+$06),B				; $9924
 			PUSH BC				; $9927
-			LD BC,($6969)				; $9928
+			LD BC,(POS_XY)				; $9928
 			LD A,$05				; $992C
 			LD L,$02				; $992E
 			LD H,$42				; $9930
@@ -6897,7 +6919,7 @@ L_9BE2:
 			LD E,A				; $9C0E
 			LD A,($9BD5)				; $9C0F
 			OR A				; $9C12
-			LD A,($6969)				; $9C13
+			LD A,(POS_XY)				; $9C13
 			JR Z,L_9C24				; $9C16
 			CP $10				; $9C18
 			RET C				; $9C1A
@@ -7194,10 +7216,10 @@ L_A0A0:
 			INC HL				; $A0B7
 			LD B,(HL)				; $A0B8
 			CALL L_A47B				; $A0B9
-			LD A,($8F94)				; $A0BC
+			LD A,(InputOff)				; $A0BC
 			OR A				; $A0BF
 			JR NZ,L_A0CC				; $A0C0
-			LD BC,($6969)				; $A0C2
+			LD BC,(POS_XY)				; $A0C2
 			CALL L_6802				; $A0C6
 			OR A				; $A0C9
 			JR NZ,L_A0D4				; $A0CA
@@ -7246,7 +7268,7 @@ L_A0F6:
 			JP NZ,L_A0F6				; $A116
 			LD A,$01				; $A119
 			LD ($6AEE),A				; $A11B
-			LD DE,($6969)				; $A11E
+			LD DE,(POS_XY)				; $A11E
 			LD B,D				; $A122
 			LD C,E				; $A123
 			CALL L_6953				; $A124
@@ -10413,97 +10435,91 @@ L_C067:
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $EF23 ........
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $EF2B ........
 			defb $00,$00,$00,$00,$00                            ; $EF33 .....
-
-PLAY_AY_MUSIC_50FPS:											   
-L_EF38:
-			JP L_EFE5				; $EF38  ; self modifying, replaced with RET
-
-L_EF3B:
-L_EF3B:
-			JP L_EF93				; $EF3B
-
-			LD E,$01				; $EF3E
-			LD A,$01				; $EF40
-L_EF42:
-			LD C,A				; $EF42
-			CALL L_EFC1				; $EF43
-			LD A,(HL)				; $EF46
+									   
+AY_MUSIC:	JP L_EFE5			; $EF38 ; Self-modifying: Can be replaced with RET if needed
+L_EF3B:		JP L_EF93			; $EF3B ; Self-modifying: Can be replaced with RET if needed
+			LD E,$01			; $EF3E
+			LD A,$01			; $EF40
+L_EF42:									; this could be SFX calling point ???
+			LD C,A				; $EF42 ; Self-modifying: Can be replaced with RET if needed
+			CALL L_EFC1			; $EF43  
+			LD A,(HL)			; $EF46
 			CP $09				; $EF47
-			JP NC,L_EF4E				; $EF49
+			JP NC,L_EF4E		; $EF49
 			LD C,A				; $EF4C
 			INC HL				; $EF4D
 L_EF4E:
 			LD A,C				; $EF4E
-			LD IX,$F214				; $EF4F
+			LD IX,$F214			; $EF4F
 			DEC A				; $EF53
-			JP Z,L_EF63				; $EF54
-			LD IX,$F237				; $EF57
+			JP Z,L_EF63			; $EF54
+			LD IX,$F237			; $EF57
 			DEC A				; $EF5B
-			JP Z,L_EF63				; $EF5C
-			LD IX,$F25A				; $EF5F
+			JP Z,L_EF63			; $EF5C
+			LD IX,$F25A			; $EF5F
 L_EF63:
-			LD A,(HL)				; $EF63
+			LD A,(HL)			; $EF63
 			CP $F4				; $EF64
-			LD A,$0A				; $EF66
-			JP NZ,L_EF6E				; $EF68
+			LD A,$0A			; $EF66
+			JP NZ,L_EF6E		; $EF68
 			INC HL				; $EF6B
-			LD A,(HL)				; $EF6C
+			LD A,(HL)			; $EF6C
 			INC HL				; $EF6D
 L_EF6E:
-			CP (IX+$10)				; $EF6E
+			CP (IX+$10)			; $EF6E
 			RET C				; $EF71
-			LD (IX+$10),A				; $EF72
-			LD (IX+$12),L				; $EF75
-			LD (IX+$13),H				; $EF78
-			LD (IX+$14),L				; $EF7B
-			LD (IX+$15),H				; $EF7E
-			LD (IX+$16),L				; $EF81
-			LD (IX+$17),H				; $EF84
-			LD (IX+$11),$01				; $EF87
+			LD (IX+$10),A		; $EF72
+			LD (IX+$12),L		; $EF75
+			LD (IX+$13),H		; $EF78
+			LD (IX+$14),L		; $EF7B
+			LD (IX+$15),H		; $EF7E
+			LD (IX+$16),L		; $EF81
+			LD (IX+$17),H		; $EF84
+			LD (IX+$11),$01		; $EF87
 			XOR A				; $EF8B
-			LD (IX+$18),A				; $EF8C
-			LD (IX+$20),A				; $EF8F
-			RET				; $EF92
+			LD (IX+$18),A		; $EF8C
+			LD (IX+$20),A		; $EF8F
+			RET					; $EF92
 			
 ; == MUSIC, AY-CHIP ==
 L_EF93:
 			XOR A				; $EF93
-			LD ($F224),A				; $EF94
-			LD ($F247),A				; $EF97
-			LD ($F26A),A				; $EF9A
-			LD ($F1FE),A				; $EF9D
-			LD ($F1FF),A				; $EFA0
-			LD ($F200),A				; $EFA3
-			LD A,$3F				; $EFA6
-			LD ($F1FD),A				; $EFA8
+			LD ($F224),A		; $EF94
+			LD ($F247),A		; $EF97
+			LD ($F26A),A		; $EF9A
+			LD ($F1FE),A		; $EF9D
+			LD ($F1FF),A		; $EFA0
+			LD ($F200),A		; $EFA3
+			LD A,$3F			; $EFA6
+			LD ($F1FD),A		; $EFA8
 L_EFAB:
-			LD HL,$F203				; $EFAB
-			LD E,$0D				; $EFAE
+			LD HL,$F203			; $EFAB
+			LD E,$0D			; $EFAE
 L_EFB0:
-			LD BC,$FFFD				; $EFB0
-			OUT (C),E				; $EFB3	; AY chip
-			LD BC,$BFFD				; $EFB5
-			LD A,(HL)				; $EFB8
+			LD BC,$FFFD			; $EFB0
+			OUT (C),E			; $EFB3	; AY chip
+			LD BC,$BFFD			; $EFB5
+			LD A,(HL)			; $EFB8
 			DEC HL				; $EFB9
-			OUT (C),A				; $EFBA	; AY chip
+			OUT (C),A			; $EFBA	; AY chip
 			DEC E				; $EFBC
-			JP P,L_EFB0				; $EFBD
-			RET				; $EFC0
+			JP P,L_EFB0			; $EFBD
+			RET					; $EFC0
 
 L_EFC1:
 			LD A,E				; $EFC1
 			ADD A,A				; $EFC2
-			ADD A,$A6				; $EFC3
+			ADD A,$A6			; $EFC3
 			LD L,A				; $EFC5
-			ADC A,$F3				; $EFC6
+			ADC A,$F3			; $EFC6
 			SUB L				; $EFC8
 			LD H,A				; $EFC9
-			LD E,(HL)				; $EFCA
+			LD E,(HL)			; $EFCA
 			INC HL				; $EFCB
-			LD D,(HL)				; $EFCC
-			LD HL,$F28E				; $EFCD
-			ADD HL,DE				; $EFD0
-			RET				; $EFD1
+			LD D,(HL)			; $EFCC
+			LD HL,$F28E			; $EFCD
+			ADD HL,DE			; $EFD0
+			RET					; $EFD1
 
 L_EFD2:
 			LD A,E				; $EFD2
@@ -10867,10 +10883,10 @@ L_F1EF:
 			defb $08,$94,$08,$A7,$08,$C5,$08,$E2				; $F3F3 ........
 			defb $08,$4A,$1A,$58,$1A,$62,$1A,$AE				; $F3FB .J.X.b..
 			defb $1A,$CA,$1A,$E5,$1A,$00,$00,$C8				; $F403 ........
+			defb $80											; $F40B ........
 
-; MUSIC 
-
-			defb $80,$C8,$FF,$01,$81,$0D,$09,$7F				; $F40B ........
+MUSIC_DATA:  ;  LENGTH  $FB86-$F40C) 77A (1,914)
+			DEFB $C8,$FF,$01,$81,$0D,$09,$7F					; $F40C
 			defb $09,$C8,$80,$C8,$FF,$01,$8D,$01				; $F413 ........
 			defb $01,$7F,$04,$01,$77,$01,$FF,$FF				; $F41B ....w...
 			defb $01,$87,$01,$C8,$80,$C8,$FF,$01				; $F423 ........
@@ -11111,188 +11127,213 @@ L_F1EF:
 			defb $18,$E3,$18,$E3,$18,$FF,$E6,$34				; $FB7B .......4
 			defb $1A,$00,$00                                    ; $FB83 ...
 
-L_FB86:
-			LD HL,$FC4E				; $FB86
-			LD ($FC47),HL				; $FB89
-			RET				; $FB8C
+			; AY-MUSIC DATA END
+; ==================================================================================
 
-L_FB8D:
-			JP L_FB97				; $FB8D
+START_BEEP_MUSIC:	LD HL,BEEPER_DATA		; $FB86
+					LD (ReadLocation),HL	; $FB89
+					RET						; $FB8C
 
-L_FB90:
-			IN A,(C)				; $FB90
-			AND $1F				; $FB92
-			CP $1F				; $FB94
-			RET				; $FB96
+; Note: This beeper routine runs independently with interrupts disabled.
+; Thus, the keyboard is polled directly by the playback routine.
+BEEP_MUSIC_LOOP:	JP L_FB97				; $FB8D
+L_FB90:				IN A,(C)				; $FB90  ; keyboard input
+					AND $1F					; $FB92  ; keyboard row bits
+					CP $1F					; $FB94  ; no keys
+					RET						; $FB96
 
-L_FB97:
-			LD BC,$FEFE				; $FB97
-			CALL L_FB90				; $FB9A
-			RET NZ				; $FB9D
-			LD BC,$FDFE				; $FB9E
-			CALL L_FB90				; $FBA1
-			RET NZ				; $FBA4
-			LD BC,$FBFE				; $FBA5
-			CALL L_FB90				; $FBA8
-			RET NZ				; $FBAB
-			LD BC,$F7FE				; $FBAC
-			CALL L_FB90				; $FBAF
-			RET NZ				; $FBB2
-			LD BC,$EFFE				; $FBB3
-			CALL L_FB90				; $FBB6
-			RET NZ				; $FBB9
-			LD BC,$DFFE				; $FBBA
-			CALL L_FB90				; $FBBD
-			RET NZ				; $FBC0
-			LD BC,$BFFE				; $FBC1
-			CALL L_FB90				; $FBC4
-			RET NZ				; $FBC7
-			LD BC,$7FFE				; $FBC8
-			CALL L_FB90				; $FBCB
-			RET NZ				; $FBCE
-			XOR A				; $FBCF
-			LD ($FC49),A				; $FBD0
-			LD HL,($FC47)				; $FBD3
-			LD A,(HL)				; $FBD6
-			CP $FF				; $FBD7
-			JP NZ,L_FBE0				; $FBD9
-			LD HL,$FC4E				; $FBDC
-			LD A,(HL)				; $FBDF
-L_FBE0:
-			LD ($FC45),A				; $FBE0
-			INC HL				; $FBE3
-			LD A,(HL)				; $FBE4
-			LD ($FC46),A				; $FBE5
-			INC HL				; $FBE8
-			LD D,(HL)				; $FBE9
-			LD E,$00				; $FBEA
-			INC HL				; $FBEC
-			LD ($FC47),HL				; $FBED
-			LD A,($5C48)				; $FBF0
-			RRA				; $FBF3
-			RRA				; $FBF4
-			RRA				; $FBF5
-			AND $07				; $FBF6
-			LD ($FC43),A				; $FBF8
-			LD C,A				; $FBFB
-			LD A,($FC45)				; $FBFC
-			OR A				; $FBFF
-			LD A,C				; $FC00
-			JR Z,L_FC05				; $FC01
-			OR $10				; $FC03
-L_FC05:
-			LD ($FC44),A				; $FC05
-			LD HL,$FC45				; $FC08
-L_FC0B:
-			LD B,(HL)				; $FC0B
-L_FC0C:
-			DEC DE				; $FC0C
-			LD A,D				; $FC0D
-			OR E				; $FC0E
-			JP Z,L_FC40				; $FC0F
-			DJNZ L_FC0C				; $FC12
-			LD A,($FC43)				; $FC14
-			OUT ($FE),A				; $FC17
-			LD B,(HL)				; $FC19
-L_FC1A:
-			DEC DE				; $FC1A
-			LD A,D				; $FC1B
-			OR E				; $FC1C
-			JP Z,L_FC40				; $FC1D
-			DJNZ L_FC1A				; $FC20
-			LD A,($FC44)				; $FC22
-			OUT ($FE),A				; $FC25
-			LD A,($FC49)				; $FC27
-			INC A				; $FC2A
-			CP $08				; $FC2B
-			JR Z,L_FC38				; $FC2D
-			CP $10				; $FC2F
-			JR Z,L_FC3B				; $FC31
-L_FC33:
-			LD ($FC49),A				; $FC33
-			JR L_FC0B				; $FC36
+L_FB97:				LD BC,$FEFE				; $FB97  ; Select row 0 (SHIFT, Z, X, C, V)
+					CALL L_FB90				; $FB9A
+					RET NZ					; $FB9D
+					LD BC,$FDFE				; $FB9E  ; Select row 1 (A, S, D, F, G)
+					CALL L_FB90				; $FBA1
+					RET NZ					; $FBA4
+					LD BC,$FBFE				; $FBA5  ; Select row 2 (Q, W, E, R, T)
+					CALL L_FB90				; $FBA8
+					RET NZ					; $FBAB
+					LD BC,$F7FE				; $FBAC  ; Select row 3 (1, 2, 3, 4, 5)
+					CALL L_FB90				; $FBAF
+					RET NZ					; $FBB2
+					LD BC,$EFFE				; $FBB3  ; Select row 4 (0, 9, 8, 7, 6)
+					CALL L_FB90				; $FBB6
+					RET NZ					; $FBB9
+					LD BC,$DFFE				; $FBBA  ; Select row 5 (P, O, I, U, Y)
+					CALL L_FB90				; $FBBD
+					RET NZ					; $FBC0
+					LD BC,$BFFE				; $FBC1  ; Select row 6 (ENTER, L, K, J, H)
+					CALL L_FB90				; $FBC4
+					RET NZ					; $FBC7
+					LD BC,$7FFE				; $FBC8  ; Select row 7 (SPACE, SYM SHIFT, M, N, B)
+					CALL L_FB90				; $FBCB
+					RET NZ					; $FBCE
 
-L_FC38:
-			INC HL				; $FC38
-			JR L_FC33				; $FC39
+					XOR A					; $FBCF
+					LD (BeeperCounter),A			; $FBD0  ; zero counter
+					LD HL,(ReadLocation)		; $FBD3
+					LD A,(HL)				; $FBD6
+					CP $FF					; $FBD7  ; end-of-music marker
+					JP NZ,SKIP_BEEP_RESTART ; $FBD9  ;
+					LD HL,BEEPER_DATA		; $FBDC  ; 
+					LD A,(HL)				; $FBDF  ; restart music
+SKIP_BEEP_RESTART:	LD (Duration1st),A		; $FBE0  ; store duration
+					INC HL					; $FBE3  ; next data
+					LD A,(HL)				; $FBE4  ; 
+					LD (Duration2nd),A		; $FBE5  ; Store next duration
+					INC HL					; $FBE8  ; next data
+					LD D,(HL)				; $FBE9
+					LD E,$00				; $FBEA  ; Clear E (DE = delay count)
+					INC HL					; $FBEC  ; next data
+					LD (ReadLocation),HL		; $FBED  ; music position
 
-L_FC3B:
-			DEC HL				; $FC3B
-			LD A,$00				; $FC3C
-			JR L_FC33				; $FC3E
+	
+				; $5C48 is always zero - looks like these 6 lines do nothing!
+				; so "Pattern1st" is allows zero
+				LD A,($5C48)			; $FBF0  ; keep boarder colours
+				RRA						; $FBF3  ; /2
+				RRA						; $FBF4  ; /4
+				RRA						; $FBF5  ; /8
+				AND $07					; $FBF6
+				LD (Pattern1st),A	; $FBF8 ; beeper pattern 1
 
-L_FC40:
-			JP L_FB8D				; $FC40
+					LD C,A					; $FBFB
+					LD A,(Duration1st)		; $FBFC ; tone duration
+					OR A					; $FBFF
+					LD A,C					; $FC00
+					JR Z,SKIP_PATTERN		; $FC01 
+					OR $10					; $FC03 ;  Modify beeper pattern
+SKIP_PATTERN:		LD (Pattern2nd),A	; $FC05 ; beeper pattern 2 
+					LD HL,Duration1st		; $FC08 ; delay counter
+BEEPLOOP:			LD B,(HL)				; $FC0B ; tone duration
+DELAY1BEEP:			DEC DE					; $FC0C ; frequency delay loop
+					LD A,D					; $FC0D
+					OR E					; $FC0E
+					JP Z,EXIT1bitMUSIC		; $FC0F 
+					DJNZ DELAY1BEEP			; $FC12
 
-			defb $07,$17,$49,$4A,$08,$FD,$09,$00				; $FC43 ..IJ....
-			defb $00,$00,$1A,$DD,$DD,$2A,$AF,$AF				; $FC4B .....*..
-			defb $2A,$95,$95,$FC,$A6,$A6,$2A,$84				; $FC53 *.....*.
-			defb $84,$2A,$6E,$6E,$FC,$84,$84,$2A				; $FC5B .*nn...*
-			defb $6E,$6E,$2A,$62,$62,$2A,$57,$57				; $FC63 nn*bb*WW
-			defb $2A,$62,$62,$2A,$6E,$6E,$2A,$84				; $FC6B *bb*nn*.
-			defb $84,$2A,$95,$95,$2A,$AF,$AF,$2A				; $FC73 .*..*..*
-			defb $95,$95,$2A,$84,$84,$FC,$6E,$6F				; $FC7B ..*...no
-			defb $2A,$62,$63,$2A,$57,$58,$FC,$6E				; $FC83 *bc*WX.n
-			defb $6F,$2A,$57,$58,$2A,$49,$4A,$FC				; $FC8B o*WX*IJ.
-			defb $57,$58,$2A,$49,$4A,$2A,$41,$42				; $FC93 WX*IJ*AB
-			defb $2A,$36,$37,$2A,$41,$42,$2A,$49				; $FC9B *67*AB*I
-			defb $4A,$2A,$57,$58,$2A,$41,$42,$2A				; $FCA3 J*WX*AB*
-			defb $49,$4A,$2A,$2B,$2C,$2A,$30,$31				; $FCAB IJ*+,*01
-			defb $2A,$30,$31,$2A,$30,$31,$2A,$30				; $FCB3 *01*01*0
-			defb $31,$2A,$30,$31,$2A,$00,$FF,$2A				; $FCBB 1*01*..*
-			defb $28,$29,$2A,$2B,$2C,$2A,$30,$31				; $FCC3 ()*+,*01
-			defb $9E,$00,$FF,$0A,$30,$31,$9E,$00				; $FCCB ....01..
-			defb $FF,$0A,$30,$31,$2A,$36,$37,$2A				; $FCD3 ..01*67*
-			defb $30,$31,$2A,$2B,$2C,$2A,$30,$31				; $FCDB 01*+,*01
-			defb $2A,$00,$FF,$2A,$49,$4A,$2A,$39				; $FCE3 *..*IJ*9
-			defb $3A,$2A,$36,$37,$2A,$39,$3A,$2A				; $FCEB :*67*9:*
-			defb $49,$4A,$2A,$52,$53,$2A,$41,$42				; $FCF3 IJ*RS*AB
-			defb $2A,$36,$37,$2A,$41,$42,$2A,$57				; $FCFB *67*AB*W
-			defb $58,$2A,$49,$4A,$2A,$39,$3A,$2A				; $FD03 X*IJ*9:*
-			defb $49,$4A,$2A,$62,$63,$2A,$52,$53				; $FD0B IJ*bc*RS
-			defb $2A,$41,$42,$2A,$52,$53,$2A,$76				; $FD13 *AB*RS*v
-			defb $77,$2A,$62,$63,$2A,$52,$53,$2A				; $FD1B w*bc*RS*
-			defb $62,$63,$2A,$76,$77,$2A,$62,$63				; $FD23 bc*vw*bc
-			defb $2A,$52,$53,$2A,$62,$63,$2A,$76				; $FD2B *RS*bc*v
-			defb $77,$2A,$62,$63,$2A,$45,$46,$2A				; $FD33 w*bc*EF*
-			defb $57,$58,$2A,$76,$77,$2A,$57,$58				; $FD3B WX*vw*WX
-			defb $2A,$45,$46,$2A,$57,$58,$2A,$76				; $FD43 *EF*WX*v
-			defb $77,$2A,$41,$42,$54,$57,$58,$54				; $FD4B w*ABTWXT
-			defb $52,$53,$54,$41,$42,$54,$49,$4A				; $FD53 RSTABTIJ
-			defb $9E,$00,$FF,$0A,$49,$4A,$54,$00				; $FD5B ....IJT.
-			defb $FF,$2A,$49,$4A,$2A,$52,$6D,$54				; $FD63 .*IJ*RmT
-			defb $62,$83,$54,$57,$74,$54,$52,$6D				; $FD6B b.TWtTRm
-			defb $54,$57,$74,$9E,$00,$FF,$0A,$57				; $FD73 TWt....W
-			defb $74,$9E,$00,$FF,$0A,$45,$44,$15				; $FD7B t....ED.
-			defb $41,$40,$15,$45,$44,$15,$41,$40				; $FD83 A@.ED.A@
-			defb $15,$45,$44,$15,$41,$40,$15,$45				; $FD8B .ED.A@.E
-			defb $44,$15,$41,$40,$15,$45,$44,$15				; $FD93 D.A@.ED.
-			defb $41,$40,$15,$45,$44,$15,$41,$40				; $FD9B A@.ED.A@
-			defb $15,$45,$44,$15,$41,$40,$15,$45				; $FDA3 .ED.A@.E
-			defb $44,$15,$41,$40,$15,$45,$44,$54				; $FDAB D.A@.EDT
-			defb $41,$40,$54,$39,$38,$54,$45,$44				; $FDB3 A@T98TED
-			defb $54,$33,$32,$9E,$00,$FF,$0A,$33				; $FDBB T32....3
-			defb $32,$74,$00,$FF,$0A,$33,$32,$20				; $FDC3 2t...32 
-			defb $00,$FF,$0A,$33,$32,$A8,$00,$FF				; $FDCB ...32...
-			defb $A8,$00,$FF,$A8,$00,$FF,$A8,$FF				; $FDD3 ........
-			defb $FF,$00,$00,$00,$00,$00,$00,$00				; $FDDB ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FDE3 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FDEB ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FDF3 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FDFB ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FE03 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FE0B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FE13 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FE1B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FE23 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FE2B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FE33 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FE3B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $FE43 ........
-			defb $00,$F5,$3E,$FF,$D3,$7F,$D3,$3F				; $FE4B ..>....?
-			defb $3E,$3F,$D3,$7F,$3C,$32,$86,$FE				; $FE53 >?..<2..
-			defb $3E,$FF,$D3,$5F,$D3,$5F,$F1                    ; $FE5B >.._._.
+					; note:	Beeper is bit 5 of port &FE
+					; 1st 1/2 square wave
+					LD A,(Pattern1st)		; $FC14 ; NOTE: VALUE HERE IS ALLWAYS ZERO
+					OUT ($FE),A				; $FC17 ; beeper music
 
+					LD B,(HL)				; $FC19
+DELAY2BEEP:			DEC DE					; $FC1A ; frequency delay loop
+					LD A,D					; $FC1B
+					OR E					; $FC1C
+					JP Z,EXIT1bitMUSIC		; $FC1D
+					DJNZ DELAY2BEEP			; $FC20
+
+					; 2nd 1/2 square wave
+					LD A,(Pattern2nd)		; $FC22
+					OUT ($FE),A				; $FC25	 ; beeper music
+
+					LD A,(BeeperCounter)	; $FC27 ; get counter 
+					INC A					; $FC2A
+					CP $08					; $FC2B ; next after 8
+					JR Z,NEXT_DATA			; $FC2D
+					CP $10					; $FC2F ; zero counter after 10
+					JR Z,BACK_ZERO_COUNTER	; $FC31
+
+SET_COUNTER:		LD (BeeperCounter),A	; $FC33 ; save counter 
+					JR BEEPLOOP				; $FC36
+
+NEXT_DATA:			INC HL					; $FC38 ; DURATION_2ND next
+					JR SET_COUNTER			; $FC39
+
+BACK_ZERO_COUNTER:	DEC HL					; $FC3B ; DURATION_1ST next
+					LD A,$00				; $FC3C
+					JR SET_COUNTER 			; $FC3E
+
+EXIT1bitMUSIC:		JP BEEP_MUSIC_LOOP		; $FC40
+
+; ----------------------------------------------------------------------------------
+
+; Music playback variables for 1bit beeper music
+Pattern1st:			defb $07				; $FC43
+Pattern2nd			defb $17				; $FC44
+; NOTE: Cache of read music data - playback alternates between DURATION_1ST and DURATION_2ND  
+; It's hard to follow, but looking at INC HL at "NEXT_DATA" ($FC38), this shifts between them.
+Duration1st: 		defb $49				; $FC45
+Duration2nd:		defb $4A				; $FC46
+ReadLocation:		defb $08,$FD			; $FC47
+BeeperCounter:		defb $09				; $FC49
+					defb $00				; $FC4A
+					defb $00,$00,$1A		; $FC4B
+
+; ===============================================================================			
+; Beeper Music Data - 1 bit music when running as 48k spectrum (without AY chp)
+BEEPER_DATA:
+			defb $DD,$DD									; $FC4E
+			defb $2A,$AF,$AF	
+			defb $2A,$95,$95,$FC,$A6,$A6,$2A,$84			; $FC53 
+			defb $84,$2A,$6E,$6E,$FC,$84,$84,$2A			; $FC5B 
+			defb $6E,$6E,$2A,$62,$62,$2A,$57,$57			; $FC63 
+			defb $2A,$62,$62,$2A,$6E,$6E,$2A,$84			; $FC6B 
+			defb $84,$2A,$95,$95,$2A,$AF,$AF,$2A			; $FC73 
+			defb $95,$95,$2A,$84,$84,$FC,$6E,$6F			; $FC7B 
+			defb $2A,$62,$63,$2A,$57,$58,$FC,$6E			; $FC83 
+			defb $6F,$2A,$57,$58,$2A,$49,$4A,$FC			; $FC8B 
+			defb $57,$58,$2A,$49,$4A,$2A,$41,$42			; $FC93 
+			defb $2A,$36,$37,$2A,$41,$42,$2A,$49			; $FC9B 
+			defb $4A,$2A,$57,$58,$2A,$41,$42,$2A			; $FCA3 
+			defb $49,$4A,$2A,$2B,$2C,$2A,$30,$31			; $FCAB 
+			defb $2A,$30,$31,$2A,$30,$31,$2A,$30			; $FCB3 
+			defb $31,$2A,$30,$31,$2A,$00,$FF,$2A			; $FCBB 
+			defb $28,$29,$2A,$2B,$2C,$2A,$30,$31			; $FCC3 
+			defb $9E,$00,$FF,$0A,$30,$31,$9E,$00			; $FCCB 
+			defb $FF,$0A,$30,$31,$2A,$36,$37,$2A			; $FCD3 
+			defb $30,$31,$2A,$2B,$2C,$2A,$30,$31			; $FCDB 
+			defb $2A,$00,$FF,$2A,$49,$4A,$2A,$39			; $FCE3 
+			defb $3A,$2A,$36,$37,$2A,$39,$3A,$2A			; $FCEB 
+			defb $49,$4A,$2A,$52,$53,$2A,$41,$42			; $FCF3 
+			defb $2A,$36,$37,$2A,$41,$42,$2A,$57			; $FCFB 
+			defb $58,$2A,$49,$4A,$2A,$39,$3A,$2A			; $FD03 
+			defb $49,$4A,$2A,$62,$63,$2A,$52,$53			; $FD0B 
+			defb $2A,$41,$42,$2A,$52,$53,$2A,$76			; $FD13 
+			defb $77,$2A,$62,$63,$2A,$52,$53,$2A			; $FD1B 
+			defb $62,$63,$2A,$76,$77,$2A,$62,$63			; $FD23 
+			defb $2A,$52,$53,$2A,$62,$63,$2A,$76			; $FD2B 
+			defb $77,$2A,$62,$63,$2A,$45,$46,$2A			; $FD33 
+			defb $57,$58,$2A,$76,$77,$2A,$57,$58			; $FD3B 
+			defb $2A,$45,$46,$2A,$57,$58,$2A,$76			; $FD43 
+			defb $77,$2A,$41,$42,$54,$57,$58,$54			; $FD4B 
+			defb $52,$53,$54,$41,$42,$54,$49,$4A			; $FD53 
+			defb $9E,$00,$FF,$0A,$49,$4A,$54,$00			; $FD5B 
+			defb $FF,$2A,$49,$4A,$2A,$52,$6D,$54			; $FD63 
+			defb $62,$83,$54,$57,$74,$54,$52,$6D			; $FD6B 
+			defb $54,$57,$74,$9E,$00,$FF,$0A,$57			; $FD73 
+			defb $74,$9E,$00,$FF,$0A,$45,$44,$15			; $FD7B 
+			defb $41,$40,$15,$45,$44,$15,$41,$40			; $FD83 
+			defb $15,$45,$44,$15,$41,$40,$15,$45			; $FD8B 
+			defb $44,$15,$41,$40,$15,$45,$44,$15			; $FD93 
+			defb $41,$40,$15,$45,$44,$15,$41,$40			; $FD9B 
+			defb $15,$45,$44,$15,$41,$40,$15,$45			; $FDA3 
+			defb $44,$15,$41,$40,$15,$45,$44,$54			; $FDAB 
+			defb $41,$40,$54,$39,$38,$54,$45,$44			; $FDB3 
+			defb $54,$33,$32,$9E,$00,$FF,$0A,$33			; $FDBB 
+			defb $32,$74,$00,$FF,$0A,$33,$32,$20			; $FDC3 
+			defb $00,$FF,$0A,$33,$32,$A8,$00,$FF			; $FDCB 
+			defb $A8,$00,$FF,$A8,$00,$FF,$A8				; $FDD3
+			; need to $FF, 2nd $FF is the true end mark
+			defb $FF,$FF	; x2 $FF, END-OF-MUSIC-MARKERS		; $FDDA
+; ===============================================================================			
+			
+			defb $00,$00,$00,$00,$00,$00,$00				; $FDEC ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FDE3 ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FDEB ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FDF3 ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FDFB ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FE03 ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FE0B ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FE13 ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FE1B ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FE23 ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FE2B ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FE33 ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FE3B ........
+			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FE43 ........
+			defb $00,$F5,$3E,$FF,$D3,$7F,$D3,$3F			; $FE4B ..>....?
+			defb $3E,$3F,$D3,$7F,$3C,$32,$86,$FE			; $FE53 >?..<2..
+			defb $3E,$FF,$D3,$5F,$D3,$5F,$F1                ; $FE5B >.._._.
 L_FE62:
 			DI				; $FE62
 			LD ($FF9C),HL				; $FE63
@@ -11389,7 +11430,6 @@ L_FEF2:
 			LD B,E				; $FEFD
 			CALL L_FF67				; $FEFE
 			LD C,E				; $FF01
-L_FF02:
 L_FF02:
 			IN A,($3F)				; $FF02
 			XOR D				; $FF04
