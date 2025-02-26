@@ -152,11 +152,9 @@ SKIP_MODIFY:
 			CALL L_EF42				; $6544
 			EI						; $6547
 			CALL L_7BFC				; $6548
-;	NOP
-;	NOP
-;	NOP
+
 			CALL INIT_MENU_SCREEN_TABLES	; $654B  
-			CALL DO_MENU						; $654E  
+			CALL DO_MENU					; $654E  
 			CALL INIT_GAME_SCREEN_TABLES	; $6551
 
 			LD A,$04				; $6554	 	; starting lives)
@@ -1912,7 +1910,7 @@ L_726F:
 			JR Z,L_729A				; $7276
 			PUSH HL				; $7278
 			CALL DRAW_TILE				; $7279
-			CALL L_A57F				; $727C
+			CALL SET_TILE_COL				; $727C
 			CALL L_678F				; $727F
 			LD (HL),A				; $7282
 			POP HL				; $7283
@@ -1941,7 +1939,7 @@ L_729E:
 			JR Z,L_72AF				; $72A0
 			PUSH HL				; $72A2
 			CALL DRAW_TILE				; $72A3
-			CALL L_A57F				; $72A6
+			CALL SET_TILE_COL				; $72A6
 			CALL L_678F				; $72A9
 			LD (HL),A				; $72AC
 			LD C,A				; $72AD
@@ -3906,7 +3904,7 @@ L_81A0:		OR A				; $81A0
 
 DO_MENU:	
 			CALL CLR_SCREEN				; $81A6  ; clear screen
-			CALL L_844F				; $81A9  ; Draw menu 
+			CALL DRAW_MENU_BORDERS				; $81A9  ; Draw menu 
 			LD HL,$8235				; $81AC
 			CALL L_6B29				; $81AF
 			LD A,(SpeccyModel)		; $81B2
@@ -3925,7 +3923,9 @@ L_81CB:		CALL L_6672				; $81CB
 			JP NZ,L_81CB			; $81CE
 			LD BC,$01F4				; $81D1
 L_81D4:		PUSH BC					; $81D4
-			CALL L_84F5				; $81D5  ; scrolling boarder effect
+
+			CALL SCROLL_BORDER		; $81D5  ; scrolling boarder effect
+
 			CALL L_82E5				; $81D8  ; menu text
 			CALL GET_KEY			; $81DB
 			POP BC					; $81DE
@@ -3949,7 +3949,7 @@ L_81D4:		PUSH BC					; $81D4
 			POP BC					; $8204
 L_8205:		CALL L_82E5				; $8205
 			CALL L_6672				; $8208
-			CALL NZ,L_84F5			; $820B
+			CALL NZ,SCROLL_BORDER			; $820B
 			JP NZ,L_8205			; $820E
 			JP L_8229				; $8211
 L_8214:		SUB $33					; $8214
@@ -4021,7 +4021,7 @@ L_82E5:
 			LD BC,$CD00				; $830A
 			XOR D				; $830D
 			LD H,(HL)				; $830E
-			CALL L_844F				; $830F
+			CALL DRAW_MENU_BORDERS				; $830F
 			XOR A				; $8312
 			LD (INPUT_TYPE),A				; $8313
 			LD HL,$83FA				; $8316
@@ -4038,12 +4038,12 @@ L_8329:
 			PUSH DE				; $8331
 L_8332:
 			CALL L_6672				; $8332
-			CALL NZ,L_84F5				; $8335
+			CALL NZ,SCROLL_BORDER				; $8335
 			JP NZ,L_8332				; $8338
 L_833B:
 			CALL GET_KEY				; $833B
 			OR A				; $833E
-			CALL Z,L_84F5				; $833F
+			CALL Z,SCROLL_BORDER				; $833F
 			JP Z,L_833B				; $8342
 			LD (IX+$02),D				; $8345
 			LD (IX+$06),E				; $8348
@@ -4098,7 +4098,7 @@ L_8391: 	LD A,(DE)				; $8391
 			CALL L_EF42				; $83AC
 			LD B,$64				; $83AF
 L_83B1:
-			CALL L_84F5				; $83B1
+			CALL SCROLL_BORDER				; $83B1
 			DJNZ L_83B1				; $83B4
 			CALL L_EF3B				; $83B6
 			LD E,$01				; $83B9
@@ -4130,31 +4130,32 @@ CHEAT_KEYS:		defb $59,$58,$45,$53								; $83F6 YXES
 				defb $31,$39,$38,$38,$20,$48,$45,$57				; $8443 1988 HEW
 				defb $53,$4F,$4E,$FF                                ; $844B SON.
 
-L_844F:
-			LD DE,$0000				; $844F
-			LD A,$10				; $8452
-			CALL DRAW_TILE				; $8454
-			CALL L_A57F				; $8457
-			LD DE,$0078				; $845A
-			LD A,$11				; $845D
-			CALL DRAW_TILE				; $845F
-			CALL L_A57F				; $8462
-			LD DE,$B000				; $8465
-			LD A,$12				; $8468
-			CALL DRAW_TILE				; $846A
-			CALL L_A57F				; $846D
-			LD DE,$B078				; $8470
-			LD A,$13				; $8473
-			CALL DRAW_TILE				; $8475
-			CALL L_A57F				; $8478
+DRAW_MENU_BORDERS:
+            LD DE,$0000        ; $844F  ; Y,X coords (Top-left)
+            LD A,$10           ; $8452  ; Tile index
+            CALL DRAW_TILE     ; $8454  ; at (0,0)
+            CALL SET_TILE_COL  ; $8457  ; 
+            LD DE,$0078        ; $845A  ; Y,X coords (Top-right)
+            LD A,$11           ; $845D  ; Tile index
+            CALL DRAW_TILE     ; $845F  ; at (0,120)
+            CALL SET_TILE_COL  ; $8462  ; 
+            LD DE,$B000        ; $8465  ; Y,X coords (Bottom-left)
+            LD A,$12           ; $8468  ; Tile index
+            CALL DRAW_TILE     ; $846A  ; at (176,0)
+            CALL SET_TILE_COL  ; $846D  ; 
+            LD DE,$B078        ; $8470  ; Y,X coords (Bottom-right)
+            LD A,$13           ; $8473  ; Tile index
+            CALL DRAW_TILE     ; $8475  ; at (176,120)
+            CALL SET_TILE_COL  ; $8478  ; 
+
 			LD DE,$1000				; $847B
-			CALL L_84B5				; $847E
+			CALL DRAW_HOR_BORDER	; $847E  ; draw left border
 			LD DE,$1078				; $8481
-			CALL L_84B5				; $8484
+			CALL DRAW_HOR_BORDER	; $8484  ; draw right boarder
 			LD DE,$0008				; $8487
-			CALL L_84C6				; $848A
-			LD DE,$B008				; $848D
-			CALL L_84C6				; $8490
+			CALL DRAW_VERT_BORDER	; $848A  ; draw top border
+			LD DE,$B008				; $848D  
+			CALL DRAW_VERT_BORDER	; $8490  ; draw bottom border
 			LD DE,$101C				; $8493
 			LD HL,$84D7				; $8496
 			LD C,$03				; $8499
@@ -4162,39 +4163,39 @@ L_849B:
 			LD B,$0A				; $849B
 L_849D:
 			LD A,(HL)				; $849D
-			INC HL				; $849E
-			CALL DRAW_TILE				; $849F
-			CALL L_A57F				; $84A2
-			LD A,E				; $84A5
+			INC HL					; $849E
+			CALL DRAW_TILE			; $849F
+			CALL SET_TILE_COL				; $84A2
+			LD A,E					; $84A5
 			ADD A,$08				; $84A6
-			LD E,A				; $84A8
+			LD E,A					; $84A8
 			DJNZ L_849D				; $84A9
 			LD E,$1C				; $84AB
-			LD A,D				; $84AD
+			LD A,D					; $84AD
 			ADD A,$10				; $84AE
-			LD D,A				; $84B0
-			DEC C				; $84B1
-			JR NZ,L_849B				; $84B2
-			RET				; $84B4
+			LD D,A					; $84B0
+			DEC C					; $84B1
+			JR NZ,L_849B			; $84B2
+			RET						; $84B4
 
-L_84B5:
+DRAW_HOR_BORDER:
 			LD B,$0A				; $84B5
 L_84B7:
 			LD A,$15				; $84B7
 			CALL DRAW_TILE				; $84B9
-			CALL L_A57F				; $84BC
+			CALL SET_TILE_COL				; $84BC
 			LD A,D				; $84BF
 			ADD A,$10				; $84C0
 			LD D,A				; $84C2
 			DJNZ L_84B7			; $84C3
 			RET					; $84C5
 
-L_84C6:
+DRAW_VERT_BORDER:
 			LD B,$0E			; $84C6
 L_84C8:
 			LD A,$14			; $84C8
 			CALL DRAW_TILE			; $84CA
-			CALL L_A57F			; $84CD
+			CALL SET_TILE_COL			; $84CD
 			LD A,E				; $84D0
 			ADD A,$08			; $84D1
 			LD E,A				; $84D3
@@ -4208,7 +4209,7 @@ L_84C8:
 			defb $6B,$6C ; REMOVED ,$76             ; $84F3 kl
 			; UPDATED TO USE INSTRUCTION
 
-L_84F5:		HALT				; $84F5
+SCROLL_BORDER:		HALT				; $84F5
 			PUSH AF				; $84F6
 			PUSH BC				; $84F7
 			PUSH DE				; $84F8
@@ -4975,15 +4976,6 @@ L_8A6C:		LD A,(HL)			; $8A6C ; get first item
 			CALL Z,DRAW4X4SPRITE		; $8A84  ; draws and clears bonus 
 			POP HL				; $8A87
 	
-	;	NOP
-	;	NOP
-	;	NOP
-	;	NOP
-	;	NOP
-	;	NOP
-;		NOP
-;		NOP	
-
 			LD A,(EventDelay)	; $8A88
 			AND $07				; $8A8B
 			OR $40				; $8A8D
@@ -6087,7 +6079,7 @@ L_9430:
 
 L_9433:
 			CALL CLR_SCREEN				; $9433
-			CALL L_844F				; $9436
+			CALL DRAW_MENU_BORDERS				; $9436
 			LD HL,$947C				; $9439
 			CALL L_6B29				; $943C
 			LD HL,$C2F1				; $943F
@@ -6111,12 +6103,12 @@ L_9452:
 			DJNZ L_944F				; $945E
 L_9460:
 			CALL L_6672				; $9460
-			CALL NZ,L_84F5				; $9463
+			CALL NZ,SCROLL_BORDER				; $9463
 			JP NZ,L_9460				; $9466
 			LD BC,$00AF				; $9469
 L_946C:
 			PUSH BC				; $946C
-			CALL L_84F5				; $946D
+			CALL SCROLL_BORDER				; $946D
 			CALL GET_KEY				; $9470
 			OR A				; $9473
 			POP BC				; $9474
@@ -6201,7 +6193,7 @@ L_9566:
 			LD BC,$0007				; $95AB
 			LD (HL),$20				; $95AE
 			LDIR				; $95B0
-			CALL L_844F				; $95B2
+			CALL DRAW_MENU_BORDERS				; $95B2
 			LD HL,$9664				; $95B5
 			CALL L_6B29				; $95B8
 			LD DE,$0F0C				; $95BB
@@ -6216,14 +6208,14 @@ L_95C8:
 			CALL WAIT_21xBC				; $95CB
 L_95CE:
 			CALL L_6672				; $95CE
-			CALL NZ,L_84F5				; $95D1
+			CALL NZ,SCROLL_BORDER				; $95D1
 			JR NZ,L_95CE				; $95D4
 			PUSH DE				; $95D6
 L_95D7:
 L_95D7:
 			CALL GET_KEY				; $95D7
 			OR A				; $95DA
-			CALL Z,L_84F5				; $95DB
+			CALL Z,SCROLL_BORDER				; $95DB
 			JR Z,L_95D7				; $95DE
 			POP DE				; $95E0
 			CP $0D				; $95E1
@@ -6275,7 +6267,7 @@ L_961F:
 			LDIR				; $9626
 L_9628:
 			CALL L_6672				; $9628
-			CALL NZ,L_84F5				; $962B
+			CALL NZ,SCROLL_BORDER				; $962B
 			JP NZ,L_9628				; $962E
 			CALL L_9433				; $9631
 			JP MAIN				; $9634
@@ -8041,10 +8033,10 @@ L_A539:		PUSH BC				; $A539
 			POP BC				; $A546
 			RET					; $A547
 
-; Draw 16x16 pixel Tite
+; Draw 16x16 pixel tiles
 ; A=Tile index, D=Y coord, E=X coord
 DRAW_TILE:	CP $E9				; $A548
-			RET NC				; $A54A  ; max tile index (233-1)
+			RET NC				; $A54A  ; max tile graphics index (233-1)
 			PUSH AF				; $A54B
 			PUSH BC				; $A54C
 			PUSH DE				; $A54D
@@ -8057,7 +8049,7 @@ DRAW_TILE:	CP $E9				; $A548
 			ADD HL,HL			; $A555 ; X16
 			ADD HL,HL			; $A556 ; X32 (width 32 pixels)
 			LD BC,$D479			; $A557 ; Tile Data
-			ADD HL,BC			; $A55A ; get data with index
+			ADD HL,BC			; $A55A ; HL now data with index
 			LD A,E				; $A55B ; X coord
 			AND $7C				; $A55C ; 
 			RRCA				; $A55E ; /2
@@ -8088,41 +8080,44 @@ X_OFFSET:	OR $00				; $A56D  ; value ($A56E) replaced, Self-Modifying Code
 			POP AF				; $A57D
 			RET					; $A57E
 
-L_A57F:		CP $E9				; $A57F
-			RET NC				; $A581
+; Add colour to 16x16 tiles
+; A=Tile col index, D=Y coord, E=X coord
+SET_TILE_COL:
+			CP $E9				; $A57F
+			RET NC				; $A581   ; max tile colour index (233-1)
 			PUSH AF				; $A582
 			PUSH BC				; $A583
 			PUSH DE				; $A584
 			PUSH HL				; $A585
 			LD L,A				; $A586
-			LD H,$00				; $A587
-			ADD HL,HL				; $A589
-			ADD HL,HL				; $A58A
-			LD BC,$E9B9				; $A58B
-			ADD HL,BC				; $A58E
+			LD H,$00			; $A587
+			ADD HL,HL			; $A589  ; X2
+			ADD HL,HL			; $A58A  ; X4
+			LD BC,$E9B9			; $A58B  ; Tile colour data
+			ADD HL,BC			; $A58E  ; HL now colour with index
 			LD B,H				; $A58F
 			LD C,L				; $A590
-			CALL L_6799				; $A591
-			LD A,(BC)				; $A594
-			LD (HL),A				; $A595
+			CALL L_6799			; $A591
+			LD A,(BC)			; $A594  ; Colour TL (%FBPPPIII)
+			LD (HL),A			; $A595	
 			INC L				; $A596
 			INC BC				; $A597
-			LD A,(BC)				; $A598
-			LD (HL),A				; $A599
+			LD A,(BC)			; $A598
+			LD (HL),A			; $A599  ; Colour TR (%FBPPPIII)
 			INC BC				; $A59A
-			LD DE,$001F				; $A59B
-			ADD HL,DE				; $A59E
-			LD A,(BC)				; $A59F
-			LD (HL),A				; $A5A0
+			LD DE,$001F			; $A59B
+			ADD HL,DE			; $A59E
+			LD A,(BC)			; $A59F 
+			LD (HL),A			; $A5A0  ; Colour BL (%FBPPPIII)
 			INC L				; $A5A1
 			INC BC				; $A5A2
-			LD A,(BC)				; $A5A3
-			LD (HL),A				; $A5A4
+			LD A,(BC)			; $A5A3
+			LD (HL),A			; $A5A4  ; Colour BR (%FBPPPIII)
 			POP HL				; $A5A5
 			POP DE				; $A5A6
 			POP BC				; $A5A7
 			POP AF				; $A5A8
-			RET				; $A5A9
+			RET					; $A5A9
 
 			defb $01                                            ; $A5AA .
 			defb $02,$03,$04,$05,$01,$01,$15,$16				; $A5AB ........
