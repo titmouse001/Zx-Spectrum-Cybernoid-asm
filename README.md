@@ -2,7 +2,7 @@
 ### Cybernoid-Disasm - ZX Spectrum Game Code Analysis
 
 This project is a disassembly of Cybernoid for the ZX Spectrum.\
-My goal is to reverse-engineer the game, add labels and comments, and hopefully restructure it to make it more understandable.
+My goal is to reverse-engineer the game, add meaningful labels and comments, and document the code to make it more understandable. I'm starting from address-only assembly instructions, so it’s a lot of work.
 
 ![Cybernoid](/asm/images/cybernoid-1st-screen.png)  
 
