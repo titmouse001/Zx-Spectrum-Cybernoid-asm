@@ -168,12 +168,12 @@ SKIP_MODIFY:
 			CALL RESET_GAME			; $6567
 
 INGAME_LOOP: 
-			LD A,(FrameCounter) 	; $656A	
-			CP $02					; $656D  ;interrupt updates FrameCounter
+			LD A,(FRAME_COUNTER) 	; $656A	
+			CP $02					; $656D  ;interrupt updates FRAME_COUNTER
 			JR NC,GO_25FPS			; $656F
 			JP INGAME_LOOP			; $6571
 GO_25FPS:	XOR A					; $6574  ; frame count is a byte - reset 
-			LD (FrameCounter),A  	; $6575
+			LD (FRAME_COUNTER),A  	; $6575
 
 			LD HL,EventDelay		; $6578
 			INC (HL)				; $657B	 ; timingCounter 		
@@ -475,45 +475,50 @@ WAIT_21xBC:   ; 21cycles x BC  (ignoring setup cost)
 			POP BC				; $6777
 			RET					; $6778
 
-L_6779:
+
+; Input: D = Y-coord, E = X-coord (repurposed from animation params)
+; Output: HL = offset for color attribute address
+GET_ANIM_ADDR:
 			PUSH AF				; $6779
 			PUSH DE				; $677A
-			LD A,D				; $677B
-			AND $F8				; $677C
-			LD L,A				; $677E
-			LD H,$00				; $677F
-			ADD HL,HL				; $6781
-			ADD HL,HL				; $6782
-			LD A,E				; $6783
-			AND $7C				; $6784
-			RRCA				; $6786
-			RRCA				; $6787
+
+			LD A,D				; $677B  ; 
+			AND $F8				; $677C  ; Mask Y to 8-pixel row boundaries
+			LD L,A				; $677E  ; L = coarse Y position
+			LD H,$00			; $677F
+			ADD HL,HL			; $6781  ; X2
+			ADD HL,HL			; $6782  ; X4  (Y * 32 bytes per attribute row)
+		
+			LD A,E				; $6783  ; attriute X pos or Sprite index 
+			AND $7C				; $6784  ; Mask X to 4-pixel column boundaries
+			RRCA				; $6786  ; /2
+			RRCA				; $6787  ; /4  (8 pixels per attribute column)
 			LD E,A				; $6788
-			LD D,$00				; $6789
-			ADD HL,DE				; $678B
+			LD D,$00			; $6789
+			ADD HL,DE			; $678B   ; HL = offset within anim or attribute table
 			POP DE				; $678C
 			POP AF				; $678D
-			RET				; $678E
+			RET					; $678E
 
-L_678F:
-			PUSH DE				; $678F
-			CALL L_6779				; $6790
-			LD DE,$5F00				; $6793
-			ADD HL,DE				; $6796
-			POP DE				; $6797
-			RET				; $6798
+GET_ANIM_ADDR_AS_HL:
+			PUSH DE					; $678F
+			CALL GET_ANIM_ADDR		; $6790   
+			LD DE,$5F00				; $6793	 ; Base address of animation struct/pattern table
+			ADD HL,DE				; $6796  ; Final address 
+			POP DE					; $6797
+			RET						; $6798
 
-L_6799:
-			PUSH DE				; $6799
-			CALL L_6779				; $679A
-			LD DE,$5800				; $679D
-			ADD HL,DE				; $67A0
-			POP DE				; $67A1
-			RET				; $67A2
+GET_ATTRIBUTE_AS_HL:
+			PUSH DE					; $6799
+			CALL GET_ANIM_ADDR		; $679A  ; HL=offset based on Y/X (seeing DE=$2000 before call)
+			LD DE,$5800				; $679D  ; Spectrum color attribute base
+			ADD HL,DE				; $67A0  ; HL=exact attribute address we are after from original x,y
+			POP DE					; $67A1
+			RET						; $67A2
 
 L_67A3:
 			PUSH DE				; $67A3
-			CALL L_6779				; $67A4
+			CALL GET_ANIM_ADDR				; $67A4
 			LD DE,$5B00				; $67A7
 			ADD HL,DE				; $67AA
 			POP DE				; $67AB
@@ -801,7 +806,7 @@ L_6972:		PUSH BC				; $6972
 			CP $78				; $697D
 			LD A,$00			; $697F
 			JR NC,L_6997		; $6981
-			CALL L_678F			; $6983
+			CALL GET_ANIM_ADDR_AS_HL			; $6983
 			INC L				; $6986
 			INC L				; $6987
 			LD BC,$0020			; $6988
@@ -833,7 +838,7 @@ L_699C:		PUSH BC				; $699C
 			OR A				; $69A7
 			LD A,$00				; $69A8
 			JR Z,L_69BF				; $69AA
-			CALL L_678F				; $69AC
+			CALL GET_ANIM_ADDR_AS_HL				; $69AC
 			DEC L				; $69AF
 			LD BC,$0020				; $69B0
 			LD A,(HL)				; $69B3
@@ -860,7 +865,7 @@ L_69C4:		PUSH BC				; $69C4
 			AND $07				; $69C8
 			LD A,$00				; $69CA
 			JR NZ,L_69E1				; $69CC
-			CALL L_678F				; $69CE
+			CALL GET_ANIM_ADDR_AS_HL				; $69CE
 			LD BC,$0040				; $69D1
 			ADD HL,BC				; $69D4
 			LD A,(HL)				; $69D5
@@ -887,7 +892,7 @@ L_69E6:		PUSH BC				; $69E6
 			AND $07				; $69EA
 			LD A,$00			; $69EC
 			JR NZ,L_6A03		; $69EE
-			CALL L_678F			; $69F0
+			CALL GET_ANIM_ADDR_AS_HL			; $69F0
 			LD BC,$FFE0			; $69F3
 			ADD HL,BC			; $69F6
 			LD A,(HL)			; $69F7
@@ -1383,7 +1388,7 @@ L_6D4D:
 L_6D7A:
 			PUSH DE				; $6D7A
 			PUSH BC				; $6D7B
-			CALL L_678F				; $6D7C
+			CALL GET_ANIM_ADDR_AS_HL				; $6D7C
 L_6D7F:
 			LD A,(HL)				; $6D7F
 			OR A				; $6D80
@@ -1745,31 +1750,34 @@ L_70D3:
 			PUSH DE				; $70DF
 			PUSH HL				; $70E0
 
-			LD HL,FrameCounter 		; $70E1
-			INC (HL)				; $70E4
-			
+			LD HL,FRAME_COUNTER 	; $70E1
+			INC (HL)				; $70E4	
+			;-----------------------------------------------------------
+			; Disable AY music - menu option 6
 			LD A,($830A)			; $70E5
 			OR A					; $70E8
-			CALL Z,L_EF3B			; $70E9  ; play AY music
-
+			CALL Z,L_EF3B			; $70E9  ; Stop AY music
 			LD A,($830A)			; $70EC
 			OR A					; $70EF
-			JR Z,EXIT_IM2			; $70F0
-
+			JR Z,EXIT_IM2			; $70F0	 ; Get out - Don't play AY music
+			;----------------------------------------------------------
 			LD A,(SpeccyModel)		; $70F2
 			OR A					; $70F5
 			JR NZ,USE_AY			; $70F6
-
-			LD A,($711B)			; $70F8
-			XOR $01					; $70FB
-			LD ($711B),A			; $70FD
-			CALL Z,L_85BA			; $7100
-
+			;----------------------------------------------------------
+			; INGAME BEEPER SFX DRIVER - called at a 50% duty cycle
+			LD A,($711B)					; $70F8 ; get
+			XOR $01							; $70FB ; flip (A=!A)
+			LD ($711B),A					; $70FD ; store
+			CALL Z,POLL_SFX_USING_BEEPER 	; $7100 
+			;----------------------------------------------------------
 			JP EXIT_IM2			; $7103
-
+			;----------------------------------------------------------
+			; AY Music at 50Hz (50fps PAL)
 USE_AY:		CALL AY_MUSIC		; $7106	
-
-EXIT_IM2:	POP HL				; $7109
+			;----------------------------------------------------------
+EXIT_IM2:	
+			POP HL				; $7109
 			POP DE				; $710A
 			POP BC				; $710B
 			POP AF				; $710C
@@ -1785,9 +1793,12 @@ EXIT_IM2:	POP HL				; $7109
 			RETI				; $7118
 
 ; =================================================================
+; Vars used by interrupt routine
+FRAME_COUNTER: 	defb $00        ; $711A
+DUTY_CYCLE:  	defb $00		; $711B  ; bit flip per frame for 50% duty cycle
+;-------------------------------------------------------------------
 
-FrameCounter: defb $00                                            ; $711A
-			defb $00,$AA,$A5,$25,$A6,$82,$A6,$D3				; $711B ...%....
+			defb  $AA,$A5,$25,$A6,$82,$A6,$D3		; $711C
 			defb $A6,$42,$A7,$BD,$A7,$C0,$A7,$2D				; $7123 .B.....-
 			defb $A8,$A9,$A8,$03,$A9,$71,$A9,$CB				; $712B .....q..
 			defb $A9,$CE,$A9,$32,$AA,$A1,$AA,$19				; $7133 ...2....
@@ -1808,8 +1819,7 @@ FrameCounter: defb $00                                            ; $711A
 			defb $C2,$FD,$C2,$75,$C3,$91,$77,$00				; $71AB ...u..w.
 			defb $00                                            ; $71B3 .
 
-L_71B4:
-			LD A,E				; $71B4
+L_71B4:		LD A,E				; $71B4
 			CP $78				; $71B5
 			JR Z,L_71C6				; $71B7
 			OR A				; $71B9
@@ -1818,12 +1828,10 @@ L_71B4:
 			CP D				; $71BF
 			JP NZ,L_71D6				; $71C0
 			JP L_71CD				; $71C3
-L_71C6:
-			LD A,($6970)				; $71C6
+L_71C6:		LD A,($6970)				; $71C6
 			CP E				; $71C9
 			JP NZ,L_71D6				; $71CA
-L_71CD:
-			POP HL				; $71CD
+L_71CD:		POP HL				; $71CD
 			INC HL				; $71CE
 			INC HL				; $71CF
 			INC HL				; $71D0
@@ -1866,7 +1874,6 @@ L_720E:		LD (POS_XY),DE				; $720E
 			LD DE,($744B)				; $7216
 			ADD A,E				; $721A
 			LD ($744B),A				; $721B
-			
 L_721E:		XOR A				; $721E
 			LD ($7E94),A				; $721F
 			LD ($800D),A				; $7222
@@ -1891,94 +1898,90 @@ L_721E:		XOR A				; $721E
 			LD ($9265),HL				; $7257
 
 			CALL L_7457				; $725A	; clear blocking tile map ?
-			CALL CLR_TABLE_ITEMS	; $725D ; action map ?
-	
-			CALL CLR_GAME_SCREEN	; $7260 ; moved onto next screen - clear
+			CALL CLR_TABLE_ITEMS	; $725D ; 
+			CALL CLR_GAME_SCREEN	; $7260 ; 
 			LD A,($744B)			; $7263
 			LD BC,$711C				; $7266
 			CALL L_744D				; $7269
-			LD DE,$2000				; $726C
-L_726F:
-			LD A,(HL)				; $726F
-			INC HL				; $7270
-			OR A				; $7271
-			JR Z,L_7284				; $7272
-			CP $FF				; $7274
-			JR Z,L_729A				; $7276
-			PUSH HL				; $7278
-			CALL DRAW_TILE				; $7279
-			CALL SET_TILE_COL				; $727C
-			CALL L_678F				; $727F
-			LD (HL),A				; $7282
-			POP HL				; $7283
-L_7284:
-			LD A,E				; $7284
-			ADD A,$08				; $7285
-			LD E,A				; $7287
-			CP $80				; $7288
-			JP NZ,L_726F				; $728A
-			LD A,D				; $728D
-			CP $B0				; $728E
-			JR Z,L_72C8				; $7290
-			ADD A,$10				; $7292
-			LD D,A				; $7294
-			LD E,$00				; $7295
-			JP L_726F				; $7297
 
-L_729A:
-			LD B,(HL)				; $729A
-			INC HL				; $729B
-			LD A,(HL)				; $729C
-			INC HL				; $729D
-L_729E:
-			LD C,A				; $729E
-			OR A				; $729F
-			JR Z,L_72AF				; $72A0
-			PUSH HL				; $72A2
-			CALL DRAW_TILE				; $72A3
-			CALL SET_TILE_COL				; $72A6
-			CALL L_678F				; $72A9
-			LD (HL),A				; $72AC
-			LD C,A				; $72AD
-			POP HL				; $72AE
-L_72AF:
-			LD A,E				; $72AF
-			ADD A,$08				; $72B0
-			LD E,A				; $72B2
-			CP $80				; $72B3
-			JP NZ,L_72C2				; $72B5
-			LD A,D				; $72B8
-			CP $B0				; $72B9
-			JR Z,L_72C8				; $72BB
-			ADD A,$10				; $72BD
-			LD D,A				; $72BF
-			LD E,$00				; $72C0
-L_72C2:
-			LD A,C				; $72C2
-			DJNZ L_729E				; $72C3
-			JP L_726F				; $72C5
+			; NOTE: DE is about to become store for a global x/y coordinate for setting screen attributes!
+			LD DE,$2000						; $726C  ; D=Y,E=X (attributes ONLY, tiles have internal store!)
+TILE_GROUP_LOOP:		
+			LD A,(HL)						; $726F ; Tile index ($FF indicates repeat same tile)
+			INC HL							; $7270
+			OR A							; $7271
+			JR Z,SKIP_GROUP					; $7272
+			CP $FF							; $7274 ; $FF=repeat same tile
+			JR Z,TILE_GROUP_REPEAT		; $7276
+			PUSH HL							; $7278
+			CALL DRAW16x16_TILE				; $7279
+			CALL SET_TILE16X16_COL			; $727C  ; DE=y/x coords
+			CALL GET_ANIM_ADDR_AS_HL		; $727F
+			LD (HL),A						; $7282
+			POP HL							; $7283
+SKIP_GROUP:	LD A,E							; $7284
+			ADD A,$08						; $7285  ; E=(X+=8), pixels as helper utils use pixels.
+			LD E,A							; $7287
+			CP $80							; $7288  ; Row Completion Check (16 steps)
+			JP NZ,TILE_GROUP_LOOP			; $728A
+			LD A,D							; $728D
+			CP $B0							; $728E  ; Limit draw on Y-axis (176)
+			JR Z,BACKGROUND_DONE						; $7290  ; Finished Drawing 
+			ADD A,$10						; $7292  ; D=(Y+=16)
+			LD D,A							; $7294
+			LD E,$00						; $7295  ; reset E=X
+			JP TILE_GROUP_LOOP				; $7297
 
-L_72C8:
-			CALL L_742E				; $72C8
-			LD IX,$6CFC				; $72CB
-			LD DE,$2000				; $72CF
-L_72D2:
-L_72D2:
-			CALL L_678F				; $72D2
+; saves data - However overhead is 3 bytes ($FF,AMOUNT,TILE)
+TILE_GROUP_REPEAT:		
+			LD B,(HL)						; $729A  ; B=amount, draw same tile multiple times
+			INC HL							; $729B
+			LD A,(HL)						; $729C	 ; Tile index
+			INC HL							; $729D
+SPECIAL_TITLES:		
+			LD C,A							; $729E
+			OR A							; $729F
+			JR Z,SKIP_SPECIAL				; $72A0
+			PUSH HL							; $72A2
+			CALL DRAW16x16_TILE				; $72A3
+			CALL SET_TILE16X16_COL			; $72A6
+			CALL GET_ANIM_ADDR_AS_HL		; $72A9
+			LD (HL),A						; $72AC
+			LD C,A							; $72AD
+			POP HL							; $72AE
+SKIP_SPECIAL:
+			LD A,E							; $72AF
+			ADD A,$08						; $72B0
+			LD E,A							; $72B2
+			CP $80							; $72B3
+			JP NZ,L_72C2					; $72B5
+			LD A,D							; $72B8
+			CP $B0							; $72B9
+			JR Z,BACKGROUND_DONE						; $72BB
+			ADD A,$10						; $72BD
+			LD D,A							; $72BF
+			LD E,$00						; $72C0
+L_72C2:		LD A,C							; $72C2
+			DJNZ SPECIAL_TITLES						; $72C3
+
+			JP TILE_GROUP_LOOP				; $72C5
+
+BACKGROUND_DONE:		
+			CALL L_742E						; $72C8
+			LD IX,$6CFC						; $72CB
+			LD DE,$2000						; $72CF
+L_72D2:		CALL GET_ANIM_ADDR_AS_HL				; $72D2
 			LD A,(HL)				; $72D5
 			CP $E9				; $72D6
 			JR C,L_72DF				; $72D8
 			LD (HL),$00				; $72DA
 			JP L_72EC				; $72DC
-
-L_72DF:
-			OR A				; $72DF
+L_72DF:		OR A				; $72DF
 			CALL NZ,L_732A				; $72E0
 			CALL L_8748				; $72E3
 			CALL L_6E07				; $72E6
 			CALL L_73AA				; $72E9
-L_72EC:
-			CALL L_8FD6				; $72EC
+L_72EC:		CALL L_8FD6				; $72EC
 			CALL L_91B1				; $72EF
 			CALL L_9B68				; $72F2 	; Enemies
 			CALL L_A1D6				; $72F5
@@ -1994,9 +1997,7 @@ L_72EC:
 			LD D,A				; $7308
 			LD E,$00				; $7309
 			JP L_72D2				; $730B
-
-L_730E:
-			LD (IX+$00),$FF				; $730E
+L_730E:		LD (IX+$00),$FF				; $730E
 			CALL L_67AD				; $7312
 			CALL L_9BD8				; $7315
 			LD A,$01				; $7318
@@ -2006,18 +2007,16 @@ L_730E:
 			LD B,D				; $7325
 			LD C,E				; $7326
 			JP L_6953				; $7327
-
-L_732A:
-			CP $E9				; $732A
+L_732A:		CP $E9				; $732A
 			RET NC				; $732C
+
 			PUSH AF				; $732D
 			PUSH DE				; $732E
 			PUSH HL				; $732F
 			LD DE,$0005				; $7330
 			LD B,A				; $7333
 			LD HL,$736D				; $7334
-L_7337:
-			LD A,(HL)				; $7337
+L_7337:		LD A,(HL)				; $7337
 			ADD HL,DE				; $7338
 			CP $FF				; $7339
 			JR Z,L_735B				; $733B
@@ -2154,17 +2153,15 @@ L_7435:
 			NOP				; $744B
 			NOP				; $744C
 
-L_744D:
-			LD L,A				; $744D
+L_744D:		LD L,A					; $744D
 			LD H,$00				; $744E
 			ADD HL,HL				; $7450
 			ADD HL,BC				; $7451
 			LD A,(HL)				; $7452
-			INC HL				; $7453
+			INC HL					; $7453
 			LD H,(HL)				; $7454
-			LD L,A				; $7455
-			RET				; $7456
-
+			LD L,A					; $7455
+			RET						; $7456
 
 L_7457:		LD HL,$5F00				; $7457  ; blocking - tile map ?
 			LD DE,$5F01				; $745A
@@ -2209,7 +2206,7 @@ RESET_GAME:
 			LD ($6AEE),A				; $749F
 			LD ($6AF3),A				; $74A2
 			LD (InputOff),A				; $74A5
-			LD (FrameCounter),A ;  ($711A),A				; $74A8
+			LD (FRAME_COUNTER),A ;  ($711A),A				; $74A8
 			LD HL,$0000				; $74AB
 			LD ($7973),HL				; $74AE
 			CALL L_7935				; $74B1
@@ -2271,7 +2268,7 @@ L_7502:
 			CALL L_6802				; $7507
 			OR A				; $750A
 			JR Z,L_752F				; $750B
-			CALL L_678F				; $750D
+			CALL GET_ANIM_ADDR_AS_HL				; $750D
 			LD A,(HL)				; $7510
 			OR A				; $7511
 			JR Z,L_752F				; $7512
@@ -2910,7 +2907,7 @@ L_7ABD:
 			LD E,$1A				; $7AD5
 			CALL PLAY_SFX				; $7AD7
 			POP DE				; $7ADA
-			CALL L_678F				; $7ADB
+			CALL GET_ANIM_ADDR_AS_HL				; $7ADB
 			LD A,(HL)				; $7ADE
 			OR (HL)				; $7ADF
 			POP HL				; $7AE0
@@ -2943,7 +2940,7 @@ L_7AF2:
 			JR NC,L_7B27				; $7B02
 			EX AF,AF'				; $7B04
 			PUSH HL				; $7B05
-			CALL L_678F				; $7B06
+			CALL GET_ANIM_ADDR_AS_HL				; $7B06
 			LD A,(HL)				; $7B09
 			POP HL				; $7B0A
 			OR A				; $7B0B
@@ -3232,7 +3229,7 @@ L_7D15:
 			LD A,(IX+$05)				; $7D1B
 			LD B,A				; $7D1E
 			PUSH HL				; $7D1F
-			CALL L_678F				; $7D20
+			CALL GET_ANIM_ADDR_AS_HL				; $7D20
 			LD A,(HL)				; $7D23
 			POP HL				; $7D24
 			OR A				; $7D25
@@ -3797,7 +3794,7 @@ L_8115:
 			AND $03				; $811D
 			LD A,$00				; $811F
 			JR NZ,L_8134				; $8121
-			CALL L_678F				; $8123
+			CALL GET_ANIM_ADDR_AS_HL				; $8123
 			INC L				; $8126
 			LD BC,$0020				; $8127
 			LD A,(HL)				; $812A
@@ -3825,7 +3822,7 @@ L_8139:
 			AND $03				; $8141
 			LD A,$00				; $8143
 			JR NZ,L_8158				; $8145
-			CALL L_678F				; $8147
+			CALL GET_ANIM_ADDR_AS_HL				; $8147
 			DEC L				; $814A
 			LD BC,$0020				; $814B
 			LD A,(HL)				; $814E
@@ -3853,7 +3850,7 @@ L_815D:
 			AND $07				; $8165
 			LD A,$00				; $8167
 			JR NZ,L_817C				; $8169
-			CALL L_678F				; $816B
+			CALL GET_ANIM_ADDR_AS_HL				; $816B
 			LD BC,$0020				; $816E
 			ADD HL,BC				; $8171
 			LD A,(HL)				; $8172
@@ -3881,7 +3878,7 @@ L_8181:
 			AND $07					; $8189
 			LD A,$00				; $818B
 			JR NZ,L_81A0			; $818D
-			CALL L_678F				; $818F
+			CALL GET_ANIM_ADDR_AS_HL				; $818F
 			LD BC,$FFE0				; $8192
 			ADD HL,BC				; $8195
 			LD A,(HL)				; $8196
@@ -3939,9 +3936,9 @@ L_81D4:		PUSH BC					; $81D4
 			CP $36					; $81EF
 			JR NZ,L_8214			; $81F1
 
-			LD A,($830A)			; $81F3
-			XOR $01					; $81F6
-			LD ($830A),A			; $81F8
+			LD A,($830A)			; $81F3  ; 
+			XOR $01					; $81F6  ; Toggle AY music ON/OFF
+			LD ($830A),A			; $81F8  ;
 
 			PUSH BC					; $81FB
 			CALL L_EF3B				; $81FC
@@ -4005,7 +4002,7 @@ L_82E5:
 			ADD A,A				; $82ED
 			LD D,A				; $82EE
 			LD E,$2C				; $82EF
-			CALL L_6799				; $82F1
+			CALL GET_ATTRIBUTE_AS_HL				; $82F1
 			LD A,($830B)				; $82F4
 			INC A				; $82F7
 			LD ($830B),A				; $82F8
@@ -4136,20 +4133,20 @@ CHEAT_KEYS:		defb $59,$58,$45,$53								; $83F6 YXES
 DRAW_MENU_BORDERS:
             LD DE,$0000        ; $844F  ; Y,X coords (Top-left)
             LD A,$10           ; $8452  ; Tile index
-            CALL DRAW_TILE     ; $8454  ; at (0,0)
-            CALL SET_TILE_COL  ; $8457  ; 
+            CALL DRAW16x16_TILE     ; $8454  ; at (0,0)
+            CALL SET_TILE16X16_COL  ; $8457  ; 
             LD DE,$0078        ; $845A  ; Y,X coords (Top-right)
             LD A,$11           ; $845D  ; Tile index
-            CALL DRAW_TILE     ; $845F  ; at (0,120)
-            CALL SET_TILE_COL  ; $8462  ; 
+            CALL DRAW16x16_TILE     ; $845F  ; at (0,120)
+            CALL SET_TILE16X16_COL  ; $8462  ; 
             LD DE,$B000        ; $8465  ; Y,X coords (Bottom-left)
             LD A,$12           ; $8468  ; Tile index
-            CALL DRAW_TILE     ; $846A  ; at (176,0)
-            CALL SET_TILE_COL  ; $846D  ; 
+            CALL DRAW16x16_TILE     ; $846A  ; at (176,0)
+            CALL SET_TILE16X16_COL  ; $846D  ; 
             LD DE,$B078        ; $8470  ; Y,X coords (Bottom-right)
             LD A,$13           ; $8473  ; Tile index
-            CALL DRAW_TILE     ; $8475  ; at (176,120)
-            CALL SET_TILE_COL  ; $8478  ; 
+            CALL DRAW16x16_TILE     ; $8475  ; at (176,120)
+            CALL SET_TILE16X16_COL  ; $8478  ; 
 
 			LD DE,$1000				; $847B
 			CALL DRAW_HOR_BORDER	; $847E  ; draw left border
@@ -4167,8 +4164,8 @@ L_849B:
 L_849D:
 			LD A,(HL)				; $849D
 			INC HL					; $849E
-			CALL DRAW_TILE			; $849F
-			CALL SET_TILE_COL				; $84A2
+			CALL DRAW16x16_TILE			; $849F
+			CALL SET_TILE16X16_COL				; $84A2
 			LD A,E					; $84A5
 			ADD A,$08				; $84A6
 			LD E,A					; $84A8
@@ -4185,8 +4182,8 @@ DRAW_HOR_BORDER:
 			LD B,$0A				; $84B5
 L_84B7:
 			LD A,$15				; $84B7
-			CALL DRAW_TILE				; $84B9
-			CALL SET_TILE_COL				; $84BC
+			CALL DRAW16x16_TILE				; $84B9
+			CALL SET_TILE16X16_COL				; $84BC
 			LD A,D				; $84BF
 			ADD A,$10				; $84C0
 			LD D,A				; $84C2
@@ -4197,8 +4194,8 @@ DRAW_VERT_BORDER:
 			LD B,$0E			; $84C6
 L_84C8:
 			LD A,$14			; $84C8
-			CALL DRAW_TILE			; $84CA
-			CALL SET_TILE_COL			; $84CD
+			CALL DRAW16x16_TILE			; $84CA
+			CALL SET_TILE16X16_COL			; $84CD
 			LD A,E				; $84D0
 			ADD A,$08			; $84D1
 			LD E,A				; $84D3
@@ -4338,8 +4335,7 @@ L_85B8:
 			POP HL				; $85B8
 			RET				; $85B9
 
-L_85BA:
-			LD HL,$859A				; $85BA
+POLL_SFX_USING_BEEPER:		LD HL,$859A				; $85BA
 			LD A,($859B)				; $85BD
 			CP $FF				; $85C0
 			JR Z,L_861D				; $85C2
@@ -4629,92 +4625,98 @@ L_87A5:
 			RET					; $87AB
 
 
-; Sprite Data Structure ???
-; +$00	Sprite index + disable sprite
-; +$01	Animation control
-; +$02	Animation start (low byte)
-; +$03	Animation start (high byte)
-; +$04	Frame (low byte)
-; +$05	Frame (high byte)
-; +$06	X 
-; +$07	Y 
-; +$08	Initial delay counter (reset counter)
-; +$09	Current delay counter (counts down)
-
+; =====================================================================
+; Animated Sprite Structure (10 bytes per sprite)
+; ---------------------------------------------------------------------
+SpriteIndex         EQU $00     ; [byte] Bits 0-6=Sprite ID, 7=end-of-list
+AnimationControl    EQU $01     ; [byte] Animation params
+; Bit 7-3: Animation set selector (used for ComputeAnimAddress)
+; Bit 2-0: unused
+AnimationStartLow   EQU $02     ; [word] first animation frame
+AnimationStartHigh  EQU $03     ; 
+FrameLow            EQU $04     ; [word] Current frame
+FrameHigh           EQU $05     ; 
+X_POS               EQU $06     ; [byte] X position
+Y_POS               EQU $07     ; [byte] Y position
+ResetCounter        EQU $08     ; [byte] Initial delay between frames
+CountDown           EQU $09     ; [byte] Current countdown to next frame
+; =====================================================================
 ANIMATE_SPRITE:
-			LD IX,$8814				; $87AC ; sprite data base
+			LD IX,$8814						; $87AC  ; sprite table pointer
+ANIM_SPRITE_LOOP:		
+			LD E,(IX+SpriteIndex)			; $87B0  ; load sprite index (doubles as end marker)
+			BIT 7,E							; $87B3  ; 
+			RET NZ							; $87B5  ; Exit if end-of-list marker found
+			LD A,(IX+AnimationControl)		; $87B6  ; animation control  
+			OR A							; $87B9  ; 
+			RET Z							; $87BA  ; Exit if no animation is enabled
+			LD D,A							; $87BB  ; Animation control
+			LD C,E							; $87BC  ; Sprite index
+			CALL GET_ANIM_ADDR_AS_HL		; $87BD  ; HL=animation data address
+			LD E,C							; $87C0  ; sprite index
+			LD A,(HL)						; $87C1  ; get animation frame data
+			OR A							; $87C2  ; get animation frame data
+			JP Z,NEXT_ANIM_SPRITE			; $87C3  ; skip zero terminator (no anim)
+			LD D,(IX+AnimationControl)		; $87C6  ; Reload animation control
+			LD B,D							; $87C9  ; ???
+			LD A,(IX+CountDown)				; $87CA  ; current delay counter
+			OR A							; $87CD  ; 
+			JR NZ,HANDLE_COUNTDOWN 			; $87CE  ; reaches zero, next frame
 
-L_87B0:		LD E,(IX+$00)			; $87B0 ; MSB - end flag 
-			BIT 7,E					; $87B3
-			RET NZ					; $87B5 ; done exit
-
-			LD A,(IX+$01)			; $87B6 ; counter 
-			OR A					; $87B9
-			RET Z					; $87BA
-
-			; Animation setup
-			LD D,A					; $87BB
-			LD C,E					; $87BC
-			CALL L_678F				; $87BD  ; get HL 
-			LD E,C					; $87C0
-			LD A,(HL)				; $87C1  ; get data
-			OR A					; $87C2
-			JP Z,L_880C				; $87C3
+			LD A,(IX+ResetCounter)			; $87D0  ; Get initial delay value
+			LD (IX+CountDown),A				; $87D3  ; Reset countdown timer (A=0)
+			LD L,(IX+FrameLow)				; $87D6  ; Get current frame pointer
+			LD H,(IX+FrameHigh)				; $87D9
+			LD A,(HL)						; $87DC  ; get frame
+			CP $FF							; $87DD  ; end-of-animation marker
+			JR NZ,UPDATE_FRAME				; $87DF  ; Proceed if not at end
 			
-			LD D,(IX+$01)			; $87C6
-			LD B,D					; $87C9
-			LD A,(IX+$09)			; $87CA
-			OR A					; $87CD
-			JR NZ,L_8809			; $87CE  ; reaches zero, next frame
-			LD A,(IX+$08)			; $87D0  ; initial frame delay
+			; Reset to start of animation
+			LD L,(IX+AnimationStartLow)		; $87E1  ; Reset animation
+			LD H,(IX+AnimationStartHigh)	; $87E4
+			LD (IX+FrameLow),L				; $87E7  ; store 
+			LD (IX+FrameHigh),H				; $87EA
+			LD A,(HL)						; $87ED  ; get data (back to first frame)
+UPDATE_FRAME:		
+			INC HL							; $87EE  ; next frame
+			LD (IX+FrameLow),L				; $87EF  ; store updated frame 
+			LD (IX+FrameHigh),H				; $87F2  ; 
 
-			LD (IX+$09),A			; $87D3  ; delay counter
-			LD L,(IX+$04)			; $87D6
-			LD H,(IX+$05)			; $87D9
+			; Update sprite graphics
+			LD L,(IX+X_POS)					; $87F5
+			LD H,(IX+Y_POS)					; $87F8
+			CALL DRAW4X4SPRITE				; $87FB  ; animated icons
+			LD (IX+X_POS),L					; $87FE
+			LD (IX+Y_POS),H					; $8801
+			LD B,A							; $8804 ; frame data
+			CALL GET_ANIM_ADDR_AS_HL		; $8805 ; Draw sprite at (L,H) = (X,Y)
+			LD (HL),B						; $8808 ; new sprite pattern 
+HANDLE_COUNTDOWN:		
+			DEC (IX+CountDown)				; $8809 ; frame delay counter
+NEXT_ANIM_SPRITE:		
+			LD DE,$000A						; $880C	; Size of per-sprite structure
+			ADD IX,DE						; $880F ; move to next sprite
+			JP ANIM_SPRITE_LOOP				; $8811 ;
 
-			LD A,(HL)				; $87DC ; get data
-			CP $FF					; $87DD ; reset indicator
-			JR NZ,L_87EE			; $87DF ; reset to the start 
-			LD L,(IX+$02)			; $87E1
-			LD H,(IX+$03)			; $87E4
-			LD (IX+$04),L			; $87E7 ; get frame
-			LD (IX+$05),H			; $87EA
-			LD A,(HL)				; $87ED ; get data
-L_87EE:		INC HL					; $87EE ; next data
 
-			LD (IX+$04),L			; $87EF ; store new frame 
-			LD (IX+$05),H			; $87F2 ; store new frame 
-			LD L,(IX+$06)			; $87F5
-			LD H,(IX+$07)			; $87F8
-			CALL DRAW4X4SPRITE		; $87FB  ; animated icons
-			LD (IX+$06),L			; $87FE
-			LD (IX+$07),H			; $8801
-			LD B,A					; $8804
-			CALL L_678F				; $8805
-			
-			LD (HL),B				; $8808 ; store 
-
-L_8809:		DEC (IX+$09)			; $8809 ; reduce delay counter
-L_880C:		LD DE,$000A				; $880C
-			ADD IX,DE				; $880F
-			JP L_87B0				; $8811  ; next sprite
-
-			defb $FC,$00,$00,$54,$FC,$A8,$00                    ; $8814 ...T...
-			defb $54,$FC,$00,$00,$54,$A8,$00,$00				; $881B T...T...
-			defb $00,$00,$00,$00,$CF,$CF,$CF,$CF				; $8823 ........
-			defb $CF,$CF,$CF,$CF,$0F,$0F,$0F,$0F				; $882B ........
-			defb $0F,$0F,$0F,$0F,$4F,$05,$0F,$0F				; $8833 ....O...
-			defb $0A,$05,$0F,$0F,$C3,$C3,$C3,$C3				; $883B ........
-			defb $C3,$C3,$C3,$FF,$1D,$60,$88,$03				; $8843 .....`..
-			defb $20,$64,$88,$03,$1F,$68,$88,$03				; $884B  d...h..
-			defb $22,$6C,$88,$03,$52,$70,$88,$05				; $8853 "l..Rp..
-			defb $53,$81,$88,$05,$FF,$1D,$1E,$1F				; $885B S.......
-			defb $FF,$20,$21,$22,$FF,$1F,$1E,$1D				; $8863 . !"....
-			defb $FF,$22,$21,$20,$FF,$52,$52,$52				; $886B ."! .RRR
-			defb $52,$52,$52,$54,$56,$58,$58,$58				; $8873 RRRTVXXX
-			defb $58,$58,$58,$56,$54,$FF,$53,$53				; $887B XXXVT.SS
-			defb $53,$53,$53,$53,$55,$57,$59,$59				; $8883 SSSSUWYY
-			defb $59,$59,$59,$59,$57,$55,$FF                    ; $888B YYYYWU.
+SPRITE_INSTRUCTION_TABLE:
+			defb $FC,$00,$00,$54,$FC,$A8,$00                ; $8814
+			defb $54,$FC,$00,$00,$54,$A8,$00,$00			; $881B
+			defb $00,$00,$00,$00,$CF,$CF,$CF,$CF			; $8823
+			defb $CF,$CF,$CF,$CF,$0F,$0F,$0F,$0F			; $882B
+			defb $0F,$0F,$0F,$0F,$4F,$05,$0F,$0F			; $8833
+			defb $0A,$05,$0F,$0F,$C3,$C3,$C3,$C3			; $883B
+			defb $C3,$C3,$C3,$FF,$1D,$60,$88,$03			; $8843
+			defb $20,$64,$88,$03,$1F,$68,$88,$03			; $884B
+			defb $22,$6C,$88,$03,$52,$70,$88,$05			; $8853
+			defb $53,$81,$88,$05,$FF,$1D,$1E,$1F			; $885B
+			defb $FF,$20,$21,$22,$FF,$1F,$1E,$1D			; $8863
+			defb $FF,$22,$21,$20,$FF,$52,$52,$52			; $886B
+			defb $52,$52,$52,$54,$56,$58,$58,$58			; $8873
+			defb $58,$58,$58,$56,$54,$FF,$53,$53			; $887B
+			defb $53,$53,$53,$53,$55,$57,$59,$59			; $8883
+			defb $59,$59,$59,$59,$57,$55                    ; $888B
+			defb $FF										; $8891  ; END-OF-LIST MARKER
 
 
 CLR_TABLE_ITEMS:		
@@ -5255,7 +5257,7 @@ L_8CFE:
 			SUB (IX+$02)				; $8D08
 			CP $14				; $8D0B
 			JR C,L_8D16				; $8D0D
-			CALL L_678F				; $8D0F
+			CALL GET_ANIM_ADDR_AS_HL				; $8D0F
 			LD A,(HL)				; $8D12
 			OR A				; $8D13
 			JR NZ,L_8D32				; $8D14
@@ -5292,7 +5294,7 @@ L_8D3F:
 			LD D,(HL)				; $8D45
 			INC HL				; $8D46
 			PUSH HL				; $8D47
-			CALL L_678F				; $8D48
+			CALL GET_ANIM_ADDR_AS_HL				; $8D48
 			LD A,(HL)				; $8D4B
 			OR A				; $8D4C
 			JR NZ,L_8D53				; $8D4D
@@ -6448,7 +6450,7 @@ L_97F3:
 			LD D,(HL)				; $97F9
 			INC HL				; $97FA
 			PUSH HL				; $97FB
-			CALL L_678F				; $97FC
+			CALL GET_ANIM_ADDR_AS_HL				; $97FC
 			LD A,(HL)				; $97FF
 			OR A				; $9800
 			JR NZ,L_9807				; $9801
@@ -6630,7 +6632,7 @@ L_9939:
 			JP L_996E				; $9944
 
 L_9947:
-			CALL L_678F				; $9947
+			CALL GET_ANIM_ADDR_AS_HL				; $9947
 			LD A,(HL)				; $994A
 			INC L				; $994B
 			OR (HL)				; $994C
@@ -6795,7 +6797,7 @@ L_9AC2:
 			LD DE,$2000				; $9ACB
 			LD B,$14				; $9ACE
 L_9AD0:
-			CALL L_678F				; $9AD0
+			CALL GET_ANIM_ADDR_AS_HL				; $9AD0
 			LD A,(HL)				; $9AD3
 			OR A				; $9AD4
 			JR NZ,L_9AE0				; $9AD5
@@ -6814,7 +6816,7 @@ L_9AE0:
 			LD DE,$2078				; $9AEB
 			LD B,$14				; $9AEE
 L_9AF0:
-			CALL L_678F				; $9AF0
+			CALL GET_ANIM_ADDR_AS_HL				; $9AF0
 			LD A,(HL)				; $9AF3
 			OR A				; $9AF4
 			JR NZ,L_9B00				; $9AF5
@@ -6833,7 +6835,7 @@ L_9B00:
 			LD DE,$2000				; $9B0B
 			LD B,$20				; $9B0E
 L_9B10:
-			CALL L_678F				; $9B10
+			CALL GET_ANIM_ADDR_AS_HL				; $9B10
 			LD A,(HL)				; $9B13
 			OR A				; $9B14
 			JR NZ,L_9B20				; $9B15
@@ -6858,7 +6860,7 @@ L_9B20:
 			LD DE,$B000				; $9B4C
 			LD B,$20				; $9B4F
 L_9B51:
-			CALL L_678F				; $9B51
+			CALL GET_ANIM_ADDR_AS_HL				; $9B51
 			LD A,(HL)				; $9B54
 			OR A				; $9B55
 			JR NZ,L_9B61				; $9B56
@@ -7118,7 +7120,7 @@ L_9FA2:
 			LD A,D				; $9FAF
 			AND $F8				; $9FB0
 			LD D,A				; $9FB2
-			CALL L_678F				; $9FB3
+			CALL GET_ANIM_ADDR_AS_HL				; $9FB3
 			LD A,(HL)				; $9FB6
 			INC L				; $9FB7
 			OR (HL)				; $9FB8
@@ -7833,7 +7835,7 @@ L_A446:
 			JR C,L_A453				; $A44F
 			LD E,$00				; $A451
 L_A453:
-			CALL L_6799				; $A453
+			CALL GET_ATTRIBUTE_AS_HL				; $A453
 L_A456:
 			PUSH HL				; $A456
 			LD DE,$0300				; $A457
@@ -7879,7 +7881,7 @@ L_A47B:
 			LD E,$00				; $A484
 L_A486:
 			LD A,$03				; $A486
-			CALL L_6799				; $A488
+			CALL GET_ATTRIBUTE_AS_HL				; $A488
 L_A48B:
 			EX AF,AF'				; $A48B
 			PUSH HL				; $A48C
@@ -7919,7 +7921,7 @@ L_A4AD:		PUSH AF				; $A4AD
 			CP $80				; $A4B4
 			JR C,L_A4BA				; $A4B6
 			LD E,$00				; $A4B8
-L_A4BA:		CALL L_6799				; $A4BA
+L_A4BA:		CALL GET_ATTRIBUTE_AS_HL				; $A4BA
 L_A4BD:		PUSH HL				; $A4BD
 			LD DE,$0300				; $A4BE
 			ADD HL,DE				; $A4C1
@@ -7964,7 +7966,7 @@ DRAW4X4SPRITE:
 			ADD HL,HL			; $A4E7  ; x32  
 			LD BC,$D479			; $A4E8  ; sprites base
 			ADD HL,BC			; $A4EB  ; base + index
-			LD ($A29A),HL		; $A4EC	 ; stored for later, but what for??? animation???
+			LD ($A29A),HL		; $A4EC	 ; save for animation
 
 			; Get Screen Coordinates
 			LD A,E				; $A4EF	 ; Y coord
@@ -8029,6 +8031,11 @@ DRAW_BY_LINE:
 
 			DJNZ DRAW_BY_LINE	; $A530  ; next scanline
 			LD HL,($A29A)		; $A532  ; restore modified HL
+
+;	NOP
+;	NOP
+;	nop
+
 			POP DE				; $A535
 			POP BC				; $A536
 			POP AF				; $A537
@@ -8049,7 +8056,8 @@ L_A539:		PUSH BC				; $A539
 
 ; Draw 16x16 pixel tiles
 ; A=Tile index, D=Y coord, E=X coord
-DRAW_TILE:	CP $E9				; $A548
+DRAW16x16_TILE:	
+			CP $E9				; $A548
 			RET NC				; $A54A  ; max tile graphics index (233-1)
 			PUSH AF				; $A54B
 			PUSH BC				; $A54C
@@ -8096,9 +8104,10 @@ X_OFFSET:	OR $00				; $A56D  ; value ($A56E) replaced, Self-Modifying Code
 
 ; Add colour to 16x16 tiles
 ; A=Tile col index, D=Y coord, E=X coord
-SET_TILE_COL:
+SET_TILE16X16_COL:
 			CP $E9				; $A57F
 			RET NC				; $A581   ; max tile colour index (233-1)
+
 			PUSH AF				; $A582
 			PUSH BC				; $A583
 			PUSH DE				; $A584
@@ -8107,11 +8116,14 @@ SET_TILE_COL:
 			LD H,$00			; $A587
 			ADD HL,HL			; $A589  ; X2
 			ADD HL,HL			; $A58A  ; X4
+			
 			LD BC,$E9B9			; $A58B  ; Tile colour data
+
 			ADD HL,BC			; $A58E  ; HL now colour with index
 			LD B,H				; $A58F
 			LD C,L				; $A590
-			CALL L_6799			; $A591
+			CALL GET_ATTRIBUTE_AS_HL			; $A591
+
 			LD A,(BC)			; $A594  ; Colour TL (%FBPPPIII)
 			LD (HL),A			; $A595	
 			INC L				; $A596
@@ -10322,8 +10334,13 @@ L_C067:
 			defb $71,$8A,$61,$0C,$71,$8A,$60,$0C				; $E99B q.a.q.`.
 			defb $77,$EA,$04,$20,$FD,$7F,$AC,$B5				; $E9A3 w.. ....
 			defb $05,$60,$67,$EE,$70,$0A,$61,$0C				; $E9AB .`g.p.a.
-			defb $71,$8A,$61,$0C,$71,$8A,$00,$00				; $E9B3 q.a.q...
-			defb $00,$00,$43,$43,$42,$43,$43,$42				; $E9BB ..CCBCCB
+			defb $71,$8A,$61,$0C,$71,$8A						; $E9B3 q.a.q...
+
+			defb $00											; $E9B9
+			defb $00											; $E9BA
+		
+			defb $00,$00,$43,$43,$42,$43,$43,$42				; $E9BB
+
 			defb $42,$43,$43,$42,$42,$43,$43,$42				; $E9C3 BCCBBCCB
 			defb $43,$43,$43,$42,$42,$43,$00,$44				; $E9CB CCCBBC.D
 			defb $44,$44,$44,$04,$44,$04,$04,$00				; $E9D3 DDD.D...
@@ -10750,11 +10767,11 @@ WRD_OPCODE: LD HL,$28B2				; $F0F9 ; noise seed value
 			JP GET_NEXT_DATA			; $F10E  ; loop get more data
 
 SET_TRANSPOSITION:
-BYTE_OPCODE:	LD A,$2A						; $F111  ; '+N' (modified operand)
+BYTE_OPCODE:	LD A,$2A					; $F111  ; '+N' (modified operand)
 NOTE_EVENT: ADD A,(IX+transposition)		; $F113
 NOTE_OFF:	LD (IX+duration_counter),E		; $F116
 			LD (IX+vol_fade_speed),A		; $F119
-			CALL L_F1A1						; $F11C
+			CALL LOOKUP_CRL_TABLE						; $F11C
 			LD H,(IX+tone_register_ptr+1)	; $F11F
 			LD L,(IX+tone_register_ptr)		; $F122
 			LD (HL),$00						; $F125
@@ -10763,7 +10780,7 @@ NOTE_OFF:	LD (IX+duration_counter),E		; $F116
 			LD HL,$0008						; $F12A
 			ADD HL,DE						; $F12D
 			; copy 8 items (16 bit each)
-			LDI								; $F12E ; (DE)=(HL),inc DE,inc HL,dec BC
+			LDI								; $F12E ; (HL)->(DE), inc HL/DE, dec BC
 			LDI								; $F130
 			LDI								; $F132
 			LDI								; $F134
@@ -10778,78 +10795,85 @@ NOTE_OFF:	LD (IX+duration_counter),E		; $F116
 			LD HL,($F212)			; $F14A
 			LD ($F20A),HL			; $F14D
 			LD HL,$0000				; $F150
-			LD ($F206),HL			; $F153
+			LD (CRL_BLOCK),HL			; $F153
 L_F156:		LD A,(AY_R7)			; $F156
 			AND (IX+custom_env_ptr+1)			; $F159
 			OR L					; $F15C
 			AND $3F					; $F15D
 			LD (AY_R7),A			; $F15F
-L_F162:		CALL L_F1C9				; $F162  ; Envelope generator
+L_F162:		CALL ENVELOPE_MODULATION				; $F162  ; Envelope generator
 			LD H,(IX+tone_register_ptr+1)			; $F165
 			LD L,(IX+tone_register_ptr)			; $F168
 			LD A,(HL)				; $F16B
 			ADD A,C					; $F16C
 			SUB $80					; $F16D
 			LD (HL),A				; $F16F
-			LD HL,(STORE_AY)	; $F170
+			LD HL,(STORE_AY)		; $F170
 			LD A,H					; $F173
 			OR L					; $F174
 			RET Z					; $F175
-			LD A,(IX+vibrato_control)			; $F176
-			OR A					; $F179
-			JP NZ,L_F192			; $F17A
-			INC IX					; $F17D
-			INC IX					; $F17F
-			CALL L_F1C9				; $F181  ; Envelope generator
-			LD HL,(STORE_AY)	; $F184
-			LD B,$00				; $F187
-			ADD HL,BC				; $F189
-			LD C,$80				; $F18A
-			SBC HL,BC				; $F18C
-			LD (STORE_AY),HL	; $F18E
-			RET						; $F191
+			LD A,(IX+vibrato_control)	; $F176
+			OR A						; $F179
+			JP NZ,DO_FADE_VIBTA				; $F17A
+			INC IX						; $F17D
+			INC IX						; $F17F
+			CALL ENVELOPE_MODULATION		; $F181  ; Envelope generator
+			LD HL,(STORE_AY)			; $F184
+			LD B,$00					; $F187
+			ADD HL,BC					; $F189
+			LD C,$80					; $F18A
+			SBC HL,BC					; $F18C
+			LD (STORE_AY),HL			; $F18E
+			RET							; $F191
 
-L_F192:		DEC (IX+vol_fade_target)			; $F192
+DO_FADE_VIBTA:		
+			DEC (IX+vol_fade_target)			; $F192
 			LD A,(IX+vol_fade_speed)			; $F195
-			JR Z,L_F1A1				; $F198
+			JR Z,LOOKUP_CRL_TABLE				; $F198
 			ADD A,(IX+vibrato_control)			; $F19A
 			LD (IX+vol_fade_target),$01			; $F19D
 
-L_F1A1:		ADD A,A					; $F1A1
-			ADD A,$8E				; $F1A2
+LOOKUP_CRL_TABLE:		
+			ADD A,A					; $F1A1  ; A=Index (each item is 2 bytes)
+			ADD A,$8E				; $F1A2  ; Table base offset (low byte)
 			LD L,A					; $F1A4
-			ADC A,$F2				; $F1A5
-			SUB L					; $F1A7
-			LD H,A					; $F1A8
-			LD DE,STORE_AY		; $F1A9
-			LDI						; $F1AC
-			LDI						; $F1AE
-			RET						; $F1B0
+			ADC A,$F2				; $F1A5  ; High byte + carry
+			SUB L					; $F1A7  ; Isolate high byte (H=$F2+carry)
+			LD H,A					; $F1A8	 ; HL=Table entry
+			LD DE,STORE_AY			; $F1A9  ; (HL)->(DE), inc HL/DE, dec BC
+			LDI						; $F1AC  ; 2xbytes into STORE_AY
+			LDI						; $F1AE  ; 2xbytes into STORE_AY
+			RET						; $F1B0  ; HL = $F28E+(A*2) or has carry HL=$F38E+(A*2) 
 
-NOISE_MIXER:		LD IX,$F206				; $F1B1
-			CALL L_F1C9				; $F1B5 
-			LD HL,AY_R6				; $F1B8  ;Noise period
-			LD A,(HL)				; $F1BB
-			ADD A,C					; $F1BC
-			SUB $80					; $F1BD
-			LD (HL),A				; $F1BF
-			CP $11					; $F1C0
-			RET C					; $F1C2
-			INC HL					; $F1C3
-			LD A,(HL)				; $F1C4
-			OR $38					; $F1C5
-			LD (HL),A				; $F1C7
-			RET						; $F1C8
 
-; Envelope Generator Routine
-L_F1C9:		PUSH IX							; $F1C9
+; Noise Period Range: The AY-3-8910 noise period is 5-bit (max $1F).
+; Here values less than $11 are ignored!
+NOISE_MIXER:
+			LD IX,CRL_BLOCK				; $F1B1  ; noise chan control block (set around transposition time)
+			CALL ENVELOPE_MODULATION	; $F1B5 
+			LD HL,AY_R6					; $F1B8  ; Noise period reg
+			LD A,(HL)					; $F1BB  ; get noise period
+			ADD A,C						; $F1BC  ; Apply modulation offset
+			SUB $80						; $F1BD  ; Center the offset (signed)
+			LD (HL),A					; $F1BF  ; AY_R6 = period
+			CP $11						; $F1C0  ; 
+			RET C						; $F1C2  ; Period<$11, exit.
+			INC HL						; $F1C3  ; onto "AY_R7" mixer 
+			LD A,(HL)					; $F1C4  ; get mixer value
+			OR $38						; $F1C5  ; %00111000 (enable noise on channels A,B,C)
+			LD (HL),A					; $F1C7  ; update "AY_R7"
+			RET							; $F1C8
+
+; Generate Envelope Modulation
+ENVELOPE_MODULATION:		
+			PUSH IX							; $F1C9
 			POP HL							; $F1CB
 			LD D,(IX+env_data_ptr+1)		; $F1CC
 			LD E,(IX+env_data_ptr+0)		; $F1CF
 			INC (HL)						; $F1D2
 			LD A,(DE)						; $F1D3
 			SUB (HL)						; $F1D4  ; Compare with counter
-			LD C,$80						; $F1D5
+			LD C,$80						; $F1D5 
 			RET NZ							; $F1D7  ; Envelope still progressing, return
 			LD (HL),A						; $F1D8  ; Reset the envelope counter
 			INC DE							; $F1D9  ; Next envelope data
@@ -10889,41 +10913,42 @@ AY_R12:		defb $00	; $F202 ; R12 Envelope period - Coarse (8bit)
 AY_R13:		defb $0A	;* $F203 ; R13 Envelope shape (4bit)
 
 STORE_AY:	defb $00,$00							; $F204 
-			defb $4A,$01,$0A,$00,$00
+CRL_BLOCK:	defb $4A,$01							; $F206 
+			defb $0A,$00,$00
 			defb $00,$04,$00,$00,$00,$12,$00,$00	; $F20B
 			defb $00								; $F213
 
-envelope_step       EQU 0						; +$00	
-envelope_substep    EQU envelope_step+1   		; +$01
-env_phase           EQU envelope_substep+1  	; +$02	
-reserved	        EQU env_phase+1         	; +$03	
-env_data_ptr        EQU reserved+1       	 	; +$04
-env_base_speed      EQU env_data_ptr+2      	; +$06	
-env_speed_mod       EQU env_base_speed+1    	; +$07
-env_loop_counter    EQU env_speed_mod+1     	; +$08	
-reserved_09         EQU env_loop_counter+1  	; +$09
-arp_index           EQU reserved_09+1       	; +$0A	
-arp_speed           EQU arp_index+1         	; +$0B
-vibrato_depth       EQU arp_speed+1        		; +$0C 
-vibrato_speed       EQU vibrato_depth+1    		; +$0D 
-portamento_target   EQU vibrato_speed+1    		; +$0E
-portamento_speed    EQU portamento_target+1 	; +$0F
-ch_status           EQU portamento_speed+1  	; +$10	
-duration_counter    EQU ch_status+1         	; +$11
-current_data_ptr    EQU duration_counter+1  	; +$12
-loop_start_ptr      EQU current_data_ptr+2  	; +$14
-phrase_start_ptr    EQU loop_start_ptr+2   		; +$16
-transposition       EQU phrase_start_ptr+2  	; +$18
-env_override_flag   EQU transposition+1     	; +$19
-custom_env_ptr      EQU env_override_flag+1		; +$1A
-tone_register_ptr   EQU custom_env_ptr+2		; +$1C
-env_release_rate    EQU tone_register_ptr+2		; +$1E
-reserved_1F         EQU env_release_rate+1 		; +$1F
-vibrato_control     EQU reserved_1F+1     		; +$20
-vol_fade_speed      EQU vibrato_control+1		; +$21
-vol_fade_target     EQU vol_fade_speed+1 		; +$22
+envelope_step       EQU ENVELOPE_STEP-ENVELOPE_STEP		; +$00	
+envelope_substep    EQU ENVELOPE_SUBSTEP-ENVELOPE_STEP  ; +$01
+env_phase           EQU ENV_PHASE-ENVELOPE_STEP  		; +$02	
+reserved	        EQU RESERVED-ENVELOPE_STEP         	; +$03	
+env_data_ptr        EQU ENV_DATA_PTR-ENVELOPE_STEP      ; +$04 (2)
+env_base_speed      EQU ENV_BASE_SPEED-ENVELOPE_STEP    ; +$06
+env_speed_mod       EQU ENV_SPEED_MOD-ENVELOPE_STEP    	; +$07
+env_loop_counter    EQU ENV_LOOP_COUNTER-ENVELOPE_STEP  ; +$08	
+reserved_09         EQU RESERVED_09-ENVELOPE_STEP  		; +$09
+arp_index           EQU ARP_INDEX-ENVELOPE_STEP     	; +$0A	
+arp_speed           EQU ARP_SPEED-ENVELOPE_STEP         ; +$0B
+vibrato_depth       EQU VIBRATO_DEPTH-ENVELOPE_STEP     ; +$0C 
+vibrato_speed       EQU VIBRATO_SPEED-ENVELOPE_STEP     ; +$0D 
+portamento_target   EQU PORTAMENTO_TARGET-ENVELOPE_STEP ; +$0E
+portamento_speed    EQU PORTAMENTO_SPEED-ENVELOPE_STEP 	; +$0F
+ch_status           EQU CH_STATUS-ENVELOPE_STEP  		; +$10	
+duration_counter    EQU DURATION_COUNTER-ENVELOPE_STEP  ; +$11
+current_data_ptr    EQU CURRENT_DATA_PTR-ENVELOPE_STEP 	; +$12 (2)
+loop_start_ptr      EQU LOOP_START_PTR-ENVELOPE_STEP  	; +$14 (2)
+phrase_start_ptr    EQU PHRASE_START_PTR-ENVELOPE_STEP  ; +$16 (2)
+transposition       EQU TRANSPOSITION-ENVELOPE_STEP		; +$18
+env_override_flag   EQU ENV_OVERRIDE_FLAG-ENVELOPE_STEP	; +$19
+custom_env_ptr      EQU CUSTOM_ENV_PTR-ENVELOPE_STEP	; +$1A (2)
+tone_register_ptr   EQU TONE_REGISTER_PTR-ENVELOPE_STEP	; +$1C (2)
+env_release_rate    EQU ENV_RELEASE_RATE-ENVELOPE_STEP	; +$1E
+reserved_1F         EQU RESERVED_1F-ENVELOPE_STEP 		; +$1F
+vibrato_control     EQU VIBRATO_CONTROL-ENVELOPE_STEP   ; +$20
+vol_fade_speed      EQU VOL_FADE_SPEED-ENVELOPE_STEP	; +$21
+vol_fade_target     EQU VOL_FADE_TARGET-ENVELOPE_STEP 	; +$22
 
-; 35-byte Channel Control Block
+; 35-byte Channel Control Block (same for all channels)
 CHANNEL1: 						   ;  $F214
 ENVELOPE_STEP       defb $00       ; +$00  Current envelope position
 ENVELOPE_SUBSTEP    defb $02       ; +$01  Sub-step counter
@@ -10970,53 +10995,6 @@ CHANNEL3:	defb $00,$00,$00,$00								; $F25A ; IX Base
 			defb $2A,$00,$00,$00,$00,$00						; $F27D
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $F283 
 			defb $00,$00,$00									; $F28B 
-
-;
-;These indices point to the next table... TODO
-;It seems that some values wrap around... When they do, they still appear to
-;land at a valid location in another table lower in memory!
-;It's kind of odd, but it seems to work... I think this is how it behaves.
-; (these values are found after ENVELOPE_DATA)
-			; $DA,$02 = $2DA ; F3A6+2DA = $F680
-			; $E0,$02
-			; $9C,$03
-			; $A5,$03
-			; $B0,$03
-			; $E5,$03
-			; $6E,$04
-			; $F1,$04
-			; $18,$05
-			; $3F,$05
-			; $6C,$05
-			; $77,$05
-			; $7C,$05
-			; $97,$05
-			; $1A,$06
-			; $1D,$06
-			; $32,$06
-			; $C3,$06
-			; $E0,$06
-			; $F9,$06
-			; $14,$07
-			; $87,$07
-			; 8C,$07
-			; 96,$07
-			; $A4,$07
-			; $AE,$07
-			; $B8,$07
-			; $C8,$07
-			; $D8,$07
-			; $E2,$07
-			; $F0,$07
-			; $FE,$07
-			; $08,$08
-			; $18,$08
-			; $2A,$08
-			; $38,$08
-			; $3B,$08 
-			; $48,$08
-			; $5B,$08,$94,$08,$A7,$08,$C5,$08,$E2,$08,$4A,$1A,$58,$1A,$62,$1A,$AE,$1A,$CA,$1A,$E5,$1A,$00,$00,$C8,$80										
-
 
 
 ENVELOPE_DATA:			
