@@ -125,10 +125,11 @@ MAIN:		DI                      ; $6504        ; <- CALLED BY BASIC
 			LD BC,$0A03				; $6513
 			LDIR					; $6516
 
-			XOR A					; $6518
-			LD ($81A5),A			; $6519
-			LD ($7BFA),A			; $651C
-			OUT ($FE),A				; $651F ; boarder black
+			XOR A						; $6518 ; Zero reset
+			LD (MODE48K),A				; $6519
+
+			LD (SELECTED_WEAPON),A		; $651C	
+			OUT ($FE),A					; $651F ; boarder black
 
 			; Check speccy model, 48K or 128K to enable AY music flag.
 			LD A,($386E)			; $6521	; 48k ROM: holds $FF here
@@ -238,7 +239,7 @@ PAUSE_GAME: LD A,$FE				; $65EB
 			LD BC,$01F4				; $65F9  
 			CALL WAIT_21xBC			; $65FC
 
-L_65FF:		CALL L_6672				; $65FF  ; are the keys released
+L_65FF:		CALL ANY_KEY_DOWN		; $65FF  ; all keys released
 			JR NZ,L_65FF			; $6602
 	
 L_6604:		CALL GET_KEY			; $6604  ; pause - wait for key press
@@ -296,11 +297,24 @@ KeyTable:	; Key row mapping  ; $6649
 			defb $20,$02,"MNB" 
 			defb $0	; tables end marker
 
-L_6672:		XOR A				; $6672
-			IN A,($FE)			; $6673
-			CPL					; $6675
-			AND $1F				; $6676
-			RET					; $6678
+; -------------------------------------------------------------
+; $00FE (undocumented) - Unlike $7FFE (which detects keys 1,2,3,4 & 5 when A=$7F),
+; this port appears to show if *any* key is pressed.
+; 
+; Returns key status in A: 
+;   0 = at least one key is pressed
+;   1 = no keys are pressed
+;
+ANY_KEY_DOWN:   XOR A    ; $6672  ; A=0, Not a valid port, but works!
+          IN A,($FE)     ; $6673  ; Read keyboard
+          CPL            ; $6675  ; Invert bits (active low input)
+          AND $1F        ; $6676  ; Mask to check any of the 5 lowest bits
+          RET            ; $6678  ;
+
+; The hardware seems to detect if *any* key is down, 
+; but does not distinguish between the 8 half-rows (5 keys per row).
+; -------------------------------------------------------------
+
 
 L_6679:		PUSH HL				; $6679
 			PUSH DE				; $667A
@@ -1766,10 +1780,10 @@ L_70D3:
 			INC (HL)				; $70E4	
 			;-----------------------------------------------------------
 			; Disable AY music - menu option 6
-			LD A,($830A)			; $70E5
+			LD A,(AY_MUSIC_FLAG)			; $70E5
 			OR A					; $70E8
 			CALL Z,L_EF3B			; $70E9  ; Stop AY music
-			LD A,($830A)			; $70EC
+			LD A,(AY_MUSIC_FLAG)			; $70EC
 			OR A					; $70EF
 			JR Z,EXIT_IM2			; $70F0	 ; Get out - Don't play AY music
 			;----------------------------------------------------------
@@ -2805,92 +2819,85 @@ COUNTDOWN_TIMER				defb $00,$00		; $7A1B ; Egg Timer current
 COUNTDOWN_TIMER_RESET		defb $00,$00		; $7A1D ; Egg Timer reset
 
 
-L_7A1F:
-L_7A1F:
-			PUSH AF				; $7A1F
-			PUSH BC				; $7A20
-			PUSH HL				; $7A21
-			LD A,E				; $7A22
-			AND $03				; $7A23
-			LD L,A				; $7A25
+; draw ships shots
+L_7A1F: 	PUSH AF					; $7A1F
+			PUSH BC					; $7A20
+			PUSH HL					; $7A21
+			LD A,E					; $7A22
+			AND $03					; $7A23
+			LD L,A					; $7A25
 			LD H,$00				; $7A26
-			LD BC,$7A4C				; $7A28
+			LD BC,L_7A4C			; $7A28
 			ADD HL,BC				; $7A2B
 			LD C,(HL)				; $7A2C
 			CALL L_673B				; $7A2D
-			LD A,C				; $7A30
+			LD A,C					; $7A30
 			XOR (HL)				; $7A31
 			LD (HL),A				; $7A32
-			LD A,H				; $7A33
-			RRCA				; $7A34
-			RRCA				; $7A35
-			RRCA				; $7A36
-			AND $03				; $7A37
-			LD H,A				; $7A39
+			LD A,H					; $7A33
+			RRCA					; $7A34
+			RRCA					; $7A35
+			RRCA					; $7A36
+			AND $03					; $7A37
+			LD H,A					; $7A39
 			LD BC,$5B00				; $7A3A
 			ADD HL,BC				; $7A3D
 			LD A,(HL)				; $7A3E
-			OR A				; $7A3F
-			JR NZ,L_7A48				; $7A40
+			OR A					; $7A3F
+			JR NZ,L_7A48			; $7A40
 			LD BC,$FD00				; $7A42
 			ADD HL,BC				; $7A45
 			LD (HL),$47				; $7A46
-L_7A48:
-			POP HL				; $7A48
-			POP BC				; $7A49
-			POP AF				; $7A4A
-			RET				; $7A4B
+L_7A48:		POP HL					; $7A48
+			POP BC					; $7A49
+			POP AF					; $7A4A
+			RET						; $7A4B
+L_7A4C:		RET NZ					; $7A4C
+			JR NC,L_7A5B			; $7A4D
+			INC BC					; $7A4F
+L_7A50:		LD A,(InputOff)			; $7A50
+			OR A					; $7A53
+			RET NZ					; $7A54
+			LD A,(FIRE_BUTTON)		; $7A55
+			OR A					; $7A58
+			JR NZ,L_7A5F			; $7A59
+L_7A5B:		LD (SUPER_WEAPON_TIMER),A			; $7A5B
+			RET						; $7A5E
 
-			RET NZ				; $7A4C
-			JR NC,L_7A5B				; $7A4D
-			INC BC				; $7A4F
-L_7A50:
-			LD A,(InputOff)				; $7A50
-			OR A				; $7A53
-			RET NZ				; $7A54
-			LD A,(FIRE_BUTTON)				; $7A55
-			OR A				; $7A58
-			JR NZ,L_7A5F				; $7A59
-L_7A5B:
-			LD ($7AE9),A				; $7A5B
-			RET				; $7A5E
-
-L_7A5F:
-			LD A,($7AE9)				; $7A5F
-			OR A				; $7A62
+L_7A5F:		LD A,(SUPER_WEAPON_TIMER)			; $7A5F
+			OR A					; $7A62
 			JR Z,L_7A6B				; $7A63
-			INC A				; $7A65
-			RET Z				; $7A66
-			LD ($7AE9),A				; $7A67
-			RET				; $7A6A
+			INC A					; $7A65
+			RET Z					; $7A66
+			LD (SUPER_WEAPON_TIMER),A			; $7A67
+			RET						; $7A6A
 
-L_7A6B:
-			INC A				; $7A6B
-			LD ($7AE9),A				; $7A6C
-			LD DE,(POS_XY)				; $7A6F
-			LD A,($7AB4)				; $7A73
-			XOR $04				; $7A76
-			LD ($7AB4),A				; $7A78
-			ADD A,D				; $7A7B
-			LD D,A				; $7A7C
-			LD A,(DIRECTION)				; $7A7D
-			CP $FF				; $7A80
+L_7A6B:		INC A					; $7A6B
+			LD (SUPER_WEAPON_TIMER),A			; $7A6C
+			LD DE,(POS_XY)			; $7A6F
+			LD A,($7AB4)			; $7A73
+			XOR $04					; $7A76
+			LD ($7AB4),A			; $7A78
+			ADD A,D					; $7A7B
+			LD D,A					; $7A7C
+			LD A,(DIRECTION)		; $7A7D
+			CP $FF					; $7A80
 			LD A,$05				; $7A82
-			JR NZ,L_7A88				; $7A84
+			JR NZ,L_7A88			; $7A84
 			LD A,$01				; $7A86
 L_7A88:
-			ADD A,E				; $7A88
-			LD E,A				; $7A89
-			LD A,(DIRECTION)				; $7A8A
-			ADD A,A				; $7A8D
-			ADD A,A				; $7A8E
+			ADD A,E					; $7A88
+			LD E,A					; $7A89
+			LD A,(DIRECTION)		; $7A8A
+			ADD A,A					; $7A8D
+			ADD A,A					; $7A8E
 			CALL L_7AB5				; $7A8F
-			LD A,($6AEE)				; $7A92
-			OR A				; $7A95
-			RET Z				; $7A96
-			LD DE,(POS_XY)				; $7A97
-			LD A,(DIRECTION)				; $7A9B
-			CP $FF				; $7A9E
+			LD A,($6AEE)			; $7A92
+			OR A					; $7A95
+			RET Z					; $7A96
+			LD DE,(POS_XY)			; $7A97
+			LD A,(DIRECTION)		; $7A9B
+			CP $FF					; $7A9E
 			LD A,$0E				; $7AA0
 			LD C,$04				; $7AA2
 			JR Z,L_7AAA				; $7AA4
@@ -2946,7 +2953,7 @@ L_7ABD:
 			LD (HL),$00					; $7AE6
 			RET							; $7AE8
 
-			NOP				; $7AE9
+SUPER_WEAPON_TIMER:			defb $00  ; NOP				; $7AE9
 
 
 L_7AEA:		LD A,$03				; $7AEA
@@ -3030,10 +3037,10 @@ L_7B67:
 
 L_7B6E:
 			LD A,C				; $7B6E
-			LD ($7BFA),A				; $7B6F
+			LD (SELECTED_WEAPON),A				; $7B6F
 L_7B72:
 			LD C,$47				; $7B72
-			LD A,($7BFA)				; $7B74
+			LD A,(SELECTED_WEAPON)				; $7B74
 			LD HL,$C2F1				; $7B77
 			LD ($6C55),HL				; $7B7A
 			ADD A,A				; $7B7D
@@ -3066,36 +3073,39 @@ L_7B8D:
 			LD E,$15				; $7BA5
 			JP Display3DigitNumber				; $7BA7
 
-	
-BOMBS_LABEL:    defb "BOMBS      "      ; $7BAA  "BOMBS" (11 chars)
-    			defb $00           		; $7BB5
-    			defb $5C, $7C      		; $7BB6 
-BOMBS_MAX:      defb $14               	; $7BB8 - Maximum bombs allowed
-BOMBS_USED:     defb $14               	; $7BB9 - Bombs currently used
-MINES_LABEL:    defb "MINES      "      ; $7BBA  "MINES"
-    			defb $00           		; $7BC5
-    			defb $CE, $7D      		; $7BC6 
-MINES_MAX:      defb $14               	; $7BC8 - Maximum mines allowed
-MINES_USED:     defb $14               	; $7BC9 - Mines currently used
-SHIELD_LABEL:   defb "SHIELD     "      ; $7BCA  "SHIELD"
-    			defb $00           		; $7BD4
-    			defb $76, $7E      		; $7BD5 
-SHIELD_MAX:     defb $01               	; $7BD8 - Maximum shield allowed
-SHIELD_USED:    defb $01               	; $7BD9 - Shield currently used
-BOUNCE_LABEL:   defb "BOUNCE     "    	; $7BDA  "BOUNCE"
-    			defb $00           		; $7BE4
-    			defb $95, $7E      		; $7BE5 
-BOUNCE_MAX:     defb $05               	; $7BE8 - Maximum bounce allowed
-BOUNCE_USED:    defb $05               	; $7BE9 - Bounce currently used
-SEEKER_LABEL:   defb "SEEKER     "      ; $7BEA  "SEEKER"W
-    			defb $00           		; $7BF4
-    			defb $0E, $80      		; $7BF5 
-SEEKER_MAX:     defb $05               	; $7BF8 - Maximum seeker allowed
-SEEKER_USED:    defb $05               	; $7BF9 - Seeker currently used
 
-	
+; ------------------------------------------------------------------------
+; Super Weapons Table
+; Each super weapon structure takes 16 bytes 
+BOMBS_LABEL:   		defb "BOMBS      "      ; $7BAA  "BOMBS" (space padded to 11 chars)
+    				defb $00           		; $7BB5
+    				defb $5C, $7C      		; $7BB6 
+BOMBS_MAX:     		defb $14               	; $7BB8 - Maximum bombs allowed
+BOMBS_USED:    		defb $14               	; $7BB9 - Bombs currently used
+MINES_LABEL:   		defb "MINES      "      ; $7BBA  "MINES"
+    				defb $00           		; $7BC5
+    				defb $CE, $7D      		; $7BC6 
+MINES_MAX:     		defb $14               	; $7BC8 - Maximum mines allowed
+MINES_USED:    		defb $14               	; $7BC9 - Mines currently used
+SHIELD_LABEL:  		defb "SHIELD     "      ; $7BCA  "SHIELD"
+    				defb $00           		; $7BD4
+    				defb $76, $7E      		; $7BD5 
+SHIELD_MAX:    		defb $01               	; $7BD8 - Maximum shield allowed
+SHIELD_USED:   		defb $01               	; $7BD9 - Shield currently used
+BOUNCE_LABEL:  		defb "BOUNCE     "    	; $7BDA  "BOUNCE"
+    				defb $00           		; $7BE4
+    				defb $95, $7E      		; $7BE5 
+BOUNCE_MAX:    		defb $05               	; $7BE8 - Maximum bounce allowed
+BOUNCE_USED:   		defb $05               	; $7BE9 - Bounce currently used
+SEEKER_LABEL:  		defb "SEEKER     "      ; $7BEA  "SEEKER"W
+    				defb $00           		; $7BF4
+    				defb $0E, $80      		; $7BF5 
+SEEKER_MAX:    		defb $05               	; $7BF8 - Maximum seeker allowed
+SEEKER_USED:   		defb $05               	; $7BF9 - Seeker currently used
+					
+SELECTED_WEAPON:	defb $00 				; $7BFA  ; super weapon currently picked
+					defb $00  				; $7BFB  ; not used
 
-				defb $00,$00            ; $7BFA
 
 L_7BFC:
 			LD DE,$0010				; $7BFC
@@ -3108,53 +3118,50 @@ L_7C05:
 			DJNZ L_7C05				; $7C0D
 			RET				; $7C0F
 
-L_7C10:
-			LD A,(InputOff)				; $7C10
-			OR A				; $7C13
-			RET NZ				; $7C14
+L_7C10:		LD A,(InputOff)				; $7C10
+			OR A						; $7C13
+			RET NZ						; $7C14
 			LD DE,(POS_XY)				; $7C15
-			LD A,E				; $7C19
-			CP $79				; $7C1A
-			RET NC				; $7C1C
-			LD A,D				; $7C1D
-			CP $B1				; $7C1E
-			RET NC				; $7C20
-			CP $20				; $7C21
-			RET C				; $7C23
-			LD A,($7AE9)				; $7C24
-			CP $05			; $7C27
-			RET C				; $7C29
-			LD HL,($7BFA)				; $7C2A
-			ADD HL,HL				; $7C2D
-			ADD HL,HL				; $7C2E
-			ADD HL,HL				; $7C2F
-			ADD HL,HL				; $7C30
-			LD BC,$7BB5				; $7C31
-			ADD HL,BC				; $7C34
-			LD A,(HL)				; $7C35
-			OR A				; $7C36
-			RET Z				; $7C37    ; ? NOP for Infinite Weapons ?
-			PUSH HL				; $7C38
-			INC HL				; $7C39
-			LD A,(HL)				; $7C3A
-			INC HL				; $7C3B
-			LD H,(HL)				; $7C3C
-			LD L,A				; $7C3D
-			XOR A				; $7C3E
+			LD A,E						; $7C19
+			CP $79						; $7C1A
+			RET NC						; $7C1C
+			LD A,D						; $7C1D
+			CP $B1						; $7C1E
+			RET NC						; $7C20
+			CP $20						; $7C21
+			RET C						; $7C23
+			LD A,(SUPER_WEAPON_TIMER)	; $7C24
+			CP $05						; $7C27  ;  Active time for super weapons
+			RET C						; $7C29
+			LD HL,(SELECTED_WEAPON)		; $7C2A	 ;  Super weapons base
+			ADD HL,HL					; $7C2D  ;  X2
+			ADD HL,HL					; $7C2E  ;  X4
+			ADD HL,HL					; $7C2F  ;  X8
+			ADD HL,HL					; $7C30  ;  X16 (struct is 16bytes)
+			LD BC,BOMBS_LABEL+11		; $7C31  ; note: starting just past 11char string 
+			ADD HL,BC					; $7C34	 ; index into super weapon
+			LD A,(HL)					; $7C35
+			OR A						; $7C36
+			RET Z						; $7C37  ; Super weapon is empty
+			PUSH HL						; $7C38
+			INC HL						; $7C39
+			LD A,(HL)					; $7C3A
+			INC HL						; $7C3B
+			LD H,(HL)					; $7C3C
+			LD L,A						; $7C3D
+			XOR A						; $7C3E
 			LD ($7C54),A				; $7C3F
-			JP (HL)				; $7C42
-L_7C43:
-L_7C43:
-			POP HL				; $7C43
+			JP (HL)						; $7C42
+L_7C43:		POP HL						; $7C43
 			LD A,($7C54)				; $7C44
-			OR A				; $7C47
-			RET Z				; $7C48
-			LD A,(HL)				; $7C49
-			DEC A				; $7C4A			; shields
-			LD (HL),A				; $7C4B
-			LD DE,$0211				; $7C4C
-			LD C,$47				; $7C4F
-			JP Display3DigitNumber				; $7C51
+			OR A						; $7C47
+			RET Z						; $7C48
+			LD A,(HL)					; $7C49
+			DEC A						; $7C4A	 ; shields
+			LD (HL),A					; $7C4B
+			LD DE,$0211					; $7C4C
+			LD C,$47					; $7C4F
+			JP Display3DigitNumber		; $7C51
 
 			NOP				; $7C54
 			XOR A				; $7C55
@@ -3922,80 +3929,80 @@ L_81A0:		OR A				; $81A0
 			POP DE				; $81A2
 			POP BC				; $81A3
 			RET					; $81A4
-			NOP					; $81A5
 
-DO_MENU:	
-			CALL CLR_SCREEN				; $81A6  ; clear screen
+
+MODE48K:	defb $0		; $81A5  ; looks like a dev skip 48k music thing
+
+DO_MENU:	CALL CLR_SCREEN				; $81A6  ; clear screen
 			CALL DRAW_MENU_BORDERS		; $81A9  ; Draw menu borders
 
-			LD HL,$8235				; $81AC
-			CALL L_6B29				; $81AF
+			LD HL,$8235					; $81AC
+			CALL L_6B29					; $81AF
 
-			LD A,(SpeccyModel)		; $81B2
-			OR A					; $81B5
-			JR NZ,L_81CB			; $81B6
-			LD A,($81A5)			; $81B8
-			OR A					; $81BB
-			JR NZ,L_81CB			; $81BC
-			DI						; $81BE
-			CALL START_BEEP_MUSIC	; $81BF
-			CALL BEEP_MUSIC_LOOP	; $81C2
-			EI						; $81C5
-			LD A,$01				; $81C6
-			LD ($81A5),A			; $81C8
-L_81CB:		CALL L_6672				; $81CB
-			JP NZ,L_81CB			; $81CE
-			LD BC,$01F4				; $81D1
-L_81D4:		PUSH BC					; $81D4
+			LD A,(SpeccyModel)			; $81B2  ; 0=48k, 1=128k
+			OR A						; $81B5
+			JR NZ,L_81CB				; $81B6
+			LD A,(MODE48K)				; $81B8
+			OR A						; $81BB
+			JR NZ,L_81CB				; $81BC
+			DI							; $81BE
+			CALL START_BEEP_MUSIC		; $81BF
+			CALL BEEP_MUSIC_LOOP		; $81C2
+			EI							; $81C5
+			LD A,$01					; $81C6
+			LD (MODE48K),A				; $81C8 ; 48k
 
-			CALL SCROLL_BORDER		; $81D5  ; scrolling boarder effect
+L_81CB:		CALL ANY_KEY_DOWN			; $81CB
+			JP NZ,L_81CB				; $81CE
 
-			CALL L_82E5				; $81D8  ; menu text
-			CALL GET_KEY			; $81DB
-			POP BC					; $81DE
-			CP $31					; $81DF
-			JR C,L_8229				; $81E1
-			CP $37					; $81E3
-			JR NC,L_8229			; $81E5
-			CP $31					; $81E7
-			RET Z					; $81E9
-			CP $32					; $81EA
-			JP Z,$830C				; $81EC
-			CP $36					; $81EF
-			JR NZ,L_8214			; $81F1
+			LD BC,$01F4					; $81D1
+L_81D4:		PUSH BC						; $81D4
+			CALL SCROLL_BORDER			; $81D5  ; scrolling boarder effect
+			CALL L_82E5					; $81D8  ; menu text
+			CALL GET_KEY				; $81DB
+			POP BC						; $81DE
+			CP $31						; $81DF  ; invalid key (<'1')
+			JR C,INVALID_KEY_PRESS		; $81E1
+			CP $37						; $81E3  ; invalid key (>='7')
+			JR NC,INVALID_KEY_PRESS		; $81E5
+			CP $31						; $81E7  ; '1'
+			RET Z						; $81E9
+			CP $32						; $81EA  ; '2'
+			JP Z,REDEFINE_KEYS			; $81EC
+			CP $36						; $81EF  ; '6'
+			JR NZ,L_8214				; $81F1
+			LD A,(AY_MUSIC_FLAG)		; $81F3  ; 
+			XOR $01						; $81F6  ; Toggle AY music ON/OFF
+			LD (AY_MUSIC_FLAG),A		; $81F8  ;
 
-			LD A,($830A)			; $81F3  ; 
-			XOR $01					; $81F6  ; Toggle AY music ON/OFF
-			LD ($830A),A			; $81F8  ;
-
-			PUSH BC					; $81FB
-			CALL L_EF3B				; $81FC
-			LD E,$01				; $81FF
+			PUSH BC						; $81FB
+			CALL L_EF3B					; $81FC
+			LD E,$01					; $81FF
 			CALL PLAY_SFX				; $8201
-			POP BC					; $8204
-L_8205:		CALL L_82E5				; $8205
-			CALL L_6672				; $8208
-			CALL NZ,SCROLL_BORDER	; $820B
-			JP NZ,L_8205			; $820E
-			JP L_8229				; $8211
-L_8214:		SUB $33					; $8214
-			LD E,A					; $8216
+			POP BC						; $8204
+L_8205:		CALL L_82E5					; $8205
+			CALL ANY_KEY_DOWN			; $8208
+			CALL NZ,SCROLL_BORDER		; $820B
+			JP NZ,L_8205				; $820E
+			JP INVALID_KEY_PRESS		; $8211
+L_8214:		SUB $33						; $8214
+			LD E,A						; $8216
 			LD A,(INPUT_TYPE)			; $8217
-			CP E					; $821A
-			JR Z,L_8229				; $821B
-			LD A,E					; $821D
+			CP E						; $821A
+			JR Z,INVALID_KEY_PRESS		; $821B
+			LD A,E						; $821D
 			LD (INPUT_TYPE),A			; $821E
-			PUSH BC					; $8221
-			LD HL,$8235				; $8222
-			CALL L_6B29				; $8225
-
-			POP BC					; $8228
-L_8229:		DEC BC					; $8229
-			LD A,B					; $822A
-			OR C					; $822B
-			JP NZ,L_81D4			; $822C
-			CALL L_9433				; $822F   ; Hi-Scores
-			JP DO_MENU				; $8232
+			PUSH BC						; $8221
+			LD HL,$8235					; $8222
+			CALL L_6B29					; $8225
+			POP BC						; $8228
+INVALID_KEY_PRESS:			
+			DEC BC						; $8229
+			LD A,B						; $822A
+			OR C						; $822B
+			JP NZ,L_81D4				; $822C
+			CALL L_9433					; $822F   ; Hi-Scores
+			JP DO_MENU					; $8232
 
 			defb $EB,$00,$E6,$F1,$C2,$DF                        ; $8235 ......
 			defb $09,$08,$E0,$45,$42,$59,$20,$52				; $823B ...EBY R
@@ -4021,117 +4028,128 @@ L_8229:		DEC BC					; $8229
 			defb $38,$38,$20,$48,$45,$57,$53,$4F				; $82DB 88 HEWSO
 			defb $4E,$FF                                        ; $82E3 N.
 
-L_82E5:
-			PUSH BC				; $82E5
+L_82E5:		PUSH BC							; $82E5
 			LD A,(INPUT_TYPE)				; $82E6
-			ADD A,$0F				; $82E9
-			ADD A,A				; $82EB
-			ADD A,A				; $82EC
-			ADD A,A				; $82ED
-			LD D,A				; $82EE
-			LD E,$2C				; $82EF
-			CALL GET_ATTRIBUTE_AS_HL				; $82F1
-			LD A,($830B)				; $82F4
-			INC A				; $82F7
-			LD ($830B),A				; $82F8
-			AND $07				; $82FB
-			ADD A,$40				; $82FD
-			LD (HL),A				; $82FF
-			LD E,L				; $8300
-			LD D,H				; $8301
-			INC E				; $8302
-			LD BC,$000F				; $8303
-			LDIR				; $8306
-			POP BC				; $8308
-			RET				; $8309
+			ADD A,$0F						; $82E9
+			ADD A,A							; $82EB
+			ADD A,A							; $82EC
+			ADD A,A							; $82ED
+			LD D,A							; $82EE
+			LD E,$2C						; $82EF
+			CALL GET_ATTRIBUTE_AS_HL		; $82F1
+			LD A,($830B)					; $82F4
+			INC A							; $82F7
+			LD ($830B),A					; $82F8
+			AND $07							; $82FB
+			ADD A,$40						; $82FD
+			LD (HL),A						; $82FF
+			LD E,L							; $8300
+			LD D,H							; $8301
+			INC E							; $8302
+			LD BC,$000F						; $8303
+			LDIR							; $8306
+			POP BC							; $8308
+			RET								; $8309
 
-;???????????
-			LD BC,$CD00						; $830A
-			XOR D							; $830D
-			LD H,(HL)						; $830E
+;Unresolved targets:
+ ; • $6501
+ ; • $6B29
+ ; • $830C
+ ; • $84F5
+ ; • $8E31
+ ; • $A29C
+ ; • $C067
+
+
+; ---------------------------------------------------------------
+;;;	LD BC,$CD00						; $830A
+AY_MUSIC_FLAG:	defb $01			; $830A	
+				defb $00			; $830B		
+; ---------------------------------------------------------------
+
+REDEFINE_KEYS:		CALL CLR_SCREEN		; $830C		 ; CALL $66AA
+ 			;	XOR D							; $830D  ; wonky disassembly
+			;	LD H,(HL)						; $830E  ;
+
 			CALL DRAW_MENU_BORDERS			; $830F
 			XOR A							; $8312
 			LD (INPUT_TYPE),A				; $8313
 			LD HL,$83FA						; $8316
 			CALL L_6B29						; $8319
 			LD IX,$681D						; $831C
-			LD IY,$83F1						; $8320  ; stores x4 redefined keys
-			LD DE,$0C0F						; $8324
-			LD B,$04						; $8327
-L_8329:
-			PUSH BC				; $8329
-			LD A,$3F				; $832A
-			LD C,$44				; $832C
+			LD IY,$83F1						; $8320  ; get redefined keys base
+			LD DE,$0C0F						; $8324	 ; Y/X coords of new keys
+			LD B,$04						; $8327  ; amount to define
+
+L_8329:		PUSH BC						; $8329
+			LD A,$3F					; $832A
+			LD C,$44					; $832C
 			CALL ICON16x16				; $832E
-			PUSH DE				; $8331
-L_8332:
-			CALL L_6672				; $8332
-			CALL NZ,SCROLL_BORDER				; $8335
-			JP NZ,L_8332				; $8338
-L_833B:
+			PUSH DE						; $8331
+
+RELEASE_KEYS:	
+			CALL ANY_KEY_DOWN					; $8332
+			CALL NZ,SCROLL_BORDER		; $8335
+			JP NZ,RELEASE_KEYS			; $8338
+
+LOOP_INPUT:
 			CALL GET_KEY				; $833B
-			OR A				; $833E
-			CALL Z,SCROLL_BORDER				; $833F
-			JP Z,L_833B				; $8342
+			OR A						; $833E
+			CALL Z,SCROLL_BORDER		; $833F
+			JP Z,LOOP_INPUT					; $8342
+			
 			LD (IX+$02),D				; $8345
 			LD (IX+$06),E				; $8348
-			LD DE,$000A				; $834B
-			ADD IX,DE				; $834E
+			LD DE,$000A					; $834B
+			ADD IX,DE					; $834E
 			LD (IY+$00),A				; $8350
-			INC IY				; $8353
-			POP DE				; $8355
-			LD HL,$83C1				; $8356
-			CP $20				; $8359
+			INC IY						; $8353
+			POP DE						; $8355
+			LD HL,$83C1					; $8356
+			CP $20						; $8359
 			JR NZ,L_8360				; $835B
-			LD HL,$83C5				; $835D
-L_8360:
-			CP $0D				; $8360
+			LD HL,$83C5					; $835D
+L_8360:		CP $0D						; $8360
 			JR NZ,L_8367				; $8362
-			LD HL,$83CD				; $8364
-L_8367:
-			CP $01				; $8367
+			LD HL,$83CD					; $8364
+L_8367:		CP $01						; $8367
 			JR NZ,L_836E				; $8369
-			LD HL,$83D5				; $836B
-L_836E:
-			CP $02				; $836E
+			LD HL,$83D5					; $836B
+L_836E:		CP $02						; $836E
 			JR NZ,L_8375				; $8370
-			LD HL,$83E2				; $8372
-L_8375:
-			LD ($83C1),A				; $8375
-			LD C,$44				; $8378
-			CALL L_6B29				; $837A
-			POP BC					; $837D
-			DJNZ L_8329				; $837E
-			LD BC,$C350				; $8380
+			LD HL,$83E2					; $8372
+L_8375:		LD ($83C1),A				; $8375
+			LD C,$44					; $8378
+			CALL L_6B29					; $837A
+			POP BC						; $837D
+			DJNZ L_8329					; $837E
+			LD BC,$C350					; $8380
 			CALL WAIT_21xBC				; $8383
 			CALL WAIT_21xBC				; $8386
-			LD HL,$83F1				; $8389
-
-			LD DE,CHEAT_KEYS		; $838C  ; load cheat keys
-			LD B,$04				; $838F
-L_8391: 	LD A,(DE)				; $8391
-			CP (HL)					; $8392
-			JP NZ,DO_MENU			; $8393
-			INC HL					; $8396
-			INC DE					; $8397  ; look at next cheat key
-			DJNZ L_8391				; $8398
-
-			LD A,($8F4F)			; $839A
-			XOR $35					; $839D
-			LD ($8F4F),A			; $839F
-			JP NZ,DO_MENU			; $83A2
-			LD A,$04				; $83A5
-			CALL L_85B0				; $83A7
-			LD E,$22				; $83AA
+			LD HL,$83F1					; $8389
+			LD DE,CHEAT_KEYS			; $838C  ; load cheat keys
+			LD B,$04					; $838F
+L_8391: 	LD A,(DE)					; $8391
+			CP (HL)						; $8392
+			JP NZ,DO_MENU				; $8393
+			INC HL						; $8396
+			INC DE						; $8397  ; look at next cheat key
+			DJNZ L_8391					; $8398
+			LD A,($8F4F)				; $839A
+			XOR $35						; $839D
+			LD ($8F4F),A				; $839F
+			JP NZ,DO_MENU				; $83A2
+			LD A,$04					; $83A5
+			CALL L_85B0					; $83A7
+			LD E,$22					; $83AA
 			CALL PLAY_SFX				; $83AC
-			LD B,$64				; $83AF
-L_83B1:
-			CALL SCROLL_BORDER				; $83B1
-			DJNZ L_83B1				; $83B4
-			CALL L_EF3B				; $83B6
-			LD E,$01				; $83B9
+			LD B,$64					; $83AF
+L_83B1:		CALL SCROLL_BORDER			; $83B1
+			DJNZ L_83B1					; $83B4
+			CALL L_EF3B					; $83B6
+			LD E,$01					; $83B9
 			CALL PLAY_SFX				; $83BB
-			JP DO_MENU				; $83BE
+			JP DO_MENU					; $83BE
 
 				defb $3F,$7A                                        ; $83C1 ?z
 				defb $FF,$FF,$53,$50,$41,$43,$45,$7A				; $83C3 ..SPACEz
@@ -4141,7 +4159,7 @@ L_83B1:
 				defb $59,$4D,$42,$4F,$4C,$20,$53,$48				; $83E3 YMBOL SH
 				defb $49,$46,$54,$7A,$F4,$FF						; $83EB IFTz..
 
-DEFINE_KEYS:	defb $00,$00,$00,$00								; $83E1	x4 keys saved here
+DEFINE_KEYS:	defb $00,$00,$00,$00								; $83F1	x4 keys saved here
 				defb $00											; $83F3
 CHEAT_KEYS:		defb $59,$58,$45,$53								; $83F6 YXES
 
@@ -4237,7 +4255,8 @@ L_84C8:
 			defb $6B,$6C ; REMOVED ,$76             ; $84F3 kl
 			; UPDATED TO USE INSTRUCTION
 
-SCROLL_BORDER:		HALT				; $84F5
+SCROLL_BORDER:		
+			HALT				; $84F5
 			PUSH AF				; $84F6
 			PUSH BC				; $84F7
 			PUSH DE				; $84F8
@@ -6107,7 +6126,7 @@ L_9452:
 			LD E,$08				; $945C
 			DJNZ L_944F				; $945E
 L_9460:
-			CALL L_6672				; $9460
+			CALL ANY_KEY_DOWN				; $9460
 			CALL NZ,SCROLL_BORDER				; $9463
 			JP NZ,L_9460				; $9466
 			LD BC,$00AF				; $9469
@@ -6212,7 +6231,7 @@ L_95C8:
 			LD BC,$03E8				; $95C8
 			CALL WAIT_21xBC				; $95CB
 L_95CE:
-			CALL L_6672				; $95CE
+			CALL ANY_KEY_DOWN				; $95CE
 			CALL NZ,SCROLL_BORDER				; $95D1
 			JR NZ,L_95CE				; $95D4
 			PUSH DE				; $95D6
@@ -6271,7 +6290,7 @@ L_961F:
 			LD BC,$0008				; $9623
 			LDIR				; $9626
 L_9628:
-			CALL L_6672				; $9628
+			CALL ANY_KEY_DOWN				; $9628
 			CALL NZ,SCROLL_BORDER				; $962B
 			JP NZ,L_9628				; $962E
 			CALL L_9433				; $9631
@@ -6289,7 +6308,7 @@ L_963E:
 			JP L_9553				; $9645
 
 L_9648:
-			CALL L_6672				; $9648
+			CALL ANY_KEY_DOWN				; $9648
 			JP NZ,L_9648				; $964B
 			LD BC,$0352				; $964E
 L_9651:
@@ -7278,49 +7297,46 @@ L_A0F6:		LD (IX+$00),$00				; $A0F6
 			LD B,(IX+$03)				; $A0FD
 			LD L,(IX+$04)				; $A100
 			LD H,(IX+$05)				; $A103
-			XOR A				; $A106
-			CALL DRAW4X4SPRITE				; $A107
-			LD BC,$0006				; $A10A
-			ADD IX,BC				; $A10D
-			JP L_A08F				; $A10F
-
+			XOR A						; $A106
+			CALL DRAW4X4SPRITE			; $A107
+			LD BC,$0006					; $A10A
+			ADD IX,BC					; $A10D
+			JP L_A08F					; $A10F
 			LD A,($6AEE)				; $A112
-			OR A				; $A115
+			OR A						; $A115
 			JP NZ,L_A0F6				; $A116
-			LD A,$01				; $A119
+			LD A,$01					; $A119
 			LD ($6AEE),A				; $A11B
 			LD DE,(POS_XY)				; $A11E
-			LD B,D				; $A122
-			LD C,E				; $A123
-			CALL L_6953				; $A124
-			JP L_A0F6				; $A127
-
-			LD A,($7BFA)				; $A12A
-			ADD A,A				; $A12D
-			ADD A,A				; $A12E
-			ADD A,A				; $A12F
-			ADD A,A				; $A130
-			LD H,$00				; $A131
-			LD L,A				; $A133
-			LD BC,$7BB5				; $A134
-			ADD HL,BC				; $A137
-			LD C,(HL)				; $A138
-			INC C				; $A139
-			INC HL				; $A13A
-			INC HL				; $A13B
-			INC HL				; $A13C
-			INC HL				; $A13D
-			LD A,(HL)				; $A13E
-			CP C				; $A13F
-			JP C,L_A0F6				; $A140
-			DEC HL				; $A143
-			DEC HL				; $A144
-			DEC HL				; $A145
-			DEC HL				; $A146
-			LD (HL),C				; $A147
-			CALL L_7B72				; $A148
-			JP L_A0F6				; $A14B
-
+			LD B,D						; $A122
+			LD C,E						; $A123
+			CALL L_6953					; $A124
+			JP L_A0F6					; $A127
+			LD A,(SELECTED_WEAPON)		; $A12A
+			ADD A,A						; $A12D
+			ADD A,A						; $A12E
+			ADD A,A						; $A12F
+			ADD A,A						; $A130
+			LD H,$00					; $A131
+			LD L,A						; $A133
+			LD BC,$7BB5					; $A134
+			ADD HL,BC					; $A137
+			LD C,(HL)					; $A138
+			INC C						; $A139
+			INC HL						; $A13A
+			INC HL						; $A13B
+			INC HL						; $A13C
+			INC HL						; $A13D
+			LD A,(HL)					; $A13E
+			CP C						; $A13F
+			JP C,L_A0F6					; $A140
+			DEC HL						; $A143
+			DEC HL						; $A144
+			DEC HL						; $A145
+			DEC HL						; $A146
+			LD (HL),C					; $A147
+			CALL L_7B72					; $A148
+			JP L_A0F6					; $A14B
 			LD A,($6AF3)				; $A14E
 			OR A						; $A151
 			JP NZ,L_A0F6				; $A152
