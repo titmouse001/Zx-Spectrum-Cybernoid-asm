@@ -694,40 +694,42 @@ MOVE_SHIP:  LD A,(InputOff)			; $68AC
 			XOR L					; $68C0	 ; Check Left or Right pressed
 			JR Z,DONE_X				; $68C1
 			BIT 0,L					; $68C3
-			JR NZ,L_68EC			; $68C5  ; moves ship left
+			JR NZ,MOVE_SHIP_LEFT	; $68C5  ; moves ship left
 
-			LD A,($696B)			; $68C7 ; block move
+			LD A,(DIRECTION)		; $68C7 ; block move
 			CP $FF					; $68CA
 			LD A,$01				; $68CC
-			LD ($696B),A			; $68CE ; set as 1
-			JR NZ,L_68D9			; $68D1 ; moves ship right
+			LD (DIRECTION),A		; $68CE ; set as 1
+			JR NZ,MOVE_SHIP_RIGHT	; $68D1 ; moves ship right
 			LD ($696F),A			; $68D3
 			JP DONE_X				; $68D6
 
-; moves ship right
-L_68D9:		LD A,E					; $68D9
-			CP $78					; $68DA
-			CALL Z,L_71B4			; $68DC
-			CALL L_6972				; $68DF  ; move ship X
+MOVE_SHIP_RIGHT:		
+			LD A,E					; $68D9
+			CP $78					; $68DA  ; Xpos (logical so 1/2 width) 
+			CALL Z,UPDATE_SCENE		; $68DC  ; trigger scene update
+			CALL CHECK_SCENE_RIGHT	; $68DF  ; check scene hit going right
+
 			JR NZ,DONE_X			; $68E2
 			INC E					; $68E4  ; xpos+=1 
 			LD A,$01				; $68E5
 			LD ($696F),A			; $68E7  ; set as 1
 			JR DONE_X				; $68EA
 
-; moves ship left
-L_68EC:		LD A,($696B)			; $68EC
+MOVE_SHIP_LEFT:		
+			LD A,(DIRECTION)		; $68EC
 			CP $01					; $68EF
 			LD A,$FF				; $68F1
-			LD ($696B),A			; $68F3 ; set as $ff
+			LD (DIRECTION),A		; $68F3 ; set as $ff
 			JR NZ,L_68FE			; $68F6
 			LD ($696F),A			; $68F8
 			JP DONE_X				; $68FB
 
 L_68FE:		LD A,E					; $68FE
 			OR A					; $68FF
-			CALL Z,L_71B4			; $6900 ; move ship X
-			CALL L_699C				; $6903
+			CALL Z,UPDATE_SCENE		; $6900 ; move ship X
+			CALL CHECK_SCENE_LEFT				; $6903 ; check scene hit going left
+
 			JR NZ,DONE_X			; $6906
 			DEC E					; $6908	; xpos-=1; 
 			LD A,$01				; $6909
@@ -738,10 +740,12 @@ DONE_X: 	LD A,(UP_BUTTON)	; $690E	; get only up
 			JR Z,DONE_Y			; $6912
 			LD A,$FE			; $6914
 			LD ($696C),A		; $6916
+
 			LD A,D				; $6919
 			CP $20				; $691A
-			CALL Z,L_71B4		; $691C
-			CALL L_69E6			; $691F  ; move ship Y
+			CALL Z,UPDATE_SCENE		; $691C
+			CALL CHECK_SCENE_UP			; $691F  ; Check scene hit going up
+
 			JR NZ,NO_GRAV		; $6922
 			DEC D				; $6924	 ; move y
 			DEC D				; $6925	 ; ypos-=2 (UP)
@@ -751,15 +755,20 @@ DONE_X: 	LD A,(UP_BUTTON)	; $690E	; get only up
 
 DONE_Y:		LD A,$02			; $692D
 			LD ($696C),A		; $692F
+
 			LD A,D				; $6932 ; copy ypos
 			CP $B0				; $6933	; = y176 (going into next screen)
-			CALL Z,L_71B4		; $6935
-			CALL L_69C4			; $6938
+			CALL Z,UPDATE_SCENE	; $6935
+			CALL CHECK_SCENE_DOWN			; $6938    ; Check scene hit going down
+
 			JR NZ,NO_GRAV		; $693B
-			INC D				; $693D ; apply gravity
-			INC D				; $693E ; ypos+=1  TL(0,0)BR(256,192)
+			; ---------------------------------------------------------
+			; Apply gravity to ship
+			INC D				; $693D 
+			INC D				; $693E ; ypos+=2  TL(0,0)BR(256,192)
 			LD A,$01			; $693F
 			LD ($696F),A		; $6941
+			; -----------------------------------------------------------
 			
 NO_GRAV:	LD A,($696F)		; $6944
 			OR A				; $6947
@@ -767,77 +776,77 @@ NO_GRAV:	LD A,($696F)		; $6944
 			LD BC,(POS_XY)		; $694B
 			LD (POS_XY),DE		; $694F
 
-L_6953:		LD A,($696B)		; $6953    ; this is called from else where also
-			LD L,$01			; $6956
-			INC A				; $6958
-			JR NZ,L_695C		; $6959
-			INC L				; $695B
+L_6953:		LD A,(DIRECTION)				; $6953  ;
+			LD L,$01					; $6956
+			INC A						; $6958
+			JR NZ,USE_RIGHT_FRAME		; $6959
+			INC L						; $695B	 ; flip from right to a left ship frame
+USE_RIGHT_FRAME:		
+			LD A,L						; $695C
+			LD HL,($696D)				; $695D
+			CALL SPRITE_24x16			; $6960  ; Draw players ship
+			LD ($696D),HL				; $6963  ; keep old coords to delete next frame?
+			JP L_6A0A					; $6966
 
-L_695C:		LD A,L				; $695C
-			LD HL,($696D)		; $695D
-			CALL SPRITE_24x16	; $6960  ; Draw players ship
-
-			LD ($696D),HL		; $6963  ; keep old coords to delete next frame?
-
-			JP L_6A0A			; $6966
-
-POS_XY		defb $40,$58        ; $6969 ; ships current X,Y pos
+POS_XY:		defb $40,$58      			; $6969 ;  ships current Y/X pos
+DIRECTION:	defb $01 		  			; $696B ;  ships facing direction
+			defb $02      				; $696C ;  ??
+			defb $F9,$C6    			; $696D ;  old coords to clear last draw????
+			defb $01	      			; $696F ;  dirty update flag ????
+OLD_POS_XY:	defb $00,$00  	  			; $6970 ;  keep old starting X/Y pos
 			
 
-			defb $01 		    ; $696B ;  block‐move ????
-			defb $02      		; $696C ;  vertical movement flag ???
+;---------------------------------------------------------------
+; Handles ship's right-edge collision (2 tiles right), combining tile results from current and next row(s). 
+; If y%8 != 0, checks a third row. A holds non-zero if collision.
+; Left-edge check is similar but 1 tile left.
+; Down/Up are again similar, but down does not need to check so far ahead.
 
-			defb $F9      		; $696D ;   old coords to clear last draw????
-			defb $C6      		; $696E ;  
-
-			defb $01	      	; $696F ; dirty update flag ????
-
-			defb $00   		   	; $6970
-			defb $00   	    	; $6981
-
-L_6972:		PUSH BC				; $6972
-			PUSH DE				; $6973
-			PUSH HL				; $6974
-			LD A,E				; $6975
-			AND $03				; $6976
-			LD A,$00			; $6978
-			JR NZ,L_6997		; $697A
-			LD A,E				; $697C
-			CP $78				; $697D
-			LD A,$00			; $697F
-			JR NC,L_6997		; $6981
-			CALL GET_ANIM_ADDR_AS_HL			; $6983
-			INC L				; $6986
-			INC L				; $6987
-			LD BC,$0020			; $6988
-			LD A,(HL)			; $698B
-			ADD HL,BC			; $698C
-			OR (HL)				; $698D
-			LD E,A				; $698E
-			LD A,D				; $698F
-			AND $07				; $6990
-			LD A,E				; $6992
-			JR Z,L_6997			; $6993
-			ADD HL,BC			; $6995
-			OR (HL)				; $6996
-
-L_6997:		OR A				; $6997
-			POP HL				; $6998
-			POP DE				; $6999
-			POP BC				; $699A
-			RET				; $699B
-
-L_699C:		PUSH BC				; $699C
+CHECK_SCENE_RIGHT:		
+			PUSH BC						; $6972
+			PUSH DE						; $6973
+			PUSH HL						; $6974
+			LD A,E						; $6975	; Load xpos into A
+			AND $03						; $6976 ; Check if xpos is a multiple of 4
+			LD A,$00					; $6978 ; Default: No collision (A = 0)
+			JR NZ,NO_RIGHT_HIT			; $697A
+			LD A,E						; $697C ; xpos
+			CP $78						; $697D
+			LD A,$00					; $697F ; Default: No collision (A = 0)
+			JR NC,NO_RIGHT_HIT			; $6981 ; If xpos>=120, skip to end (no collision)
+			CALL GET_ANIM_ADDR_AS_HL	; $6983
+			INC L						; $6986 ; (NOTE: ship16x16 is really 24x16 pre-rotated pixel data)
+			INC L						; $6987 ; Move over (x2 tile8x8 right)
+ 			LD BC,$0020					; $6988	; Set BC = 32 (offset to next row of tiles)
+			LD A,(HL)					; $698B ; Get tile value
+			ADD HL,BC					; $698C ; Move HL down by 1 row (32 bytes, or 4 tiles)
+			OR (HL)						; $698D ; Combine ongoing tiles
+			LD E,A						; $698E ; Save
+			LD A,D						; $698F
+			AND $07						; $6990 ; Sitting on a multiple of 8
+			LD A,E						; $6992 ; Restore
+			JR Z,NO_RIGHT_HIT			; $6993 ; additional tile checked (not a multiple,now part into next tile down)
+			ADD HL,BC					; $6995 ; Move HL down by another row (right edge, 2 rows down)
+			OR (HL)						; $6996 ; Combine ongoing tiles
+NO_RIGHT_HIT:
+			OR A						; $6997 ; Final collision check on combined tiles
+			POP HL						; $6998
+			POP DE						; $6999
+			POP BC						; $699A
+			RET							; $699B ; A=status (0:OK,non-zero:collision). 
+										; NOTE: The calling code only checks the NZ flag and does not use the A-register value afterward.
+CHECK_SCENE_LEFT:		
+			PUSH BC				; $699C
 			PUSH DE				; $699D
 			PUSH HL				; $699E
 			LD A,E				; $699F
 			AND $03				; $69A0
 			LD A,$00				; $69A2
-			JR NZ,L_69BF				; $69A4
+			JR NZ,NO_LEFT_HIT				; $69A4
 			LD A,E				; $69A6
 			OR A				; $69A7
 			LD A,$00				; $69A8
-			JR Z,L_69BF				; $69AA
+			JR Z,NO_LEFT_HIT				; $69AA
 			CALL GET_ANIM_ADDR_AS_HL				; $69AC
 			DEC L				; $69AF
 			LD BC,$0020				; $69B0
@@ -848,23 +857,24 @@ L_699C:		PUSH BC				; $699C
 			LD A,D				; $69B7
 			AND $07				; $69B8
 			LD A,E				; $69BA
-			JR Z,L_69BF				; $69BB
+			JR Z,NO_LEFT_HIT				; $69BB
 			ADD HL,BC				; $69BD
 			OR (HL)				; $69BE
-
-L_69BF:		OR A				; $69BF
+NO_LEFT_HIT:
+			OR A				; $69BF
 			POP HL				; $69C0
 			POP DE				; $69C1
 			POP BC				; $69C2
 			RET				; $69C3
 
-L_69C4:		PUSH BC				; $69C4
+CHECK_SCENE_DOWN:		
+			PUSH BC				; $69C4
 			PUSH DE				; $69C5
 			PUSH HL				; $69C6
 			LD A,D				; $69C7
 			AND $07				; $69C8
 			LD A,$00				; $69CA
-			JR NZ,L_69E1				; $69CC
+			JR NZ,NO_DOWN_HIT				; $69CC
 			CALL GET_ANIM_ADDR_AS_HL				; $69CE
 			LD BC,$0040				; $69D1
 			ADD HL,BC				; $69D4
@@ -875,23 +885,24 @@ L_69C4:		PUSH BC				; $69C4
 			LD A,E				; $69D9
 			AND $03				; $69DA
 			LD A,D				; $69DC
-			JR Z,L_69E1				; $69DD
+			JR Z,NO_DOWN_HIT				; $69DD
 			INC L				; $69DF
 			OR (HL)				; $69E0
-L_69E1:
+NO_DOWN_HIT:
 			OR A				; $69E1
 			POP HL				; $69E2
 			POP DE				; $69E3
 			POP BC				; $69E4
 			RET				; $69E5
 
-L_69E6:		PUSH BC				; $69E6
+CHECK_SCENE_UP:		
+			PUSH BC				; $69E6
 			PUSH DE				; $69E7
 			PUSH HL				; $69E8
 			LD A,D				; $69E9
 			AND $07				; $69EA
 			LD A,$00			; $69EC
-			JR NZ,L_6A03		; $69EE
+			JR NZ,NO_UP_HIT		; $69EE
 			CALL GET_ANIM_ADDR_AS_HL			; $69F0
 			LD BC,$FFE0			; $69F3
 			ADD HL,BC			; $69F6
@@ -902,17 +913,19 @@ L_69E6:		PUSH BC				; $69E6
 			LD A,E				; $69FB
 			AND $03				; $69FC
 			LD A,D				; $69FE
-			JR Z,L_6A03			; $69FF
+			JR Z,NO_UP_HIT			; $69FF
 			INC L				; $6A01
 			OR (HL)				; $6A02
-L_6A03:		OR A				; $6A03
+NO_UP_HIT:	
+			OR A				; $6A03
 			POP HL				; $6A04
 			POP DE				; $6A05
 			POP BC				; $6A06
 			RET					; $6A07
 
+			; data - used ?
 			NOP				; $6A08   ; copy of ship cords  ? NOT USED ?
-			NOP				; $6A09
+			NOP				; 
 
 L_6A0A:		LD A,($6AEE)			; $6A0A 
 			OR A					; $6A0D
@@ -920,7 +933,7 @@ L_6A0A:		LD A,($6AEE)			; $6A0A
 			LD HL,($6AEF)			; $6A11
 			LD BC,($6AF1)			; $6A14
 			LD DE,(POS_XY)			; $6A18
-			LD A,($696B)			; $6A1C
+			LD A,(DIRECTION)			; $6A1C
 			CP $FF					; $6A1F
 			JR Z,L_6A36				; $6A21
 			LD A,E					; $6A23
@@ -946,7 +959,7 @@ L_6A46:		LD A,($6AF3)			; $6A46 ; get Mace enabled state
 			LD A,(InputOff)			; $6A50
 			OR A					; $6A53
 			JP NZ,L_6A87			; $6A54
-			LD A,($696B)			; $6A57
+			LD A,(DIRECTION)			; $6A57
 			CP $FF					; $6A5A
 			LD A,($6AF8)			; $6A5C
 			JR Z,L_6A6B				; $6A5F
@@ -986,10 +999,12 @@ L_6A87:		LD BC,($6AF6)			; $6A87
 			CALL L_67B9				; $6AA2
 			CALL L_9A75				; $6AA5
 			JR Z,L_6AB1				; $6AA8
+			
 			PUSH DE					; $6AAA
-			LD E,$21				; $6AAB
-			CALL PLAY_SFX				; $6AAD
+			LD E,$21				; $6AAB  ; mace hit sound
+			CALL PLAY_SFX			; $6AAD
 			POP DE					; $6AB0
+
 L_6AB1:		INC E					; $6AB1
 			INC E					; $6AB2
 			INC D					; $6AB3
@@ -1487,27 +1502,24 @@ L_6DE0:
 			POP AF				; $6E05
 			RET				; $6E06
 
-L_6E07:
-			PUSH AF				; $6E07
-			PUSH BC				; $6E08
-			PUSH HL				; $6E09
+L_6E07:		PUSH AF					; $6E07
+			PUSH BC					; $6E08
+			PUSH HL					; $6E09
 			LD HL,$6E52				; $6E0A
-L_6E0D:
-			LD C,A				; $6E0D
+L_6E0D:		LD C,A					; $6E0D 
 			LD A,(HL)				; $6E0E
-			CP $FF				; $6E0F
-			LD A,C				; $6E11
+			CP $FF					; $6E0F
+			LD A,C					; $6E11
 			JR Z,L_6E1D				; $6E12
-			CP (HL)				; $6E14
+			CP (HL)					; $6E14
 			JR Z,L_6E21				; $6E15
 			LD BC,$0008				; $6E17
 			ADD HL,BC				; $6E1A
 			JR L_6E0D				; $6E1B
-L_6E1D:
-			POP HL				; $6E1D
-			POP BC				; $6E1E
-			POP AF				; $6E1F
-			RET				; $6E20
+L_6E1D:		POP HL					; $6E1D
+			POP BC					; $6E1E
+			POP AF					; $6E1F
+			RET						; $6E20
 
 L_6E21:
 			LD (IX+$04),A				; $6E21
@@ -1819,83 +1831,94 @@ DUTY_CYCLE:  	defb $00		; $711B  ; bit flip per frame for 50% duty cycle
 			defb $C2,$FD,$C2,$75,$C3,$91,$77,$00				; $71AB ...u..w.
 			defb $00                                            ; $71B3 .
 
-L_71B4:		LD A,E				; $71B4
-			CP $78				; $71B5
-			JR Z,L_71C6				; $71B7
-			OR A				; $71B9
-			JR Z,L_71C6				; $71BA
-			LD A,($6971)				; $71BC
-			CP D				; $71BF
-			JP NZ,L_71D6				; $71C0
-			JP L_71CD				; $71C3
-L_71C6:		LD A,($6970)				; $71C6
-			CP E				; $71C9
-			JP NZ,L_71D6				; $71CA
-L_71CD:		POP HL				; $71CD
+; NOTE:  WWhile reverse engineering this I found that I had had at first 
+; mixed X/Y here when using OLD_POS_XY+1, interestingly this allowed the game to go back to last screen (X-axis)
+; IN: E = current X, D = current Y
+; Does the screen transitions when player moves outside the screen limits
+UPDATE_SCENE:		
+
+			; if (X==120 || X==0)
+			LD A,E      		; X coords
+			CP $78 	    		; 120 (right screen edge)
+			JR Z,X_SCRN_EDGE 	; 
+			OR A        		; zero (left screen edge)
+			JR Z,X_SCRN_EDGE  	; 
+
+			LD A,(OLD_POS_XY+1)	; $71BC  
+			CP D				; $71BF  ; Compare old Y to current Y (D)
+			JP NZ,L_71D6		; $71C0  ; If different, trigger scene update
+			JP NO_SCENE_UPDATE	; $71C3
+X_SCRN_EDGE:		
+			LD A,(OLD_POS_XY)	; $71C6
+			CP E				; $71C9	 ; Compare old X to current X (E)
+			JP NZ,L_71D6		; $71CA  ; If different, trigger scene update
+
+NO_SCENE_UPDATE:		
+			POP HL				; $71CD 
 			INC HL				; $71CE
 			INC HL				; $71CF
 			INC HL				; $71D0
-			LD A,$01				; $71D1
+			LD A,$01			; $71D1
 			OR A				; $71D3
 			PUSH HL				; $71D4
-			RET				; $71D5
+			RET					; $71D5  ;Return without transition
 
 L_71D6:		POP HL				; $71D6
-			LD A,($696B)				; $71D7
+			LD A,(DIRECTION)		; $71D7
 			CP $FF				; $71DA
 			LD A,E				; $71DC
-			JR Z,L_71E9				; $71DD
-			CP $78				; $71DF
-			JR NZ,L_71F2				; $71E1
-			LD A,$01				; $71E3
-			LD E,$00				; $71E5
-			JR L_720E				; $71E7
+			JR Z,L_71E9			; $71DD
+			CP $78				; $71DF  ; 120
+			JR NZ,L_71F2		; $71E1
+			LD A,$01			; $71E3
+			LD E,$00			; $71E5
+			JR L_720E			; $71E7  ; scene transition
 L_71E9:		OR A				; $71E9
-			JR NZ,L_71F2				; $71EA
-			LD A,$FF				; $71EC
-			LD E,$78				; $71EE
-			JR L_720E				; $71F0
-L_71F2:		LD A,($696C)				; $71F2
+			JR NZ,L_71F2		; $71EA
+			LD A,$FF			; $71EC
+			LD E,$78			; $71EE	; 120
+			JR L_720E			; $71F0 ;scene transition
+L_71F2:		LD A,($696C)		; $71F2
 			CP $FE				; $71F5
 			LD A,D				; $71F7
-			JR Z,L_7204				; $71F8
-			CP $B0				; $71FA
+			JR Z,L_7204			; $71F8
+			CP $B0				; $71FA  ; 176
 			RET NZ				; $71FC
-			LD A,($744C)				; $71FD
-			LD D,$20				; $7200
-			JR L_720E				; $7202
-L_7204:		CP $20				; $7204
+			LD A,($744C)		; $71FD
+			LD D,$20			; $7200  ; 32
+			JR L_720E			; $7202  ; scene transition
+L_7204:		CP $20				; $7204  ; 32
 			RET NZ				; $7206
-			LD A,($744C)				; $7207
-			NEG				; $720A
-			LD D,$B0				; $720C
-L_720E:		LD (POS_XY),DE				; $720E
-			LD ($6970),DE				; $7212
-			LD DE,($744B)				; $7216
+			LD A,($744C)		; $7207
+			NEG					; $720A
+			LD D,$B0			; $720C  ; 176
+L_720E:		LD (POS_XY),DE		; $720E
+			LD (OLD_POS_XY),DE	; $7212
+			LD DE,($744B)		; $7216
 			ADD A,E				; $721A
-			LD ($744B),A				; $721B
+			LD ($744B),A		; $721B
 L_721E:		XOR A				; $721E
-			LD ($7E94),A				; $721F
-			LD ($800D),A				; $7222
-			LD (EventDelay),A				; $7225
-			LD ($80B3),A				; $7228
-			LD A,$FF				; $722B
-			LD ($9B47),A				; $722D
-			LD ($9BD5),A				; $7230
-			LD A,$32				; $7233
-			LD ($9BD4),A				; $7235
-			LD HL,$0753				; $7238
-			LD ($71B2),HL				; $723B
-			LD HL,$C6F9				; $723E
-			LD ($696D),HL				; $7241
-			LD ($6AEF),HL				; $7244
-			LD ($6AF4),HL				; $7247
-			LD HL,$9142				; $724A
-			LD (HL),$FF				; $724D
-			LD ($9140),HL				; $724F
-			LD HL,$921E				; $7252
-			LD (HL),$FF				; $7255
-			LD ($9265),HL				; $7257
+			LD ($7E94),A		; $721F
+			LD ($800D),A		; $7222
+			LD (EventDelay),A	; $7225
+			LD ($80B3),A		; $7228
+			LD A,$FF			; $722B
+			LD ($9B47),A		; $722D
+			LD ($9BD5),A		; $7230
+			LD A,$32			; $7233
+			LD ($9BD4),A		; $7235
+			LD HL,$0753			; $7238
+			LD ($71B2),HL		; $723B
+			LD HL,$C6F9			; $723E
+			LD ($696D),HL		; $7241
+			LD ($6AEF),HL		; $7244
+			LD ($6AF4),HL		; $7247
+			LD HL,$9142			; $724A
+			LD (HL),$FF			; $724D
+			LD ($9140),HL		; $724F
+			LD HL,$921E			; $7252
+			LD (HL),$FF			; $7255
+			LD ($9265),HL		; $7257
 
 			CALL L_7457				; $725A	; clear blocking tile map ?
 			CALL CLR_TABLE_ITEMS	; $725D ; 
@@ -1969,23 +1992,28 @@ L_72C2:		LD A,C							; $72C2
 BACKGROUND_DONE:		
 			CALL L_742E						; $72C8
 			LD IX,$6CFC						; $72CB
-			LD DE,$2000						; $72CF
-L_72D2:		CALL GET_ANIM_ADDR_AS_HL				; $72D2
-			LD A,(HL)				; $72D5
-			CP $E9				; $72D6
-			JR C,L_72DF				; $72D8
-			LD (HL),$00				; $72DA
-			JP L_72EC				; $72DC
-L_72DF:		OR A				; $72DF
-			CALL NZ,L_732A				; $72E0
-			CALL L_8748				; $72E3
-			CALL L_6E07				; $72E6
-			CALL L_73AA				; $72E9
-L_72EC:		CALL L_8FD6				; $72EC
-			CALL L_91B1				; $72EF
-			CALL L_9B68				; $72F2 	; Enemies
-			CALL L_A1D6				; $72F5
-			LD A,E				; $72F8
+			LD DE,$2000						; $72CF  ; y/x coords
+L_72D2:		CALL GET_ANIM_ADDR_AS_HL		; $72D2
+			LD A,(HL)						; $72D5
+			CP $E9							; $72D6  ; max tile value?
+			JR C,L_72DF						; $72D8
+			LD (HL),$00						; $72DA
+			JP L_72EC						; $72DC
+L_72DF:		OR A							; $72DF
+			CALL NZ,L_732A					; $72E0
+			CALL L_8748						; $72E3
+			CALL L_6E07						; $72E6
+		;	nop
+	;		nop
+;			nop
+			CALL L_73AA						; $72E9
+L_72EC:		CALL L_8FD6						; $72EC
+			CALL L_91B1						; $72EF
+
+			CALL GENERATE_FLYING_ENEMIES						; $72F2  ; Generate flying enemies
+			CALL PLACE_PICKUPS				; $72F5  ; first time pick up (mace,+1 items)
+
+			LD A,E							; $72F8
 			ADD A,$08				; $72F9
 			LD E,A				; $72FB
 			CP $80				; $72FC
@@ -2071,60 +2099,54 @@ L_735B:
 			defb $00,$00,$00,$00,$95,$01,$00,$01				; $739B ........
 			defb $00,$97,$00,$01,$00,$01,$FF                    ; $73A3 .......
 
-L_73AA:
-			PUSH AF				; $73AA
+L_73AA:		PUSH AF				; $73AA
 			PUSH DE				; $73AB
 			PUSH HL				; $73AC
-			LD HL,$73F4				; $73AD
+			LD HL,$73F4			; $73AD
 			LD B,A				; $73B0
-L_73B1:
-			LD A,(HL)				; $73B1
+L_73B1:		LD A,(HL)			; $73B1
 			INC HL				; $73B2
 			CP $FF				; $73B3
-			JP Z,L_73F0				; $73B5
+			JP Z,L_73F0			; $73B5
 			CP B				; $73B8
-			JR Z,L_73BF				; $73B9
+			JR Z,L_73BF			; $73B9
 			INC HL				; $73BB
-			JP L_73B1				; $73BC
-
-L_73BF:
-			PUSH HL				; $73BF
+			JP L_73B1			; $73BC
+L_73BF:		PUSH HL				; $73BF
 			PUSH BC				; $73C0
-			LD L,(HL)				; $73C1
-			LD H,$00				; $73C2
+			LD L,(HL)			; $73C1
+			LD H,$00			; $73C2
 			LD C,L				; $73C4
 			LD B,H				; $73C5
-			ADD HL,HL				; $73C6
-			ADD HL,HL				; $73C7
-			ADD HL,BC				; $73C8
-			LD BC,$7413				; $73C9
-			ADD HL,BC				; $73CC
+			ADD HL,HL			; $73C6
+			ADD HL,HL			; $73C7
+			ADD HL,BC			; $73C8
+			LD BC,$7413			; $73C9
+			ADD HL,BC			; $73CC
 			PUSH HL				; $73CD
 			POP IY				; $73CE
-			LD L,(IY+$02)				; $73D0
-			LD H,(IY+$03)				; $73D3
-			LD (HL),E				; $73D6
+			LD L,(IY+$02)		; $73D0
+			LD H,(IY+$03)		; $73D3
+			LD (HL),E			; $73D6
 			INC HL				; $73D7
-			LD (HL),D				; $73D8
+			LD (HL),D			; $73D8
 			INC HL				; $73D9
-			LD C,(IY+$04)				; $73DA
+			LD C,(IY+$04)		; $73DA
 			DEC C				; $73DD
 			DEC C				; $73DE
-			LD B,$00				; $73DF
-			ADD HL,BC				; $73E1
-			LD (HL),$FF				; $73E2
-			LD (IY+$02),L				; $73E4
-			LD (IY+$03),H				; $73E7
+			LD B,$00			; $73DF
+			ADD HL,BC			; $73E1
+			LD (HL),$FF			; $73E2
+			LD (IY+$02),L		; $73E4
+			LD (IY+$03),H		; $73E7
 			POP BC				; $73EA
 			POP HL				; $73EB
 			INC HL				; $73EC
-			JP L_73B1				; $73ED
-
-L_73F0:
-			POP HL				; $73F0
+			JP L_73B1			; $73ED
+L_73F0:		POP HL				; $73F0
 			POP DE				; $73F1
 			POP AF				; $73F2
-			RET				; $73F3
+			RET					; $73F3
 
 			defb $2E,$00,$2F,$00,$8D,$00,$8E                    ; $73F4 ../....
 			defb $00,$8F,$00,$90,$00,$27,$01,$32				; $73FB .....'.2
@@ -2135,23 +2157,21 @@ L_73F0:
 			defb $75,$00,$00,$02,$44,$76,$00,$00				; $7423 u...Dv..
 			defb $02,$00,$00                                    ; $742B ...
 
-L_742E:
-			LD BC,$0005				; $742E
+L_742E:		LD BC,$0005				; $742E
 			LD IX,$7413				; $7431
-L_7435:
-			LD A,(IX+$00)				; $7435
-			LD L,A				; $7438
-			LD H,(IX+$01)				; $7439
-			OR H				; $743C
-			RET Z				; $743D
+L_7435:		LD A,(IX+$00)			; $7435
+			LD L,A					; $7438
+			LD H,(IX+$01)			; $7439
+			OR H					; $743C
+			RET Z					; $743D
 			LD (HL),$FF				; $743E
-			LD (IX+$02),L				; $7440
-			LD (IX+$03),H				; $7443
+			LD (IX+$02),L			; $7440
+			LD (IX+$03),H			; $7443
 			ADD IX,BC				; $7446
 			JP L_7435				; $7448
 
-			NOP				; $744B
-			NOP				; $744C
+			NOP						; $744B
+			NOP						; $744C
 
 L_744D:		LD L,A					; $744D
 			LD H,$00				; $744E
@@ -2170,62 +2190,70 @@ L_7457:		LD HL,$5F00				; $7457  ; blocking - tile map ?
 			LDIR					; $7462
 			RET						; $7464
 
-
 RESET_GAME:
-			LD ($74E1),A		; $7465
-			ADD A,A				; $7468
-			ADD A,A				; $7469
-			ADD A,A				; $746A
-			LD L,A				; $746B
-			LD H,$00				; $746C
-			LD BC,START_POS				; $746E
-			ADD HL,BC				; $7471
-			LD E,(HL)				; $7472
-			INC HL				; $7473
-			LD D,(HL)				; $7474
-			INC HL				; $7475
-			LD (POS_XY),DE				; $7476
-			LD ($6970),DE				; $747A
-			LD A,(HL)				; $747E
-			LD ($744C),A				; $747F
-			INC HL				; $7482
-			LD A,(HL)				; $7483
-			LD ($744B),A				; $7484
-			INC HL				; $7487
-			LD E,(HL)				; $7488
+			LD ($74E1),A						; $7465
+			ADD A,A								; $7468
+			ADD A,A								; $7469
+			ADD A,A								; $746A
+			LD L,A								; $746B
+			LD H,$00							; $746C
+			LD BC,START_POS						; $746E
+			ADD HL,BC							; $7471
+			LD E,(HL)							; $7472
+			INC HL								; $7473
+			LD D,(HL)							; $7474
+			INC HL								; $7475
+			LD (POS_XY),DE						; $7476
+			LD (OLD_POS_XY),DE					; $747A
+			LD A,(HL)							; $747E
+			LD ($744C),A						; $747F
+			INC HL								; $7482
+			LD A,(HL)							; $7483
+			LD ($744B),A						; $7484
+			INC HL								; $7487
+			LD E,(HL)							; $7488
 			INC HL								; $7489
 			LD D,(HL)							; $748A
 			LD (COUNTDOWN_TIMER_RESET),DE		; $748B
 			LD (COUNTDOWN_TIMER),DE				; $748F
 			INC HL								; $7493
 			LD A,(HL)							; $7494
-			LD ($696B),A						; $7495
-			XOR A				; $7498
-			LD (EGG_TIMER),A				; $7499
-			LD ($7643),A				; $749C
-			LD ($6AEE),A				; $749F
-			LD ($6AF3),A				; $74A2
-			LD (InputOff),A				; $74A5
-			LD (FRAME_COUNTER),A ;  ($711A),A				; $74A8
-			LD HL,$0000				; $74AB
-			LD ($7973),HL				; $74AE
-			CALL L_7935				; $74B1
-			CALL CLR_SCREEN				; $74B4
+			LD (DIRECTION),A						; $7495
+			XOR A								; $7498
+			LD (EGG_TIMER),A					; $7499
+			LD ($7643),A						; $749C
+			LD ($6AEE),A						; $749F
+			LD ($6AF3),A						; $74A2
+			LD (InputOff),A						; $74A5
+			LD (FRAME_COUNTER),A ;  			; $74A8
+			LD HL,$0000							; $74AB
+			LD ($7973),HL						; $74AE
+			CALL L_7935							; $74B1
+			CALL CLR_SCREEN						; $74B4
+			CALL L_77FF							; $74B7
+			CALL L_721E							; $74BA
+			LD DE,(POS_XY)						; $74BD
+			LD B,D								; $74C1
+			LD C,E								; $74C2
+			CALL L_6953							; $74C3
+			JP INIT_GAME_SCREEN_TABLES			; $74C6
 
-			CALL L_77FF				; $74B7
+; Data is in a X,Y seqeuence (looks like just Xpos is 1/2 screen width)
+; for example: (256/2)-8,(192/2)-8 will put the ship centre Y but far right screen edge!!!
 
-			CALL L_721E				; $74BA
+;+0: Bytes 0-1 (POS_XY): starting (X, Y) player coords
+;+2: Byte 2 ($744C): ???
+;+3: Byte 3 ($744B):  ??? direction flag ?
+;+4: Bytes 4-5 (COUNTDOWN_TIMER_RESET): 16-bit timer initial value (little-endian)
+;+6: Byte 6 : Ships direction ($696B)
 
-			LD DE,(POS_XY)				; $74BD
-			LD B,D				; $74C1
-			LD C,E				; $74C2
-			CALL L_6953				; $74C3
-			JP INIT_GAME_SCREEN_TABLES				; $74C6
-
-START_POS:	defb $20,$90                                        ; $74C9  ; ships starting x,y on screen
-			defb $06,$00,$F4,$01,$01,$00,$60,$50				; $74CB ......`P
-			defb $06,$15,$EE,$02,$FF,$00,$60,$60				; $74D3 ......``
-			defb $08,$2B,$84,$03,$FF,$00,$00                    ; $74DB .+.....
+START_POS:	defb $20,$90                                        ; $74C9 ; ships starting x,y on screen
+			defb $06,$00										; $74CB 
+			defb $F4,$01
+			defb $01,$00
+			defb $60,$50
+			defb $06,$15,$EE,$02,$FF,$00,$60,$60				; $74D3 
+			defb $08,$2B,$84,$03,$FF,$00,$00                    ; $74DB 
 
 L_74E2:
 			PUSH AF				; $74E2
@@ -2238,7 +2266,7 @@ L_74E2:
 			DEC D				; $74E9
 			DEC E				; $74EA
 			DEC E				; $74EB
-			JP L_74F3				; $74EC
+			JP L_74F3			; $74EC
 
 L_74EF:
 			PUSH AF				; $74EF
@@ -2845,7 +2873,7 @@ L_7A6B:
 			LD ($7AB4),A				; $7A78
 			ADD A,D				; $7A7B
 			LD D,A				; $7A7C
-			LD A,($696B)				; $7A7D
+			LD A,(DIRECTION)				; $7A7D
 			CP $FF				; $7A80
 			LD A,$05				; $7A82
 			JR NZ,L_7A88				; $7A84
@@ -2853,7 +2881,7 @@ L_7A6B:
 L_7A88:
 			ADD A,E				; $7A88
 			LD E,A				; $7A89
-			LD A,($696B)				; $7A8A
+			LD A,(DIRECTION)				; $7A8A
 			ADD A,A				; $7A8D
 			ADD A,A				; $7A8E
 			CALL L_7AB5				; $7A8F
@@ -2861,7 +2889,7 @@ L_7A88:
 			OR A				; $7A95
 			RET Z				; $7A96
 			LD DE,(POS_XY)				; $7A97
-			LD A,($696B)				; $7A9B
+			LD A,(DIRECTION)				; $7A9B
 			CP $FF				; $7A9E
 			LD A,$0E				; $7AA0
 			LD C,$04				; $7AA2
@@ -2902,29 +2930,29 @@ L_7ABD:
 			LD (HL),E				; $7ACD
 			LD A,$05				; $7ACE
 			CALL L_85B0				; $7AD0
-			PUSH HL				; $7AD3
-			PUSH DE				; $7AD4
-			LD E,$1A				; $7AD5
-			CALL PLAY_SFX				; $7AD7
-			POP DE				; $7ADA
-			CALL GET_ANIM_ADDR_AS_HL				; $7ADB
-			LD A,(HL)				; $7ADE
-			OR (HL)				; $7ADF
-			POP HL				; $7AE0
-			JP Z,L_7A1F				; $7AE1
-			INC HL				; $7AE4
-			INC HL				; $7AE5
-			LD (HL),$00				; $7AE6
-			RET				; $7AE8
+			PUSH HL						; $7AD3
+			PUSH DE						; $7AD4
+			LD E,$1A					; $7AD5
+			CALL PLAY_SFX				; $7AD7   ; ships guns
+
+			POP DE						; $7ADA
+			CALL GET_ANIM_ADDR_AS_HL	; $7ADB
+			LD A,(HL)					; $7ADE
+			OR (HL)						; $7ADF
+			POP HL						; $7AE0
+			JP Z,L_7A1F					; $7AE1 
+			INC HL						; $7AE4
+			INC HL						; $7AE5
+			LD (HL),$00					; $7AE6
+			RET							; $7AE8
 
 			NOP				; $7AE9
-L_7AEA:
-			LD A,$03				; $7AEA
+
+
+L_7AEA:		LD A,$03				; $7AEA
 			CALL L_67B9				; $7AEC
 			LD HL,$7B36				; $7AEF
-L_7AF2:
-L_7AF2:
-			LD E,(HL)				; $7AF2
+L_7AF2:		LD E,(HL)				; $7AF2
 			BIT 7,E				; $7AF3
 			RET NZ				; $7AF5
 			INC HL				; $7AF6
@@ -3094,7 +3122,7 @@ L_7C10:
 			CP $20				; $7C21
 			RET C				; $7C23
 			LD A,($7AE9)				; $7C24
-			CP $05				; $7C27
+			CP $05			; $7C27
 			RET C				; $7C29
 			LD HL,($7BFA)				; $7C2A
 			ADD HL,HL				; $7C2D
@@ -3173,7 +3201,7 @@ L_7C8C:
 			ADD HL,DE				; $7CAE
 			LD (IX+$00),L				; $7CAF
 			LD (IX+$01),H				; $7CB2
-			LD A,($696B)				; $7CB5
+			LD A,(DIRECTION)				; $7CB5
 			ADD A,A				; $7CB8
 			LD (IX+$05),A				; $7CB9
 			EX DE,HL				; $7CBC
@@ -4335,121 +4363,114 @@ L_85B8:
 			POP HL				; $85B8
 			RET				; $85B9
 
-POLL_SFX_USING_BEEPER:		LD HL,$859A				; $85BA
-			LD A,($859B)				; $85BD
-			CP $FF				; $85C0
+;----------------------------------------------------------------
+; SFX Beeper driver - must be polled every other frame (25pfs)
+;---------------------------------------------------------------
+POLL_SFX_USING_BEEPER:		
+			LD HL,$859A				; $85BA
+			LD A,($859B)			; $85BD
+			CP $FF					; $85C0
 			JR Z,L_861D				; $85C2
-			LD C,A				; $85C4
+			LD C,A					; $85C4
 			LD A,$FF				; $85C5
-			LD ($859B),A				; $85C7
+			LD ($859B),A			; $85C7
 			LD A,(HL)				; $85CA
-			AND A				; $85CB
+			AND A					; $85CB
 			JR Z,L_85D1				; $85CC
-			CP C				; $85CE
+			CP C					; $85CE
 			JR C,L_861D				; $85CF
 L_85D1:
 			LD (HL),C				; $85D1
-			LD A,C				; $85D2
-			AND A				; $85D3
+			LD A,C					; $85D2
+			AND A					; $85D3
 			JP Z,L_870B				; $85D4
-			DEC A				; $85D7
-			RLCA				; $85D8
-			RLCA				; $85D9
-			RLCA				; $85DA
-			LD E,A				; $85DB
+			DEC A					; $85D7
+			RLCA					; $85D8
+			RLCA					; $85D9
+			RLCA					; $85DA
+			LD E,A					; $85DB
 			LD D,$00				; $85DC
 			LD HL,$8710				; $85DE
 			ADD HL,DE				; $85E1
 			LD DE,$859E				; $85E2
 			LD BC,$0007				; $85E5
-			LDIR				; $85E8
+			LDIR					; $85E8
 			LD A,(HL)				; $85EA
-			AND $0F				; $85EB
+			AND $0F					; $85EB
 			LD (DE),A				; $85ED
-			INC DE				; $85EE
+			INC DE					; $85EE
 			XOR (HL)				; $85EF
-			RRCA				; $85F0
-			RRCA				; $85F1
-			RRCA				; $85F2
-			RRCA				; $85F3
+			RRCA					; $85F0
+			RRCA					; $85F1
+			RRCA					; $85F2
+			RRCA					; $85F3
 			LD (DE),A				; $85F4
 			LD HL,$85A4				; $85F5
 			LD C,(HL)				; $85F8
 			LD HL,$85A7				; $85F9
-			LD A,($859E)				; $85FC
+			LD A,($859E)			; $85FC
 			LD (HL),A				; $85FF
-			INC HL				; $8600
-			LD A,($85A0)				; $8601
+			INC HL					; $8600
+			LD A,($85A0)			; $8601
 			LD (HL),A				; $8604
-			LD A,($85A5)				; $8605
-			LD ($85A9),A				; $8608
-			BIT 7,C				; $860B
-			EXX				; $860D
+			LD A,($85A5)			; $8605
+			LD ($85A9),A			; $8608
+			BIT 7,C					; $860B
+			EXX						; $860D
 			LD HL,$85A7				; $860E
-			LD E,L				; $8611
-			LD D,H				; $8612
+			LD E,L					; $8611
+			LD D,H					; $8612
 			JR Z,L_8618				; $8613
 			LD DE,$85A8				; $8615
-L_8618:
-			EXX				; $8618
+L_8618:		EXX						; $8618
 			LD B,$01				; $8619
 			JR L_862E				; $861B
-
-L_861D:
-			LD A,(HL)				; $861D
-			AND A				; $861E
+L_861D:		LD A,(HL)				; $861D
+			AND A					; $861E
 			JP Z,L_870B				; $861F
-			LD HL,($85AA)				; $8622
-			LD DE,($85AC)				; $8625
-			EXX				; $8629
-			LD BC,($85AE)				; $862A
-L_862E:
-			LD HL,($859C)				; $862E
-L_8631:
-			EXX				; $8631
+			LD HL,($85AA)			; $8622
+			LD DE,($85AC)			; $8625
+			EXX						; $8629
+			LD BC,($85AE)			; $862A
+L_862E:		LD HL,($859C)			; $862E
+L_8631:		EXX						; $8631
 			LD C,$02				; $8632
 			LD A,$18				; $8634
-L_8636:
-			LD B,(HL)				; $8636
+L_8636:		LD B,(HL)				; $8636
 			OUT ($FE),A				; $8637
-L_8639:
-			EXX				; $8639
-			DEC HL				; $863A
-			EXX				; $863B
+L_8639:		EXX						; $8639
+			DEC HL					; $863A
+			EXX						; $863B
 			DJNZ L_8639				; $863C
 			EX DE,HL				; $863E
 			LD A,$00				; $863F
-			DEC C				; $8641
-			JR NZ,L_8636				; $8642
-			EXX				; $8644
-			BIT 7,H				; $8645
+			DEC C					; $8641
+			JR NZ,L_8636			; $8642
+			EXX						; $8644
+			BIT 7,H					; $8645
 			JR Z,L_8631				; $8647
-			BIT 7,C				; $8649
+			BIT 7,C					; $8649
 			JR Z,L_865D				; $864B
 			LD HL,$85A7				; $864D
-			LD A,($859F)				; $8650
+			LD A,($859F)			; $8650
 			ADD A,(HL)				; $8653
 			LD (HL),A				; $8654
-			INC HL				; $8655
-			LD A,($85A1)				; $8656
+			INC HL					; $8655
+			LD A,($85A1)			; $8656
 			ADD A,(HL)				; $8659
 			LD (HL),A				; $865A
 			JR L_866F				; $865B
-
-L_865D:
-			LD HL,$85A7				; $865D
-			LD A,($859F)				; $8660
-			BIT 0,B				; $8663
-			JR NZ,L_866D				; $8665
+L_865D:		LD HL,$85A7				; $865D
+			LD A,($859F)			; $8660
+			BIT 0,B					; $8663
+			JR NZ,L_866D			; $8665
 			LD HL,$85A8				; $8667
-			LD A,($85A1)				; $866A
-L_866D:
-			ADD A,(HL)				; $866D
+			LD A,($85A1)			; $866A
+L_866D:		ADD A,(HL)				; $866D
 			LD (HL),A				; $866E
-L_866F:
-			LD HL,$85A9				; $866F
+L_866F:		LD HL,$85A9				; $866F
 			DEC (HL)				; $8672
-			JP NZ,L_86FE				; $8673
+			JP NZ,L_86FE			; $8673
 			LD HL,$85A3				; $8676
 			DEC (HL)				; $8679
 			JP Z,L_870B				; $867A
@@ -4457,91 +4478,79 @@ L_866F:
 			LD E,(HL)				; $8680
 			LD HL,$859F				; $8681
 			LD A,(HL)				; $8684
-			ADD A,E				; $8685
+			ADD A,E					; $8685
 			LD (HL),A				; $8686
 			LD HL,$85A1				; $8687
 			LD A,(HL)				; $868A
-			ADD A,E				; $868B
+			ADD A,E					; $868B
 			LD (HL),A				; $868C
-			BIT 5,C				; $868D
+			BIT 5,C					; $868D
 			JR Z,L_8699				; $868F
 			LD HL,$85A5				; $8691
 			DEC (HL)				; $8694
-			JR NZ,L_8699				; $8695
+			JR NZ,L_8699			; $8695
 			LD (HL),$01				; $8697
-L_8699:
-			BIT 3,C				; $8699
+L_8699:		BIT 3,C					; $8699
 			JR Z,L_86AC				; $869B
-			BIT 7,C				; $869D
-			JR NZ,L_86A5				; $869F
-			BIT 0,B				; $86A1
+			BIT 7,C					; $869D
+			JR NZ,L_86A5			; $869F
+			BIT 0,B					; $86A1
 			JR Z,L_86AC				; $86A3
-L_86A5:
-			LD HL,$859F				; $86A5
+L_86A5:		LD HL,$859F				; $86A5
 			LD A,(HL)				; $86A8
-			NEG				; $86A9
+			NEG						; $86A9
 			LD (HL),A				; $86AB
-L_86AC:
-			BIT 4,C				; $86AC
+L_86AC:		BIT 4,C					; $86AC
 			JR Z,L_86BF				; $86AE
-			BIT 7,C				; $86B0
-			JR NZ,L_86B8				; $86B2
-			BIT 0,B				; $86B4
+			BIT 7,C					; $86B0
+			JR NZ,L_86B8			; $86B2
+			BIT 0,B					; $86B4
 			JR Z,L_86BF				; $86B6
-L_86B8:
-			LD HL,$85A1				; $86B8
+L_86B8:		LD HL,$85A1				; $86B8
 			LD A,(HL)				; $86BB
-			NEG				; $86BC
+			NEG						; $86BC
 			LD (HL),A				; $86BE
-L_86BF:
-			BIT 6,C				; $86BF
+L_86BF:		BIT 6,C					; $86BF
 			JR Z,L_86CF				; $86C1
 			LD HL,$85A7				; $86C3
-			LD A,($859E)				; $86C6
+			LD A,($859E)			; $86C6
 			LD (HL),A				; $86C9
-			INC HL				; $86CA
-			LD A,($85A0)				; $86CB
+			INC HL					; $86CA
+			LD A,($85A0)			; $86CB
 			LD (HL),A				; $86CE
-L_86CF:
-			EXX				; $86CF
+L_86CF:		EXX						; $86CF
 			LD HL,$85A7				; $86D0
 			LD DE,$85A8				; $86D3
-			LD A,($85A5)				; $86D6
-			EXX				; $86D9
-			BIT 7,C				; $86DA
-			JR NZ,L_86FB				; $86DC
-			LD A,($85A3)				; $86DE
-			LD B,C				; $86E1
-			SRL A				; $86E2
-			JR NC,L_86EC				; $86E4
-			JR NZ,L_86EA				; $86E6
-			RR B				; $86E8
-L_86EA:
-			RR B				; $86EA
-L_86EC:
-			BIT 0,B				; $86EC
-			EXX				; $86EE
-			LD A,($85A5)				; $86EF
-			JR NZ,L_86F8				; $86F2
+			LD A,($85A5)			; $86D6
+			EXX						; $86D9
+			BIT 7,C					; $86DA
+			JR NZ,L_86FB			; $86DC
+			LD A,($85A3)			; $86DE
+			LD B,C					; $86E1
+			SRL A					; $86E2
+			JR NC,L_86EC			; $86E4
+			JR NZ,L_86EA			; $86E6
+			RR B					; $86E8
+L_86EA:		RR B					; $86EA
+L_86EC:		BIT 0,B					; $86EC
+			EXX						; $86EE
+			LD A,($85A5)			; $86EF
+			JR NZ,L_86F8			; $86F2
 			EX DE,HL				; $86F4
-			LD A,($85A6)				; $86F5
-L_86F8:
-			LD E,L				; $86F8
-			LD D,H				; $86F9
-			EXX				; $86FA
-L_86FB:
-			LD ($85A9),A				; $86FB
-L_86FE:
-			LD ($85AE),BC				; $86FE
-			EXX				; $8702
-			LD ($85AA),HL				; $8703
-			LD ($85AC),DE				; $8706
-			RET				; $870A
+			LD A,($85A6)			; $86F5
+L_86F8:		LD E,L					; $86F8
+			LD D,H					; $86F9
+			EXX						; $86FA
+L_86FB:		LD ($85A9),A			; $86FB
+L_86FE:		LD ($85AE),BC			; $86FE
+			EXX						; $8702
+			LD ($85AA),HL			; $8703
+			LD ($85AC),DE			; $8706
+			RET						; $870A
 
-L_870B:
-			XOR A				; $870B
-			LD ($859A),A				; $870C
-			RET				; $870F
+L_870B:		XOR A					; $870B
+			LD ($859A),A			; $870C
+			RET						; $870F
 
 			defb $80,$FE,$01                                    ; $8710 ...
 			defb $01,$00,$03,$87,$03,$0F,$01,$00				; $8713 ........
@@ -4554,6 +4563,8 @@ L_870B:
 			RLCA					; $8736
 			LD (BC),A				; $8737
 
+
+; init
 L_8738:		LD HL,$0190				; $8738
 			LD ($859C),HL			; $873B
 			LD A,$FF				; $873E
@@ -4562,15 +4573,15 @@ L_8738:		LD HL,$0190				; $8738
 			LD ($859A),A			; $8744
 			RET						; $8747
 
-L_8748:
-			PUSH AF				; $8748
+;----------
+
+L_8748:		PUSH AF				; $8748
 			PUSH BC				; $8749
 			PUSH DE				; $874A
 			PUSH HL				; $874B
 			PUSH IX				; $874C
 			LD HL,$8847				; $874E
-L_8751:
-			LD C,A				; $8751
+L_8751:		LD C,A				; $8751
 			LD A,(HL)				; $8752
 			CP $FF				; $8753
 			JP Z,L_87A5				; $8755
@@ -4580,11 +4591,8 @@ L_8751:
 			LD BC,$0004				; $875C
 			ADD HL,BC				; $875F
 			JR L_8751				; $8760
-
-L_8762:
-			LD IX,$8814				; $8762
-L_8766:
-			BIT 7,(IX+$00)				; $8766
+L_8762:		LD IX,$8814				; $8762
+L_8766:		BIT 7,(IX+$00)				; $8766
 			JR NZ,L_87A5				; $876A
 			EX AF,AF'				; $876C
 			LD A,(IX+$01)				; $876D
@@ -4594,9 +4602,7 @@ L_8766:
 			LD BC,$000A				; $8774
 			ADD IX,BC				; $8777
 			JR L_8766				; $8779
-
-L_877B:
-			EX AF,AF'				; $877B
+L_877B:		EX AF,AF'				; $877B
 			PUSH HL				; $877C
 			CALL L_A539				; $877D
 			LD (IX+$06),L				; $8780
@@ -4616,8 +4622,7 @@ L_877B:
 			LD A,(HL)				; $879E
 			LD (IX+$08),A				; $879F
 			LD (IX+$09),A				; $87A2
-L_87A5:
-			POP IX				; $87A5
+L_87A5:		POP IX				; $87A5
 			POP HL				; $87A7
 			POP DE				; $87A8
 			POP BC				; $87A9
@@ -5516,7 +5521,7 @@ L_8F58:
 			LD ($7E94),A				; $8F6C
 			CALL L_7BFC				; $8F6F
 			CALL L_7B72				; $8F72
-			LD DE,($6970)				; $8F75
+			LD DE,(OLD_POS_XY)				; $8F75
 			LD (POS_XY),DE				; $8F79
 			LD B,D				; $8F7D
 			LD C,E				; $8F7E
@@ -5609,10 +5614,8 @@ L_8FD6:
 			defb $FF,$32,$FF,$2D,$FF,$3C,$01,$37				; $9033 .2.-.<.7
 			defb $01,$32,$01,$2D,$01                            ; $903B .2.-.
 
-L_9040:
-			LD IX,$9142				; $9040
-L_9044:
-			LD A,(IX+$00)				; $9044
+L_9040:		LD IX,$9142				; $9040
+L_9044:		LD A,(IX+$00)				; $9044
 			CP $FF				; $9047
 			RET Z				; $9049
 			LD A,(IX+$0A)				; $904A
@@ -5620,17 +5623,15 @@ L_9044:
 			JP Z,L_905D				; $904F
 			JP L_90CA				; $9052
 
-L_9055:
-			LD DE,$000B				; $9055
+L_9055:		LD DE,$000B				; $9055
 			ADD IX,DE				; $9058
 			JP L_9044				; $905A
 
-L_905D:
-			LD E,(IX+$00)				; $905D
+L_905D:		LD E,(IX+$00)				; $905D
 			LD D,(IX+$01)				; $9060
 			LD B,D				; $9063
 			LD C,E				; $9064
-			CALL L_69E6				; $9065
+			CALL CHECK_SCENE_UP				; $9065
 			CALL NZ,L_9137				; $9068
 			LD A,(IX+$0A)				; $906B
 			ADD A,D				; $906E
@@ -5670,12 +5671,11 @@ L_905D:
 			CALL L_A47B				; $90C4
 			JP L_9055				; $90C7
 
-L_90CA:
-			LD E,(IX+$05)				; $90CA
+L_90CA:		LD E,(IX+$05)				; $90CA
 			LD D,(IX+$06)				; $90CD
 			LD B,D				; $90D0
 			LD C,E				; $90D1
-			CALL L_69C4				; $90D2
+			CALL CHECK_SCENE_DOWN				; $90D2
 			CALL NZ,L_9137				; $90D5
 			LD A,(IX+$0A)				; $90D8
 			ADD A,D				; $90DB
@@ -6349,22 +6349,17 @@ L_96F3:
 			LD (IX+$07),B				; $970B
 			RET				; $970E
 
-L_970F:
-			LD IX,$979F				; $970F
-L_9713:
-			LD A,(IX+$00)				; $9713
+L_970F:		LD IX,$979F				; $970F
+L_9713:		LD A,(IX+$00)				; $9713
 			CP $FF				; $9716
 			RET Z				; $9718
 			LD A,(IX+$02)				; $9719
 			OR A				; $971C
 			JP NZ,L_9728				; $971D
-L_9720:
-			LD BC,$0008				; $9720
+L_9720:		LD BC,$0008				; $9720
 			ADD IX,BC				; $9723
 			JP L_9713				; $9725
-
-L_9728:
-			LD E,(IX+$00)				; $9728
+L_9728:		LD E,(IX+$00)				; $9728
 			LD D,(IX+$01)				; $972B
 			LD B,D				; $972E
 			LD C,E				; $972F
@@ -6376,18 +6371,16 @@ L_9728:
 			LD A,D				; $973D
 			CP $B0				; $973E
 			JP Z,L_9787				; $9740
-			CALL L_69C4				; $9743
+			CALL CHECK_SCENE_DOWN				; $9743
 			JP NZ,L_9787				; $9746
 			JP L_9758				; $9749
 
-L_974C:
-			LD A,D				; $974C
+L_974C:		LD A,D				; $974C
 			CP $20				; $974D
 			JP Z,L_9787				; $974F
-			CALL L_69E6				; $9752
+			CALL CHECK_SCENE_UP				; $9752
 			JP NZ,L_9787				; $9755
-L_9758:
-			LD A,(IX+$05)				; $9758
+L_9758:		LD A,(IX+$05)				; $9758
 			ADD A,D				; $975B
 			LD D,A				; $975C
 			LD (IX+$01),D				; $975D
@@ -6875,7 +6868,7 @@ L_9B61:
 			DJNZ L_9B51				; $9B65
 			RET				; $9B67
 
-L_9B68:
+GENERATE_FLYING_ENEMIES:
 			CP $EC				; $9B68
 			RET C				; $9B6A
 			CP $F0				; $9B6B
@@ -7107,8 +7100,7 @@ L_9C49:
 			defb $01,$03,$01,$03,$01,$03,$01,$02				; $9F93 ........
 			defb $01,$02,$01,$01,$01,$01,$E1                    ; $9F9B .......
 
-L_9FA2:
-			PUSH AF				; $9FA2
+L_9FA2:		PUSH AF				; $9FA2
 			PUSH BC				; $9FA3
 			PUSH DE				; $9FA4
 			PUSH HL				; $9FA5
@@ -7133,8 +7125,7 @@ L_9FA2:
 			OR (HL)				; $9FC1
 			JP NZ,L_9FFB				; $9FC2
 			LD IX,$A002				; $9FC5
-L_9FC9:
-			LD A,(IX+$00)				; $9FC9
+L_9FC9:		LD A,(IX+$00)				; $9FC9
 			CP $FF				; $9FCC
 			JP Z,L_9FFB				; $9FCE
 			OR A				; $9FD1
@@ -7144,9 +7135,7 @@ L_9FC9:
 			ADD IX,BC				; $9FD8
 			POP BC				; $9FDA
 			JP L_9FC9				; $9FDB
-
-L_9FDE:
-			LD A,C				; $9FDE
+L_9FDE:		LD A,C				; $9FDE
 			CALL L_A03F				; $9FDF
 			LD (IX+$00),C				; $9FE2
 			LD A,(HL)				; $9FE5
@@ -7158,8 +7147,7 @@ L_9FDE:
 			LD DE,$C6F9				; $9FF2
 			LD (IX+$04),E				; $9FF5
 			LD (IX+$05),D				; $9FF8
-L_9FFB:
-			POP IX				; $9FFB
+L_9FFB:		POP IX				; $9FFB
 			POP HL				; $9FFD
 			POP DE				; $9FFE
 			POP BC				; $9FFF
@@ -7190,28 +7178,24 @@ L_A03F:
 			POP AF				; $A04C
 			RET				; $A04D
 
-L_A04E:
-			LD HL,$A002				; $A04E
-L_A051:
-			LD A,(HL)				; $A051
+L_A04E:		LD HL,$A002				; $A04E
+L_A051:		LD A,(HL)				; $A051
 			CP $FF				; $A052
 			RET Z				; $A054
 			OR A				; $A055
 			JR NZ,L_A05F				; $A056
-L_A058:
-			LD BC,$0006				; $A058
+L_A058:		LD BC,$0006				; $A058
 			ADD HL,BC				; $A05B
 			JP L_A051				; $A05C
 
-L_A05F:
-			PUSH HL				; $A05F
+L_A05F:		PUSH HL				; $A05F
 			INC HL				; $A060
 			LD C,(HL)				; $A061
 			INC HL				; $A062
 			LD E,(HL)				; $A063
 			INC HL				; $A064
 			LD D,(HL)				; $A065
-			CALL L_69C4				; $A066
+			CALL CHECK_SCENE_DOWN				; $A066
 			JR NZ,L_A082				; $A069
 			LD B,D				; $A06B
 			INC D				; $A06C
@@ -7228,26 +7212,21 @@ L_A05F:
 			PUSH IX				; $A07A
 			LD (IX+$04),L				; $A07C
 			LD (IX+$05),H				; $A07F
-L_A082:
-			POP HL				; $A082
+L_A082:		POP HL				; $A082
 			JP L_A058				; $A083
-
-L_A086:
-			LD A,$01				; $A086
+L_A086:		LD A,$01				; $A086
 			CALL L_67B9				; $A088
 			LD IX,$A002				; $A08B
-L_A08F:
-			LD A,(IX+$00)				; $A08F
+L_A08F:		LD A,(IX+$00)				; $A08F
 			CP $FF				; $A092
 			RET Z				; $A094
+
 			OR A				; $A095
 			JR NZ,L_A0A0				; $A096
 			LD BC,$0006				; $A098
 			ADD IX,BC				; $A09B
 			JP L_A08F				; $A09D
-
-L_A0A0:
-			LD E,(IX+$02)				; $A0A0
+L_A0A0:		LD E,(IX+$02)				; $A0A0
 			LD D,(IX+$03)				; $A0A3
 			LD B,A				; $A0A6
 			LD A,D				; $A0A7
@@ -7269,13 +7248,10 @@ L_A0A0:
 			CALL L_6802				; $A0C6
 			OR A				; $A0C9
 			JR NZ,L_A0D4				; $A0CA
-L_A0CC:
-			LD BC,$0006				; $A0CC
+L_A0CC:		LD BC,$0006				; $A0CC
 			ADD IX,BC				; $A0CF
 			JP L_A08F				; $A0D1
-
-L_A0D4:
-			INC HL				; $A0D4
+L_A0D4:		INC HL				; $A0D4
 			LD E,(HL)				; $A0D5
 			INC HL				; $A0D6
 			LD D,(HL)				; $A0D7
@@ -7296,9 +7272,8 @@ L_A0D4:
 			LD H,(HL)				; $A0F3
 			LD L,A				; $A0F4
 			JP (HL)				; $A0F5
-L_A0F6:
-L_A0F6:
-			LD (IX+$00),$00				; $A0F6
+
+L_A0F6:		LD (IX+$00),$00				; $A0F6
 			LD C,(IX+$02)				; $A0FA
 			LD B,(IX+$03)				; $A0FD
 			LD L,(IX+$04)				; $A100
@@ -7347,11 +7322,11 @@ L_A0F6:
 			JP L_A0F6				; $A14B
 
 			LD A,($6AF3)				; $A14E
-			OR A				; $A151
+			OR A						; $A151
 			JP NZ,L_A0F6				; $A152
-			LD A,$01				; $A155
+			LD A,$01					; $A155
 			LD ($6AF3),A				; $A157
-			JP L_A0F6				; $A15A
+			JP L_A0F6					; $A15A
 
 			defb $00,$00,$00,$00,$00,$00                        ; $A15D ......
 			defb $00,$00,$71,$47,$47,$00,$00,$12				; $A163 ..qGG...
@@ -7370,33 +7345,32 @@ L_A0F6:
 			defb $A0,$00,$8C,$47,$47,$00,$00,$F6				; $A1CB ...GG...
 			defb $A0,$00,$FF                                    ; $A1D3 ...
 
-L_A1D6:
+PLACE_PICKUPS:		
 			CP $E9				; $A1D6
 			RET C				; $A1D8
+
 			PUSH AF				; $A1D9
 			PUSH BC				; $A1DA
 			PUSH DE				; $A1DB
 			PUSH HL				; $A1DC
-			LD HL,$A1F6				; $A1DD
+			LD HL,$A1F6			; $A1DD
 			LD C,A				; $A1E0
-L_A1E1:
-			LD A,(HL)				; $A1E1
+L_A1E1:		LD A,(HL)			; $A1E1
 			CP $FF				; $A1E2
-			JR Z,L_A1F1				; $A1E4
+			JR Z,L_A1F1			; $A1E4
 			INC HL				; $A1E6
 			INC HL				; $A1E7
 			CP C				; $A1E8
-			JR NZ,L_A1E1				; $A1E9
+			JR NZ,L_A1E1		; $A1E9
 			DEC HL				; $A1EB
-			LD A,(HL)				; $A1EC
+			LD A,(HL)			; $A1EC
 			DEC D				; $A1ED
-			CALL L_9FA2				; $A1EE
-L_A1F1:
-			POP HL				; $A1F1
+			CALL L_9FA2			; $A1EE
+L_A1F1:		POP HL				; $A1F1
 			POP DE				; $A1F2
 			POP BC				; $A1F3
 			POP AF				; $A1F4
-			RET				; $A1F5
+			RET					; $A1F5
 
 			JP (HL)				; $A1F6
 
