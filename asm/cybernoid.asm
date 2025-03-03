@@ -1060,21 +1060,15 @@ L_6AE2:		LD A,($6AF3)			; $6AE2
 			defb $F5,$EB,$F8,$E6,$FC,$E2;  REMOVED ,$7E,$23		; $6B23
 			; UPDATED TO USE INSTRUCTION
 
-
-
-;	defb $EB,$00,$E6,$F1,$C2,$DF                        ; $8235 ......
-;	defb $09,$08,$E0,$45,$42,$59,$20,$52				; $823B ...EBY R
-;	defb $41,$46,$46,$41,$45,$4C,$45,$20				; $8243 AFFAELE 
-
-L_6B29:		ld a,(HL)				; $6B29
+DRAW_LIST:	ld a,(HL)				; $6B29
 			inc hl					; $6B2A
-			CP $61					; $6B2B
-			JP NC,L_6B37			; $6B2D
+			CP $61					; $6B2B  
+			JP NC,SKIP_MENU_DRAW	; $6B2D  ; Bytes >= $61
 			CALL ICON16x16			; $6B30
-			INC E					; $6B33
-			JP L_6B29				; $6B34
-
-L_6B37:		CP $90					; $6B37
+			INC E					; $6B33	 ; byte wraps (screenX is 0-255)  
+			JP DRAW_LIST			; $6B34  ; keep drawing until marker
+SKIP_MENU_DRAW:		
+			CP $90					; $6B37
 			JP NC,L_6B47			; $6B39
 			SUB $78					; $6B3C
 			ADD A,D					; $6B3E
@@ -1083,180 +1077,161 @@ L_6B37:		CP $90					; $6B37
 			ADD A,E					; $6B41
 			LD E,A					; $6B42
 			INC HL					; $6B43
-			JP L_6B29				; $6B44
-
-L_6B47:		CP $CF				; $6B47
-			JP NC,L_6B54				; $6B49
-			INC D				; $6B4C
-			SUB $AF				; $6B4D
-			ADD A,E				; $6B4F
-			LD E,A				; $6B50
-			JP L_6B29				; $6B51
-
-L_6B54:
-			CP $DF				; $6B54
-			JP NC,L_6B6D				; $6B56
-			SUB $CF				; $6B59
-			CP $08				; $6B5B
+			JP DRAW_LIST			; $6B44
+L_6B47:		CP $CF					; $6B47
+			JP NC,L_6B54			; $6B49
+			INC D					; $6B4C
+			SUB $AF					; $6B4D
+			ADD A,E					; $6B4F
+			LD E,A					; $6B50
+			JP DRAW_LIST			; $6B51
+L_6B54:		CP $DF					; $6B54  ;
+			JP NC,L_6B6D			; $6B56
+			SUB $CF					; $6B59
+			CP $08					; $6B5B
 			JP C,L_6B64				; $6B5D
-			SUB $08				; $6B60
-			OR $40				; $6B62
-L_6B64:
-			LD B,A				; $6B64
-			LD A,C				; $6B65
-			AND $38				; $6B66
-			OR B				; $6B68
-			LD C,A				; $6B69
-			JP L_6B29				; $6B6A
-L_6B6D:
-			CP $DF				; $6B6D
-			JP NZ,L_6B79				; $6B6F
-			LD D,(HL)				; $6B72
-			INC HL				; $6B73
-			LD E,(HL)				; $6B74
-			INC HL				; $6B75
-			JP L_6B29				; $6B76
-L_6B79:
-			CP $E0				; $6B79
-			JP NZ,L_6B83				; $6B7B
-			LD C,(HL)				; $6B7E
-			INC HL				; $6B7F
-			JP L_6B29				; $6B80
-
-L_6B83:
-			CP $E1				; $6B83
-			JP NZ,L_6B8F				; $6B85
-			LD B,(HL)				; $6B88
-			INC HL				; $6B89
-L_6B8A:
-			PUSH HL				; $6B8A
-			PUSH BC				; $6B8B
-			JP L_6B29				; $6B8C
-
-L_6B8F:
-			CP $E2				; $6B8F
-			JP NZ,L_6B9F				; $6B91
-			POP BC				; $6B94
-			DJNZ L_6B9B				; $6B95
-			POP AF				; $6B97
-			JP L_6B29				; $6B98
-
-L_6B9B:
-			POP HL				; $6B9B
+			SUB $08					; $6B60
+			OR $40					; $6B62
+L_6B64:		LD B,A					; $6B64
+			LD A,C					; $6B65
+			AND $38					; $6B66
+			OR B					; $6B68
+			LD C,A					; $6B69
+			JP DRAW_LIST			; $6B6A
+;------------------------------------------------------------------			
+L_6B6D:		CP $DF					; $6B6D  ; $DF - Set Cursor Position
+			JP NZ,L_6B79			; $6B6F
+			LD D,(HL)				; $6B72  ; get Y
+			INC HL					; $6B73
+			LD E,(HL)				; $6B74  ; get X
+			INC HL					; $6B75
+			JP DRAW_LIST			; $6B76
+;------------------------------------------------------------------
+L_6B79:		CP $E0					; $6B79  ; $E0 - Set Colour Attribute
+			JP NZ,L_6B83			; $6B7B
+			LD C,(HL)				; $6B7E  ; get Colour
+			INC HL					; $6B7F
+			JP DRAW_LIST			; $6B80
+;------------------------------------------------------------------			
+L_6B83:		CP $E1					; $6B83  ; $E1 - Loop Control (Start loop)
+			JP NZ,L_6B8F			; $6B85
+			LD B,(HL)				; $6B88  ; get counter
+			INC HL					; $6B89
+L_6B8A:		PUSH HL					; $6B8A  
+			PUSH BC					; $6B8B  ; Save counter
+			JP DRAW_LIST			; $6B8C
+;------------------------------------------------------------------	
+L_6B8F:		CP $E2					; $6B8F  ; $E2: - Loop Control (end loop)
+			JP NZ,L_6B9F			; $6B91
+			POP BC					; $6B94  ; Restore counter
+			DJNZ L_6B9B				; $6B95  ; jmp foward ($E1:counter)
+			POP AF					; $6B97
+			JP DRAW_LIST			; $6B98
+L_6B9B:		POP HL					; $6B9B
 			JP L_6B8A				; $6B9C
-
-L_6B9F:
-			CP $E3				; $6B9F
-			JP NZ,L_6BB5				; $6BA1
-			LD A,(HL)				; $6BA4
-			INC HL				; $6BA5
-			PUSH HL				; $6BA6
-			LD H,(HL)				; $6BA7
-			LD L,A				; $6BA8
-			PUSH BC				; $6BA9
-			PUSH DE				; $6BAA
-			CALL L_6B29				; $6BAB
-			POP DE				; $6BAE
-			POP BC				; $6BAF
-			POP HL				; $6BB0
-			INC HL				; $6BB1
-			JP L_6B29				; $6BB2
-
-L_6BB5:
-			CP $E4				; $6BB5
-			JP NZ,L_6BC7				; $6BB7
+;------------------------------------------------------------------	
+L_6B9F:		CP $E3					; $6B9F ; $E3 - Recursive Drawing
+			JP NZ,L_6BB5			; $6BA1
+			LD A,(HL)				; $6BA4  ; Load address low byte
+			INC HL					; $6BA5
+			PUSH HL					; $6BA6
+			LD H,(HL)				; $6BA7  ; Load address high byte
+			LD L,A					; $6BA8
+			PUSH BC					; $6BA9
+			PUSH DE					; $6BAA
+			CALL DRAW_LIST			; $6BAB  ; Recursively process at (HL)
+			POP DE					; $6BAE
+			POP BC					; $6BAF
+			POP HL					; $6BB0
+			INC HL					; $6BB1
+			JP DRAW_LIST			; $6BB2
+;------------------------------------------------------------------	
+L_6BB5:		CP $E4					; $6BB5  ; $E4:Draw horizontally
+			JP NZ,L_6BC7			; $6BB7
 			LD B,(HL)				; $6BBA
-			INC HL				; $6BBB
+			INC HL					; $6BBB
 			LD A,(HL)				; $6BBC
-L_6BBD:
-			CALL ICON16x16				; $6BBD
-			INC E				; $6BC0
+L_6BBD:		CALL ICON16x16			; $6BBD
+			INC E					; $6BC0
 			DJNZ L_6BBD				; $6BC1
-			INC HL				; $6BC3
-			JP L_6B29				; $6BC4
-
-L_6BC7:
-			CP $E5				; $6BC7
-			JP NZ,L_6BD9				; $6BC9
+			INC HL					; $6BC3
+			JP DRAW_LIST			; $6BC4
+;------------------------------------------------------------------	
+L_6BC7:		CP $E5					; $6BC7  ; $E5:Draw vertically
+			JP NZ,L_6BD9			; $6BC9
 			LD B,(HL)				; $6BCC
-			INC HL				; $6BCD
+			INC HL					; $6BCD
 			LD A,(HL)				; $6BCE
-L_6BCF:
-			CALL ICON16x16				; $6BCF
-			INC D				; $6BD2
+L_6BCF:		CALL ICON16x16			; $6BCF
+			INC D					; $6BD2
 			DJNZ L_6BCF				; $6BD3
-			INC HL				; $6BD5
-			JP L_6B29				; $6BD6
-
-L_6BD9:
-			CP $E6				; $6BD9
-			JR NZ,L_6BEA				; $6BDB
-			LD A,(HL)				; $6BDD
-			LD ($6C55),A				; $6BDE
-			INC HL				; $6BE1
-			LD A,(HL)				; $6BE2
-			LD ($6C56),A				; $6BE3
-			INC HL				; $6BE6
-			JP L_6B29				; $6BE7
-
-L_6BEA:
-			CP $E7				; $6BEA
-			JR NZ,L_6C07				; $6BEC
-			PUSH HL				; $6BEE
-			LD HL,($6C55)				; $6BEF
-			PUSH HL				; $6BF2
+			INC HL					; $6BD5
+			JP DRAW_LIST			; $6BD6
+;------------------------------------------------------------------	
+L_6BD9:		CP $E6							; $6BD9  ;$E6:store
+			JR NZ,L_6BEA					; $6BDB
+			LD A,(HL)						; $6BDD
+			LD (ICON_LD_ADDR+1),A		; $6BDE
+			INC HL							; $6BE1
+			LD A,(HL)						; $6BE2
+			LD (ICON_LD_ADDR+2),A		; $6BE3
+			INC HL							; $6BE6
+			JP DRAW_LIST					; $6BE7
+L_6BEA:		CP $E7							; $6BEA  ;$E7:store
+			JR NZ,L_6C07					; $6BEC
+			PUSH HL							; $6BEE
+			LD HL,(ICON_LD_ADDR+1)			; $6BEF
+			PUSH HL					; $6BF2
 			LD HL,$C2F1				; $6BF3
-			LD ($6C55),HL				; $6BF6
+			LD (ICON_LD_ADDR+1),HL			; $6BF6
 			LD A,$20				; $6BF9
-			CALL ICON16x16				; $6BFB
-			INC E				; $6BFE
-			POP HL				; $6BFF
-			LD ($6C55),HL				; $6C00
-			POP HL				; $6C03
-			JP L_6B29				; $6C04
-L_6C07:
-			CP $E8				; $6C07
-			JR NZ,L_6C13				; $6C09
+			CALL ICON16x16			; $6BFB
+			INC E					; $6BFE
+			POP HL					; $6BFF
+			LD (ICON_LD_ADDR+1),HL			; $6C00
+			POP HL					; $6C03
+			JP DRAW_LIST			; $6C04
+L_6C07:		CP $E8					; $6C07  ;$E6:store
+			JR NZ,L_6C13			; $6C09
 			LD A,(HL)				; $6C0B
-			LD ($6C82),A				; $6C0C
-			INC HL				; $6C0F
-			JP L_6B29				; $6C10
+			LD ($6C82),A			; $6C0C
+			INC HL					; $6C0F
+			JP DRAW_LIST			; $6C10
+L_6C13:		CP $E9					; $6C13
+			JR NZ,L_6C1A			; $6C15
+			JP DRAW_LIST			; $6C17
+L_6C1A:		CP $EA					; $6C1A
+			JR NZ,L_6C21			; $6C1C
+			JP DRAW_LIST			; $6C1E
+L_6C21:		CP $EB					; $6C21  ; 
+			RET NZ					; $6C23  ; Return if not (Z flag set if $EB)
 
-L_6C13:
-			CP $E9				; $6C13
-			JR NZ,L_6C1A				; $6C15
-			JP L_6B29				; $6C17
-
-L_6C1A:
-			CP $EA				; $6C1A
-			JR NZ,L_6C21				; $6C1C
-			JP L_6B29				; $6C1E
-
-L_6C21:
-			CP $EB				; $6C21
-			RET NZ				; $6C23
-			PUSH BC				; $6C24
-			PUSH HL				; $6C25
-			LD L,(HL)				; $6C26
+			;  (notes: for menu, here HL = $8235 +1)
+			;------------------------------------------------------------------
+			; !!!This section does dynamic reconfiguration of the draw list!!!
+			PUSH BC					; $6C24
+			PUSH HL					; $6C25
+			LD L,(HL)				; $6C26       
 			LD H,$00				; $6C27
-			ADD HL,HL				; $6C29
-			LD BC,$6C44				; $6C2A
-			ADD HL,BC				; $6C2D
-			LD A,(HL)				; $6C2E
-			INC HL				; $6C2F
-			LD H,(HL)				; $6C30
-			LD L,A				; $6C31
-			LD ($6B31),HL				; $6C32
-			LD ($6BBE),HL				; $6C35
-			LD ($6BD0),HL				; $6C38
-			LD ($6BFC),HL				; $6C3B
-			POP HL				; $6C3E
-			POP BC				; $6C3F
-			INC HL				; $6C40
-			JP L_6B29				; $6C41
-
-			defb $4A,$6C,$87,$6C,$87,$6C                        ; $6C44 Jl.l.l
-
+			ADD HL,HL				; $6C29  ; X2
+			LD BC,$6C44				; $6C2A  ; Lookup  table
+			ADD HL,BC				; $6C2D  ; HL = $6C44 + (2 * index)
+			LD A,(HL)				; $6C2E  ; Load low byte of target address
+			INC HL					; $6C2F  ; 
+			LD H,(HL)				; $6C30  ; Load high byte
+			LD L,A					; $6C31
+			LD ($6B31),HL			; $6C32  ; Patch CALL ICON16x16 to use new routine
+			LD ($6BBE),HL			; $6C35  ; 
+			LD ($6BD0),HL			; $6C38  ; 
+			LD ($6BFC),HL			; $6C3B  ; 
+			POP HL					; $6C3E
+			POP BC					; $6C3F
+			INC HL					; $6C40  
+			;  (notes: for Menu here HL = $8235 +2, (i.e. MENU_TEXT+2) )
+			JP DRAW_LIST			; $6C41  
+			;------------------------------------------------------------------
+			defb $4A,$6C,$87,$6C,$87,$6C     ; $6C44  ; Lookup table: addresses for rendering routines
+			;------------------------------------------------------------------
 
 ; == DISPLAY 8x8 icon ==
 ; input: D=Y, E=X, A=char
@@ -1267,12 +1242,15 @@ ICON16x16:
 			PUSH HL				; $6C4C
 			PUSH BC				; $6C4D
 			LD L,A				; $6C4E
-			LD H,$00				; $6C4F
-			ADD HL,HL				; $6C51
-			ADD HL,HL				; $6C52
-			ADD HL,HL				; $6C53	;Ax8 for 8 byte char bitmap
-			LD BC,$0000				; $6C54
-			ADD HL,BC				; $6C57
+			LD H,$00			; $6C4F
+			ADD HL,HL			; $6C51
+			ADD HL,HL			; $6C52
+			ADD HL,HL			; $6C53	;Ax8 for 8 byte char bitmap
+
+ICON_LD_ADDR:
+			LD BC,$0000			; $6C54  ; code patched here with new address
+
+			ADD HL,BC			; $6C57
 			PUSH HL				; $6C58
 			LD A,D				; $6C59	; Y coords
 			AND $F8				; $6C5A ; Aligned to 8-pixel rows
@@ -2486,7 +2464,7 @@ L_7676:
 			LD BC,$0005				; $769B
 			LDIR				; $769E
 			LD HL,$76CC				; $76A0
-			CALL L_6B29				; $76A3
+			CALL DRAW_LIST				; $76A3
 			LD HL,LIVES				; $76A6	; load lives
 			INC (HL)				; $76A9	; bonus life
 			LD DE,$7972				; $76AA
@@ -2500,7 +2478,7 @@ L_76B0:
 
 L_76BB:
 			LD HL,$7730				; $76BB
-			CALL L_6B29				; $76BE
+			CALL DRAW_LIST				; $76BE
 L_76C1:
 			CALL USER_INPUT				; $76C1
 			LD A,(FIRE_BUTTON)				; $76C4
@@ -2550,7 +2528,7 @@ L_76C1:
 
 L_77FF:
 			LD HL,$7814				; $77FF
-			CALL L_6B29				; $7802
+			CALL DRAW_LIST				; $7802
 			CALL L_788E				; $7805
 			CALL L_78AF				; $7808
 			CALL L_78C8				; $780B
@@ -2581,7 +2559,7 @@ L_788E:
 			PUSH HL				; $7891
 			LD C,$45				; $7892
 			LD HL,$C2F1				; $7894
-			LD ($6C55),HL				; $7897
+			LD (ICON_LD_ADDR+1),HL				; $7897
 			LD HL,$78F9				; $789A
 			LD DE,$0108				; $789D
 			LD B,$06				; $78A0
@@ -2599,7 +2577,7 @@ L_78A2:
 
 L_78AF:
 			LD HL,$C2F1				; $78AF
-			LD ($6C55),HL				; $78B2
+			LD (ICON_LD_ADDR+1),HL				; $78B2
 			LD C,$43				; $78B5
 			LD HL,$796C				; $78B7
 			LD DE,$0208				; $78BA
@@ -2700,7 +2678,7 @@ Display3DigitNumber:  ; L_7977:
 			PUSH BC					; $7977
 			PUSH HL					; $7978
 			LD HL,$C2F1				; $7979 ; font data
-			LD ($6C55),HL			; $797C	; modifies this "LD BC,$XXXX" @$6C55 
+			LD (ICON_LD_ADDR+1),HL			; $797C	; modifies this "LD BC,$XXXX" @ICON_LD_ADDR+1 
 			LD B,$64				; $797F
 			CALL Display8x8Digits	; $7981 ; hundreds
 			LD B,$0A				; $7984
@@ -2738,7 +2716,7 @@ L_79A7:
 ; Display Egg Timer 
 ; E register: X coords (initial $7B = 123)
 L_79A9:		LD HL,$79BE			; $79A9  ; data address
-			CALL L_6B29			; $79AC
+			CALL DRAW_LIST			; $79AC
 			LD A,(EGG_TIMER)	; $79AF  ; count down from 17 (egg timer)
 			OR A				; $79B2
 			RET Z				; $79B3  ; dont display
@@ -3042,7 +3020,7 @@ L_7B72:
 			LD C,$47				; $7B72
 			LD A,(SELECTED_WEAPON)				; $7B74
 			LD HL,$C2F1				; $7B77
-			LD ($6C55),HL				; $7B7A
+			LD (ICON_LD_ADDR+1),HL				; $7B7A
 			ADD A,A				; $7B7D
 			ADD A,A				; $7B7E
 			ADD A,A				; $7B7F
@@ -3936,9 +3914,11 @@ MODE48K:	defb $0		; $81A5  ; looks like a dev skip 48k music thing
 DO_MENU:	CALL CLR_SCREEN				; $81A6  ; clear screen
 			CALL DRAW_MENU_BORDERS		; $81A9  ; Draw menu borders
 
-			LD HL,$8235					; $81AC
-			CALL L_6B29					; $81AF
+			LD HL,MENU_TEXT				; $81AC
+			CALL DRAW_LIST				; $81AF  ; menu text
 
+
+	
 			LD A,(SpeccyModel)			; $81B2  ; 0=48k, 1=128k
 			OR A						; $81B5
 			JR NZ,L_81CB				; $81B6
@@ -3993,8 +3973,8 @@ L_8214:		SUB $33						; $8214
 			LD A,E						; $821D
 			LD (INPUT_TYPE),A			; $821E
 			PUSH BC						; $8221
-			LD HL,$8235					; $8222
-			CALL L_6B29					; $8225
+			LD HL,MENU_TEXT					; $8222
+			CALL DRAW_LIST					; $8225
 			POP BC						; $8228
 INVALID_KEY_PRESS:			
 			DEC BC						; $8229
@@ -4004,10 +3984,15 @@ INVALID_KEY_PRESS:
 			CALL L_9433					; $822F   ; Hi-Scores
 			JP DO_MENU					; $8232
 
-			defb $EB,$00,$E6,$F1,$C2,$DF                        ; $8235 ......
-			defb $09,$08,$E0,$45,$42,$59,$20,$52				; $823B ...EBY R
-			defb $41,$46,$46,$41,$45,$4C,$45,$20				; $8243 AFFAELE 
-			defb $43,$45,$43,$43,$4F,$DA,$DF,$0B				; $824B CECCO...
+
+; Menu text and control bytes 
+MENU_TEXT:	defb $EB,$00 				                       	; $8235 ; Setup:$EB (with index)
+			defb $E6,$F1,$C2									; $8237 ; Patch 'ICON_LD_ADDR': $E6 (with values)
+			defb $DF											; $823A ; Position: $DF
+			defb $09,$08										; $823B ; Y: $09, X: $08
+			defb $E0,$45										; $823D ; Colour: $E0  (with col)
+			defb "BY RAFFAELE CECCO" 							; $823F
+			defb $DA,$DF,$0B
 			defb $06,$4D,$55,$53,$49,$43,$20,$42				; $8253 .MUSIC B
 			defb $59,$20,$44,$41,$56,$45,$20,$52				; $825B Y DAVE R
 			defb $4F,$47,$45,$52,$53,$DF,$0D,$09				; $8263 OGERS...
@@ -4075,7 +4060,7 @@ REDEFINE_KEYS:		CALL CLR_SCREEN		; $830C		 ; CALL $66AA
 			XOR A							; $8312
 			LD (INPUT_TYPE),A				; $8313
 			LD HL,$83FA						; $8316
-			CALL L_6B29						; $8319
+			CALL DRAW_LIST						; $8319
 			LD IX,$681D						; $831C
 			LD IY,$83F1						; $8320  ; get redefined keys base
 			LD DE,$0C0F						; $8324	 ; Y/X coords of new keys
@@ -4120,7 +4105,7 @@ L_836E:		CP $02						; $836E
 			LD HL,$83E2					; $8372
 L_8375:		LD ($83C1),A				; $8375
 			LD C,$44					; $8378
-			CALL L_6B29					; $837A
+			CALL DRAW_LIST					; $837A
 			POP BC						; $837D
 			DJNZ L_8329					; $837E
 			LD BC,$C350					; $8380
@@ -5047,9 +5032,8 @@ L_8AD8:
 
 L_8ADA:
 			LD HL,$8B16				; $8ADA
-L_8ADD:
-L_8ADD:
-			LD E,(HL)				; $8ADD
+
+L_8ADD:		LD E,(HL)				; $8ADD
 			BIT 7,E				; $8ADE
 			RET NZ				; $8AE0
 			INC HL				; $8AE1
@@ -5556,7 +5540,7 @@ L_8F95:
 			LD E,$22				; $8F95
 			CALL PLAY_SFX				; $8F97
 			LD HL,$C2F1				; $8F9A
-			LD ($6C55),HL				; $8F9D
+			LD (ICON_LD_ADDR+1),HL				; $8F9D
 			LD HL,$8FCD				; $8FA0
 			LD BC,$0945				; $8FA3
 			LD DE,$0E0B				; $8FA6
@@ -6105,9 +6089,9 @@ L_9433:
 			CALL CLR_SCREEN				; $9433
 			CALL DRAW_MENU_BORDERS				; $9436
 			LD HL,$947C				; $9439
-			CALL L_6B29				; $943C
+			CALL DRAW_LIST				; $943C
 			LD HL,$C2F1				; $943F
-			LD ($6C55),HL				; $9442
+			LD (ICON_LD_ADDR+1),HL				; $9442
 			LD HL,$949C				; $9445
 			LD B,$0A				; $9448
 			LD C,$47				; $944A
@@ -6219,7 +6203,7 @@ L_9566:
 			LDIR				; $95B0
 			CALL DRAW_MENU_BORDERS				; $95B2
 			LD HL,$9664				; $95B5
-			CALL L_6B29				; $95B8
+			CALL DRAW_LIST				; $95B8
 			LD DE,$0F0C				; $95BB
 			LD HL,$96D0				; $95BE
 L_95C1:
@@ -9081,7 +9065,11 @@ L_C067:
 			defb $2E,$00,$27,$28,$FF,$09,$00,$20				; $C2D3 ..'(... 
 			defb $00,$22,$00,$00,$29,$2A,$FF,$06				; $C2DB ."..)*..
 			defb $00,$FF,$0A,$14,$11,$0C,$0D,$0E				; $C2E3 ........
-			defb $0F,$0C,$01,$02,$03,$04,$05,$01				; $C2EB ........
+
+			defb $0F,$0C,$01,$02,$03,$04				; $C2EB ........
+
+			defb $05,$01								; $C2F1 ; patched with DRAW_LIST (commands $E6,$E7)
+
 			defb $02,$04,$03,$01,$15,$02,$01,$03				; $C2F3 ........
 			defb $02,$01,$01,$02,$03,$04,$05,$01				; $C2FB ........
 			defb $02,$03,$04,$05,$15,$01,$01,$02				; $C303 ........
