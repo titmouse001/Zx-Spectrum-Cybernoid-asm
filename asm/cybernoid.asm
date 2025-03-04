@@ -1049,88 +1049,127 @@ L_6AE2:		LD A,($6AF3)			; $6AE2
 			LD DE,($6AF6)			; $6AE7
 			JP L_A446				; $6AEB
 
-			defb $00											; $6AEE    ; Immediate Backshot
-			defb $00,$00,$00,$00                            	; $6AEF ....
-			defb $00,$00,$00,$00,$00,$00,$00,$E0				; $6AF3 ........
-			defb $04,$E2,$08,$E6,$0B,$EB,$0D,$F1				; $6AFB ........
-			defb $0F,$F8,$0F,$00,$0F,$08,$0D,$0F				; $6B03 ........
-			defb $0B,$15,$08,$1A,$04,$1E,$00,$20				; $6B0B ....... 
-			defb $FC,$1E,$F8,$1A,$F5,$15,$F3,$0F				; $6B13 ........
-			defb $F1,$08,$F1,$00,$F1,$F8,$F3,$F1				; $6B1B ........
-			defb $F5,$EB,$F8,$E6,$FC,$E2;  REMOVED ,$7E,$23		; $6B23
-			; UPDATED TO USE INSTRUCTION
+			defb $00								; $6AEE ; Immediate Backshot
+			defb $00,$00,$00,$00                    ; $6AEF 
+			defb $00,$00,$00,$00,$00,$00,$00,$E0	; $6AF3 
+			defb $04,$E2,$08,$E6,$0B,$EB,$0D,$F1	; $6AFB 
+			defb $0F,$F8,$0F,$00,$0F,$08,$0D,$0F	; $6B03 
+			defb $0B,$15,$08,$1A,$04,$1E,$00,$20	; $6B0B 
+			defb $FC,$1E,$F8,$1A,$F5,$15,$F3,$0F	; $6B13 
+			defb $F1,$08,$F1,$00,$F1,$F8,$F3,$F1	; $6B1B 
+			defb $F5,$EB,$F8,$E6,$FC,$E2
+	
+; --------------------------------------------------------------------------
+; *** COMMAND DEFINITIONS FOR DRAW LIST ***
+SET_POS				EQU $DF		; Set absolute position (Y,X)
+MOVE				EQU $78		; Base value for relative moves ($79-$8F)
+GLOBAL_COL			EQU $E0		; Set global color attribute (paper + default ink)
+END_MARKER			EQU $FF		; End of draw list
+ICON_ADDR			EQU $E6		; Patch icon source address (L,H)
+SETUP				EQU $EB		; Configure rendering routine via lookup table
 
+; *** Ink Colors ***
+; Note: For bright variants add 8
+INK_BLACK			EQU $CF+0+8	
+INK_BLUE			EQU $CF+1+8	
+INK_RED				EQU $CF+2+8	
+INK_PURPLE			EQU $CF+3+8
+INK_GREEN			EQU $CF+4+8
+INK_CYAN			EQU $CF+5+8
+INK_YELLOW			EQU $CF+6+8
+INK_WHITE			EQU $CF+7+8
+
+; --------------------------------------------------------------------------
+; Draw List Of Icons 16x16
+; Input: HL=Draw List
 DRAW_LIST:	ld a,(HL)				; $6B29
 			inc hl					; $6B2A
 			CP $61					; $6B2B  
 			JP NC,SKIP_MENU_DRAW	; $6B2D  ; Bytes >= $61
-			CALL ICON16x16			; $6B30
-			INC E					; $6B33	 ; byte wraps (screenX is 0-255)  
+			CALL ICON16x16			; $6B30  ; IN: DE=y/x, C=colour (A < $61)
+			INC E					; $6B33	 ; Next position (screenX is 0-255)  
 			JP DRAW_LIST			; $6B34  ; keep drawing until marker
 SKIP_MENU_DRAW:		
-			CP $90					; $6B37
-			JP NC,L_6B47			; $6B39
-			SUB $78					; $6B3C
-			ADD A,D					; $6B3E
-			LD D,A					; $6B3F
-			LD A,(HL)				; $6B40
+			;-----------------------------------------------------
+			; Relative move
+			CP $90					; $6B37 
+			JP NC,SKIP_X_AXIS		; $6B39 ; A >= $90
+			SUB $78					; $6B3C ; Newline  (i.e. $79-$78)
+			ADD A,D					; $6B3E  
+			LD D,A					; $6B3F ; Ypos moved 
+			LD A,(HL)				; $6B40 ; Get X amount to move (i.e $F3)
 			ADD A,E					; $6B41
-			LD E,A					; $6B42
+			LD E,A					; $6B42	; Xpos moved 
 			INC HL					; $6B43
 			JP DRAW_LIST			; $6B44
-L_6B47:		CP $CF					; $6B47
-			JP NC,L_6B54			; $6B49
-			INC D					; $6B4C
+SKIP_X_AXIS:		
+			CP $CF					; $6B47 ;  
+			JP NC,SKIP_Y_AXIS			; $6B49 ; A >= $CF
+			INC D					; $6B4C ; Down one pixel row
 			SUB $AF					; $6B4D
-			ADD A,E					; $6B4F
+			ADD A,E					; $6B4F ; horizontal position
 			LD E,A					; $6B50
 			JP DRAW_LIST			; $6B51
-L_6B54:		CP $DF					; $6B54  ;
-			JP NC,L_6B6D			; $6B56
-			SUB $CF					; $6B59
-			CP $08					; $6B5B
-			JP C,L_6B64				; $6B5D
-			SUB $08					; $6B60
-			OR $40					; $6B62
-L_6B64:		LD B,A					; $6B64
-			LD A,C					; $6B65
-			AND $38					; $6B66
-			OR B					; $6B68
-			LD C,A					; $6B69
-			JP DRAW_LIST			; $6B6A
-;------------------------------------------------------------------			
-L_6B6D:		CP $DF					; $6B6D  ; $DF - Set Cursor Position
-			JP NZ,L_6B79			; $6B6F
+SKIP_Y_AXIS:
+			;-----------------------------------------------------
+			; Ink $D0-$DE (after sub $CF -> $01 to $0F) 
+			CP $DF					; 
+			JP NC,SKIP_INK			; A >= $DF, not ink/color code
+			SUB $CF					; Convert ($D0-$DE) to 0-14 
+			CP $08					;
+			JP C,DO_SIMPLE_INK		; A < 8 (simple ink color)
+			SUB $08					; 
+			OR $40					; Set brightness
+DO_SIMPLE_INK:
+			LD B,A					; ink/brightness
+			LD A,C					; get global $E0 setting
+			AND $38					; Mask ink (preserve paper color only, %FBPPPIII)
+			OR B					; Merge new ink/brightness
+			LD C,A					; color attribute
+			JP DRAW_LIST			; 
+SKIP_INK:	
+			;------------------------------------------------------------------			
+			; Set Cursor Position
+			CP $DF					; $6B6D 
+			JP NZ,SKIP_SET_POS		; $6B6F  if A != $DF
 			LD D,(HL)				; $6B72  ; get Y
 			INC HL					; $6B73
 			LD E,(HL)				; $6B74  ; get X
 			INC HL					; $6B75
 			JP DRAW_LIST			; $6B76
-;------------------------------------------------------------------
-L_6B79:		CP $E0					; $6B79  ; $E0 - Set Colour Attribute
-			JP NZ,L_6B83			; $6B7B
+SKIP_SET_POS:	
+			;------------------------------------------------------------------
+			; Set Colour Attribute (global for paper)
+			CP $E0					; $6B79  ;  
+			JP NZ,SKIP_ATTR			; $6B7B  ; 
 			LD C,(HL)				; $6B7E  ; get Colour
 			INC HL					; $6B7F
 			JP DRAW_LIST			; $6B80
-;------------------------------------------------------------------			
-L_6B83:		CP $E1					; $6B83  ; $E1 - Loop Control (Start loop)
-			JP NZ,L_6B8F			; $6B85
+SKIP_ATTR:		
+			;------------------------------------------------------------------			
+			; Loop Control (Start loop)
+			CP $E1					; $6B83  
+			JP NZ,SKIP_CTR1			; $6B85
 			LD B,(HL)				; $6B88  ; get counter
 			INC HL					; $6B89
-L_6B8A:		PUSH HL					; $6B8A  
+LOOP_CTR	PUSH HL					; $6B8A  
 			PUSH BC					; $6B8B  ; Save counter
 			JP DRAW_LIST			; $6B8C
-;------------------------------------------------------------------	
-L_6B8F:		CP $E2					; $6B8F  ; $E2: - Loop Control (end loop)
-			JP NZ,L_6B9F			; $6B91
+SKIP_CTR1:
+			;------------------------------------------------------------------	
+			; Loop Control (end loop)
+			CP $E2					; $6B8F 
+			JP NZ,SKIP_CTR2			; $6B91
 			POP BC					; $6B94  ; Restore counter
-			DJNZ L_6B9B				; $6B95  ; jmp foward ($E1:counter)
+			DJNZ SKIP_				; $6B95  ; jmp foward ($E1:counter)
 			POP AF					; $6B97
 			JP DRAW_LIST			; $6B98
-L_6B9B:		POP HL					; $6B9B
-			JP L_6B8A				; $6B9C
-;------------------------------------------------------------------	
-L_6B9F:		CP $E3					; $6B9F ; $E3 - Recursive Drawing
+SKIP_:		POP HL					; $6B9B
+			JP LOOP_CTR				; $6B9C
+SKIP_CTR2:				
+			;------------------------------------------------------------------	
+			; Recursive Drawing
+			CP $E3					; $6B9F 
 			JP NZ,L_6BB5			; $6BA1
 			LD A,(HL)				; $6BA4  ; Load address low byte
 			INC HL					; $6BA5
@@ -1139,14 +1178,16 @@ L_6B9F:		CP $E3					; $6B9F ; $E3 - Recursive Drawing
 			LD L,A					; $6BA8
 			PUSH BC					; $6BA9
 			PUSH DE					; $6BAA
-			CALL DRAW_LIST			; $6BAB  ; Recursively process at (HL)
+			CALL DRAW_LIST			; $6BAB  ; Recursively process submenu at (HL)
 			POP DE					; $6BAE
 			POP BC					; $6BAF
 			POP HL					; $6BB0
 			INC HL					; $6BB1
 			JP DRAW_LIST			; $6BB2
-;------------------------------------------------------------------	
-L_6BB5:		CP $E4					; $6BB5  ; $E4:Draw horizontally
+L_6BB5:
+			;------------------------------------------------------------------	
+			; Draw horizontally
+			CP $E4					; $6BB5  
 			JP NZ,L_6BC7			; $6BB7
 			LD B,(HL)				; $6BBA
 			INC HL					; $6BBB
@@ -1156,8 +1197,10 @@ L_6BBD:		CALL ICON16x16			; $6BBD
 			DJNZ L_6BBD				; $6BC1
 			INC HL					; $6BC3
 			JP DRAW_LIST			; $6BC4
-;------------------------------------------------------------------	
-L_6BC7:		CP $E5					; $6BC7  ; $E5:Draw vertically
+L_6BC7:	
+			;------------------------------------------------------------------	
+			; Draw vertically
+			CP $E5					; $6BC7 
 			JP NZ,L_6BD9			; $6BC9
 			LD B,(HL)				; $6BCC
 			INC HL					; $6BCD
@@ -1167,27 +1210,29 @@ L_6BCF:		CALL ICON16x16			; $6BCF
 			DJNZ L_6BCF				; $6BD3
 			INC HL					; $6BD5
 			JP DRAW_LIST			; $6BD6
-;------------------------------------------------------------------	
-L_6BD9:		CP $E6							; $6BD9  ;$E6:store
+L_6BD9:	
+			;------------------------------------------------------------------	
+			; store
+			CP $E6							; $6BD9 
 			JR NZ,L_6BEA					; $6BDB
 			LD A,(HL)						; $6BDD
-			LD (ICON_LD_ADDR+1),A		; $6BDE
+			LD (ICON_LD_ADDR+1),A			; $6BDE
 			INC HL							; $6BE1
 			LD A,(HL)						; $6BE2
-			LD (ICON_LD_ADDR+2),A		; $6BE3
+			LD (ICON_LD_ADDR+2),A			; $6BE3
 			INC HL							; $6BE6
 			JP DRAW_LIST					; $6BE7
 L_6BEA:		CP $E7							; $6BEA  ;$E7:store
 			JR NZ,L_6C07					; $6BEC
 			PUSH HL							; $6BEE
 			LD HL,(ICON_LD_ADDR+1)			; $6BEF
-			PUSH HL					; $6BF2
-			LD HL,$C2F1				; $6BF3
+			PUSH HL							; $6BF2
+			LD HL,$C2F1						; $6BF3
 			LD (ICON_LD_ADDR+1),HL			; $6BF6
-			LD A,$20				; $6BF9
-			CALL ICON16x16			; $6BFB
-			INC E					; $6BFE
-			POP HL					; $6BFF
+			LD A,$20						; $6BF9
+			CALL ICON16x16					; $6BFB
+			INC E							; $6BFE
+			POP HL							; $6BFF
 			LD (ICON_LD_ADDR+1),HL			; $6C00
 			POP HL					; $6C03
 			JP DRAW_LIST			; $6C04
@@ -1235,7 +1280,7 @@ L_6C21:		CP $EB					; $6C21  ;
 
 ; == DISPLAY 8x8 icon ==
 ; input: D=Y, E=X, A=char
-; This draws text + other icons - the whole top bar is draw with this.
+; This draws text + other icons - The top bar is drawn with this.
 ICON16x16:
 			PUSH AF				; $6C4A
 			PUSH DE				; $6C4B
@@ -1280,7 +1325,7 @@ L_6C6B:		LD A,(DE)			; $6C6B ; char data
 			AND $03				; $6C77
 			OR $58				; $6C79	; 0x5800, attribute memory
 			LD H,A				; $6C7B
-			LD (HL),C			; $6C7C	; set colour (L is value same as icon)
+			LD (HL),C			; $6C7C	; set colour (L value same as icon)
 			LD DE,$0700			; $6C7D
 			ADD HL,DE			; $6C80
 			LD (HL),$00			; $6C81 ; marker flag ?
@@ -2594,7 +2639,7 @@ L_78BF:
 L_78C8:
 			LD A,(LIVES)			; $78C8	; load lives;
 			LD DE,$0203				; $78CB	; char_y=02,char_x=03
-			LD C,$46				; $78CE	; colour FBPPPIII, bright yellow
+			LD C,$46				; $78CE	; colour (FBPPPIII)
 			JP Display3DigitNumber	; $78D0	; display score
 
 LIVES:		defb $0					; $78D3	
@@ -3985,33 +4030,34 @@ INVALID_KEY_PRESS:
 			JP DO_MENU					; $8232
 
 
-; Menu text and control bytes 
-MENU_TEXT:	defb $EB,$00 				                       	; $8235 ; Setup:$EB (with index)
-			defb $E6,$F1,$C2									; $8237 ; Patch 'ICON_LD_ADDR': $E6 (with values)
-			defb $DF											; $823A ; Position: $DF
-			defb $09,$08										; $823B ; Y: $09, X: $08
-			defb $E0,$45										; $823D ; Colour: $E0  (with col)
-			defb "BY RAFFAELE CECCO" 							; $823F
-			defb $DA,$DF,$0B
-			defb $06,$4D,$55,$53,$49,$43,$20,$42				; $8253 .MUSIC B
-			defb $59,$20,$44,$41,$56,$45,$20,$52				; $825B Y DAVE R
-			defb $4F,$47,$45,$52,$53,$DF,$0D,$09				; $8263 OGERS...
-			defb $DA,$31,$20,$DB,$53,$54,$41,$52				; $826B .1 .STAR
-			defb $54,$20,$47,$41,$4D,$45,$79,$F4				; $8273 T GAMEy.
-			defb $DA,$32,$20,$DB,$44,$45,$46,$49				; $827B .2 .DEFI
-			defb $4E,$45,$20,$4B,$45,$59,$53,$79				; $8283 NE KEYSy
-			defb $F3,$DA,$33,$20,$DB,$4B,$45,$59				; $828B ..3 .KEY
-			defb $42,$4F,$41,$52,$44,$79,$F6,$DA				; $8293 BOARDy..
-			defb $34,$20,$DB,$49,$4E,$54,$45,$52				; $829B 4 .INTER
-			defb $46,$41,$43,$45,$20,$32,$79,$F3				; $82A3 FACE 2y.
-			defb $DA,$35,$20,$DB,$4B,$45,$4D,$50				; $82AB .5 .KEMP
-			defb $53,$54,$4F,$4E,$79,$F6,$DA,$36				; $82B3 STONy..6
-			defb $20,$DB,$53,$4F,$55,$4E,$44,$20				; $82BB  .SOUND 
-			defb $4F,$4E,$2F,$4F,$46,$46,$DF,$14				; $82C3 ON/OFF..
-			defb $04,$D9,$43,$59,$42,$45,$52,$4E				; $82CB ..CYBERN
-			defb $4F,$49,$44,$20,$2A,$20,$31,$39				; $82D3 OID * 19
-			defb $38,$38,$20,$48,$45,$57,$53,$4F				; $82DB 88 HEWSO
-			defb $4E,$FF                                        ; $82E3 N.
+
+;--------------------------------------------------------------------------------
+; *** Menu text and control bytes ***
+MENU_TEXT:  						 ; $8235
+            defb SETUP,$00     		 ; Setup (with index)
+            defb ICON_ADDR,$F1,$C2 	 ; Patch 'ICON_LD_ADDR'   
+            defb SET_POS,$09,$08 	 ; Set position (Y=9, X=8)    
+            defb GLOBAL_COL,$45    	 ; Set global "standard" (%FBPPPIII) colour attribute 
+            defb "BY RAFFAELE CECCO"     
+            defb INK_PURPLE	 		 ; Set colour  
+            defb SET_POS,11,6    	 ; Set position (Y=11, X=6) 
+            defb "MUSIC BY DAVE ROGERS"  
+            defb SET_POS,13,9    
+            defb INK_PURPLE,"1 ",INK_GREEN,"START GAME"           	
+            defb MOVE+1,-12   	
+            defb INK_PURPLE,"2 ",INK_GREEN,"DEFINE KEYS"          	
+            defb MOVE+1,-13   	
+            defb INK_PURPLE,"3 ",INK_GREEN,"KEYBOARD"               	
+            defb MOVE+1,-10  	
+            defb INK_PURPLE,"4 ",INK_GREEN,"INTERFACE 2"            	
+            defb MOVE+1,-13   	
+            defb INK_PURPLE,"5 ",INK_GREEN,"KEMPSTON"               	
+            defb MOVE+1,-10   	
+            defb INK_PURPLE,"6 ",INK_GREEN,"SOUND ON/OFF"           	
+            defb SET_POS,20,4  	
+            defb INK_RED,"CYBERNOID * 1988 HEWSON"   
+            defb END_MARKER
+;--------------------------------------------------------------------------------
 
 L_82E5:		PUSH BC							; $82E5
 			LD A,(INPUT_TYPE)				; $82E6
