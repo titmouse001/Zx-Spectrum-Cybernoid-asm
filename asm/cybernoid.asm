@@ -113,10 +113,29 @@ L_6501:
 			defb $00                                            ; $6452 
 			defb $00                                            ; $6453 
 
+
+; ---------------------------------------
+; Sound Effects (E=SFX,CALL PLAY_SFX)
+SFX_SHIELD				EQU 22
+SFX_SEEKER				EQU 23
+SFX_MISSILE				EQU 24
+SFX_PICKUP				EQU 25
+SFX_BULLETS				EQU 26
+SFX_EXPLODEA			EQU 27
+SFX_BOUNCE1				EQU 28
+SFX_BOUNCE2				EQU 29
+SFX_LARGEEXPLODE		EQU 30
+SFX_MINE				EQU 31
+SFX_EXPLODEB			EQU 32
+SFX_MACEHIT				EQU 33
+SFX_GAMEOVER			EQU 34
+SFX_HISCORE				EQU 40
+;-----------------------------------------
+
 MAIN:		DI                      ; $6504        ; <- CALLED BY BASIC
 			LD SP,$0000				; $6505
 			; setup IM2
-			CALL L_70B4				; $6508
+			CALL SETUP_IM2_JUMP_TABLE				; $6508
 			
 			; Zero memory top - $5B00 to $6503 (after screen)					 
 			LD HL,$5B00				; $650B
@@ -150,7 +169,7 @@ IS_48K_ROM:	LD (SpeccyModel),A		; $652A ; Model type flag
 SKIP_MODIFY:
 			CALL L_EF3B				; $653F
 			LD E,$01				; $6542
-			CALL PLAY_SFX				; $6544
+			CALL PLAY_SFX			; $6544
 			EI						; $6547
 			CALL L_7BFC				; $6548
 
@@ -191,7 +210,7 @@ GO_25FPS:	XOR A					; $6574  ; frame count is a byte - reset
 			CALL L_7CD2				; $6593		 ; process player missiles
 			CALL L_7B4A				; $6596 	 ; process enemy shots
 			CALL L_7C10				; $6599  	; ... player missiles
-			CALL ExplosiveFX		; $659C
+			CALL ExplosiveFXSprite		; $659C
 			CALL ANIMATE_SPRITE		; $659F		; animated icons (pump)
 			CALL BONUS_TEXT			; $65A2		; bonus scores, like "250" on big items 
 			CALL L_7F1D				; $65A5
@@ -207,7 +226,9 @@ GO_25FPS:	XOR A					; $6574  ; frame count is a byte - reset
 			CALL L_9267				; $65C0		; snakes
 			CALL L_97F0				; $65C3		; move scenes rockets
 			CALL L_970F				; $65C6
-			CALL L_9BE2				; $65C9		; procppqpees Flying Enemies
+	
+			CALL L_9BE2				; $65C9		; Flying Enemies
+	
 			CALL L_98B4				; $65CC		; Draw Flying Enemies
 			CALL L_A04E				; $65CF		; Draw PickUps (mace, rear gun)
 			CALL L_8066				; $65D2
@@ -1015,7 +1036,7 @@ L_6A87:		LD BC,($6AF6)			; $6A87
 			JR Z,L_6AB1				; $6AA8
 			
 			PUSH DE					; $6AAA
-			LD E,$21				; $6AAB  ; mace hit sound
+			LD E,SFX_MACEHIT				; $6AAB  ; mace hit sound
 			CALL PLAY_SFX			; $6AAD
 			POP DE					; $6AB0
 
@@ -1094,6 +1115,7 @@ SKIP_MENU_DRAW:
 			; Relative move
 			CP $90					; $6B37 
 			JP NC,SKIP_X_AXIS		; $6B39 ; A >= $90
+			; --- X/Y Relative Move ---
 			SUB $78					; $6B3C ; Newline  (i.e. $79-$78)
 			ADD A,D					; $6B3E  
 			LD D,A					; $6B3F ; Ypos moved 
@@ -1104,7 +1126,8 @@ SKIP_MENU_DRAW:
 			JP DRAW_LIST			; $6B44
 SKIP_X_AXIS:		
 			CP $CF					; $6B47 ;  
-			JP NC,SKIP_Y_AXIS			; $6B49 ; A >= $CF
+			JP NC,SKIP_Y_AXIS		; $6B49 ; A >= $CF
+			; --- Y-axis Move ---
 			INC D					; $6B4C ; Down one pixel row
 			SUB $AF					; $6B4D
 			ADD A,E					; $6B4F ; horizontal position
@@ -1115,6 +1138,7 @@ SKIP_Y_AXIS:
 			; Ink $D0-$DE (after sub $CF -> $01 to $0F) 
 			CP $DF					; 
 			JP NC,SKIP_INK			; A >= $DF, not ink/color code
+			; --- Set Ink Color ---
 			SUB $CF					; Convert ($D0-$DE) to 0-14 
 			CP $08					;
 			JP C,DO_SIMPLE_INK		; A < 8 (simple ink color)
@@ -1129,7 +1153,7 @@ DO_SIMPLE_INK:
 			JP DRAW_LIST			; 
 SKIP_INK:	
 			;------------------------------------------------------------------			
-			; Set Cursor Position
+			; Set Absolute Position
 			CP $DF					; $6B6D 
 			JP NZ,SKIP_SET_POS		; $6B6F  if A != $DF
 			LD D,(HL)				; $6B72  ; get Y
@@ -1186,37 +1210,37 @@ SKIP_CTR2:
 			JP DRAW_LIST			; $6BB2
 L_6BB5:
 			;------------------------------------------------------------------	
-			; Draw horizontally
+			; Draw tiles horizontally
 			CP $E4					; $6BB5  
 			JP NZ,L_6BC7			; $6BB7
-			LD B,(HL)				; $6BBA
-			INC HL					; $6BBB
-			LD A,(HL)				; $6BBC
+			LD B,(HL)				; $6BBA  ; repeat count
+			INC HL					; $6BBB 
+			LD A,(HL)				; $6BBC  ; tile ID
 L_6BBD:		CALL ICON16x16			; $6BBD
-			INC E					; $6BC0
+			INC E					; $6BC0  ; Move right
 			DJNZ L_6BBD				; $6BC1
-			INC HL					; $6BC3
+			INC HL					; $6BC3  ; Next comman
 			JP DRAW_LIST			; $6BC4
 L_6BC7:	
 			;------------------------------------------------------------------	
-			; Draw vertically
+			; Draw tiles vertically
 			CP $E5					; $6BC7 
 			JP NZ,L_6BD9			; $6BC9
-			LD B,(HL)				; $6BCC
+			LD B,(HL)				; $6BCC ; repeat count
 			INC HL					; $6BCD
-			LD A,(HL)				; $6BCE
+			LD A,(HL)				; $6BCE ; tile ID
 L_6BCF:		CALL ICON16x16			; $6BCF
-			INC D					; $6BD2
+			INC D					; $6BD2 ; Move dow
 			DJNZ L_6BCF				; $6BD3
-			INC HL					; $6BD5
+			INC HL					; $6BD5 ; Next command
 			JP DRAW_LIST			; $6BD6
 L_6BD9:	
 			;------------------------------------------------------------------	
-			; store
+			; Patch Icon Soruce Address
 			CP $E6							; $6BD9 
 			JR NZ,L_6BEA					; $6BDB
 			LD A,(HL)						; $6BDD
-			LD (ICON_LD_ADDR+1),A			; $6BDE
+			LD (ICON_LD_ADDR+1),A			; $6BDE 
 			INC HL							; $6BE1
 			LD A,(HL)						; $6BE2
 			LD (ICON_LD_ADDR+2),A			; $6BE3
@@ -1225,17 +1249,18 @@ L_6BD9:
 L_6BEA:		CP $E7							; $6BEA  ;$E7:store
 			JR NZ,L_6C07					; $6BEC
 			PUSH HL							; $6BEE
-			LD HL,(ICON_LD_ADDR+1)			; $6BEF
+			LD HL,(ICON_LD_ADDR+1)			; $6BEF  ; Get icon address
 			PUSH HL							; $6BF2
 			LD HL,$C2F1						; $6BF3
 			LD (ICON_LD_ADDR+1),HL			; $6BF6
-			LD A,$20						; $6BF9
+			LD A,$20						; $6BF9  ; Tile ID
 			CALL ICON16x16					; $6BFB
-			INC E							; $6BFE
+			INC E							; $6BFE  ; Move right
 			POP HL							; $6BFF
 			LD (ICON_LD_ADDR+1),HL			; $6C00
-			POP HL					; $6C03
-			JP DRAW_LIST			; $6C04
+			POP HL							; $6C03
+			JP DRAW_LIST					; $6C04
+			; --------------------------------------------------------------------------			
 L_6C07:		CP $E8					; $6C07  ;$E6:store
 			JR NZ,L_6C13			; $6C09
 			LD A,(HL)				; $6C0B
@@ -1275,6 +1300,8 @@ L_6C21:		CP $EB					; $6C21  ;
 			;  (notes: for Menu here HL = $8235 +2, (i.e. MENU_TEXT+2) )
 			JP DRAW_LIST			; $6C41  
 			;------------------------------------------------------------------
+			; Setup Command ($EB):
+			; - Table entries are addresses of rendering functions (e.g ICON16x16)
 			defb $4A,$6C,$87,$6C,$87,$6C     ; $6C44  ; Lookup table: addresses for rendering routines
 			;------------------------------------------------------------------
 
@@ -1389,7 +1416,7 @@ L_6C9A:
 			ADD A,B				; $6CE4
 			LD B,A				; $6CE5
 			CALL L_6D4D				; $6CE6
-			LD E,$1E				; $6CE9
+			LD E,SFX_LARGEEXPLODE				; $6CE9
 			CALL PLAY_SFX				; $6CEB
 L_6CEE:
 			POP IX				; $6CEE
@@ -1705,10 +1732,8 @@ L_6EBF:
 			defb $38,$0D,$0A,$09,$4A,$FF                        ; $7063 8...J.
 
 ;------------------------------------------------------
-
-; Func handles a range of 'boom' sprites.
-; It's used for debris, explosions and volcanic eruptions
-ExplosiveFX:
+; Debris, explosions and volcanic eruptions
+ExplosiveFXSprite:
 			LD HL,$6EC4			; $7069   ; Explosive data
 L_706C:
 			LD A,(HL)			; $706C
@@ -1720,7 +1745,6 @@ L_706C:
 			LD BC,$0006			; $7074
 			ADD HL,BC			; $7077
 			JR L_706C			; $7078
-
 L_707A:
 			PUSH HL				; $707A
 			INC HL				; $707B
@@ -1756,7 +1780,6 @@ L_707A:
 			LD BC,$0006			; $70A3
 			ADD HL,BC			; $70A6
 			JP L_706C			; $70A7
-
 L_70AA:
 			POP HL				; $70AA
 			POP HL				; $70AB
@@ -1765,26 +1788,28 @@ L_70AA:
 			ADD HL,BC			; $70B1
 			JR L_706C			; $70B2
 
-			; === ROUTINE TO SETUP IM2  ===
-			; patches location $FDFD with "JP L_70D3"						 
-L_70B4:
+;--------------------------------------------------------
+; *** ROUTINE TO SETUP IM2 ***
+SETUP_IM2_JUMP_TABLE:
+			; Patch location ($FDFD-$FDFF) with "JP L_70D3"
 			LD A,$C3				; $70B4
-			LD ($FDFD),A				; $70B6
+			LD ($FDFD),A			; $70B6
 			LD HL,$70D3				; $70B9
-			LD ($FDFE),HL				; $70BC
-			; Fill 'IM2 jump table' full of $FD			 
+			LD ($FDFE),HL			; $70BC	 
+			; Fills jump table with $FD	
+			; (Can't used the rom trick due to 128k)
 			LD HL,$FE00				; $70BF
 			LD (HL),$FD				; $70C2
 			LD DE,$FE01				; $70C4
 			LD BC,$0101				; $70C7
-			LDIR				; $70CA
-			IM 2				; $70CC
+			LDIR					; $70CA
+			IM 2					; $70CC
 			LD A,$FE				; $70CE
-			LD I,A				; $70D0
-			RET				; $70D2
+			LD I,A					; $70D0
+			RET						; $70D2
 
-; =================================================================
-; === INTERRUPT ROUTINE, called 50pfs  ===
+;--------------------------------------------------------
+; *** INTERRUPT ROUTINE, called 50pfs ***
 L_70D3:					 
 			PUSH AF				; $70D3
 			PUSH BC				; $70D4
@@ -2047,7 +2072,7 @@ L_72DF:		OR A							; $72DF
 L_72EC:		CALL L_8FD6						; $72EC
 			CALL L_91B1						; $72EF
 
-			CALL GENERATE_FLYING_ENEMIES						; $72F2  ; Generate flying enemies
+			CALL GENERATE_FLYING_ENEMIES	; $72F2  ; Generate flying enemies
 			CALL PLACE_PICKUPS				; $72F5  ; first time pick up (mace,+1 items)
 
 			LD A,E							; $72F8
@@ -2718,12 +2743,12 @@ L_7950:
 			defb $00,$00,$00,$00                                ; $7973 ....
 
 ; === Display Routine, uses custom font @ $C2F1 ===					
-; note: the game code chops of the 3 digit! Can be fixed to display 3 digits.
+; note: the game code chops off the 3 digit! Can be fixed to display 3 digits.
 Display3DigitNumber:  ; L_7977:
 			PUSH BC					; $7977
 			PUSH HL					; $7978
 			LD HL,$C2F1				; $7979 ; font data
-			LD (ICON_LD_ADDR+1),HL			; $797C	; modifies this "LD BC,$XXXX" @ICON_LD_ADDR+1 
+			LD (ICON_LD_ADDR+1),HL	; $797C	; modifies this "LD BC,$XXXX" @ICON_LD_ADDR+1 
 			LD B,$64				; $797F
 			CALL Display8x8Digits	; $7981 ; hundreds
 			LD B,$0A				; $7984
@@ -2962,9 +2987,8 @@ L_7ABD:
 			CALL L_85B0				; $7AD0
 			PUSH HL						; $7AD3
 			PUSH DE						; $7AD4
-			LD E,$1A					; $7AD5
+			LD E,SFX_BULLETS				; $7AD5
 			CALL PLAY_SFX				; $7AD7   ; ships guns
-
 			POP DE						; $7ADA
 			CALL GET_ANIM_ADDR_AS_HL	; $7ADB
 			LD A,(HL)					; $7ADE
@@ -3218,7 +3242,7 @@ L_7C8C:
 			PUSH DE				; $7C91
 			PUSH HL				; $7C92
 			PUSH IX				; $7C93
-			LD E,$18				; $7C95
+			LD E,SFX_MISSILE				; $7C95
 			CALL PLAY_SFX				; $7C97
 			POP IX				; $7C9A
 			POP HL				; $7C9C
@@ -3396,7 +3420,7 @@ L_7E0A:
 			LD A,$03				; $7E18
 			CALL L_85B0				; $7E1A
 			PUSH DE				; $7E1D
-			LD E,$1F				; $7E1E
+			LD E,SFX_MINE				; $7E1E
 			CALL PLAY_SFX				; $7E20
 			POP DE				; $7E23
 			JP L_7C43				; $7E24
@@ -3442,7 +3466,7 @@ L_7E31:
 			LD A,$04				; $7E7D
 			CALL L_85B0				; $7E7F
 			PUSH DE				; $7E82
-			LD E,$16				; $7E83
+			LD E,SFX_SHIELD				; $7E83
 			CALL PLAY_SFX				; $7E85
 			POP DE				; $7E88
 			LD A,$5A				; $7E89
@@ -3460,7 +3484,7 @@ L_7E31:
 			LD A,$01				; $7EA1
 			CALL L_85B0				; $7EA3
 			PUSH DE				; $7EA6
-			LD E,$1C				; $7EA7
+			LD E,SFX_BOUNCE1				; $7EA7
 			CALL PLAY_SFX				; $7EA9
 			POP DE				; $7EAC
 			LD DE,(POS_XY)				; $7EAD
@@ -3621,7 +3645,7 @@ L_7F97:
 			PUSH BC				; $7FB1
 			PUSH DE				; $7FB2
 			PUSH HL				; $7FB3
-			LD E,$1D				; $7FB4
+			LD E,SFX_BOUNCE2				; $7FB4
 			CALL PLAY_SFX				; $7FB6
 			POP HL				; $7FB9
 			POP DE				; $7FBA
@@ -3643,7 +3667,7 @@ L_7FBF:
 			PUSH BC				; $7FD9
 			PUSH DE				; $7FDA
 			PUSH HL				; $7FDB
-			LD E,$1D				; $7FDC
+			LD E,SFX_BOUNCE2				; $7FDC
 			CALL PLAY_SFX				; $7FDE
 			POP HL				; $7FE1
 			POP DE				; $7FE2
@@ -3716,7 +3740,7 @@ L_8049:
 			CALL L_8B71				; $8056
 			LD A,$01				; $8059
 			LD ($7C54),A				; $805B
-			LD E,$17				; $805E
+			LD E,SFX_SEEKER				; $805E
 			CALL PLAY_SFX				; $8060
 			JP L_7C43				; $8063
 
@@ -4082,16 +4106,6 @@ L_82E5:		PUSH BC							; $82E5
 			POP BC							; $8308
 			RET								; $8309
 
-;Unresolved targets:
- ; • $6501
- ; • $6B29
- ; • $830C
- ; • $84F5
- ; • $8E31
- ; • $A29C
- ; • $C067
-
-
 ; ---------------------------------------------------------------
 ;;;	LD BC,$CD00						; $830A
 AY_MUSIC_FLAG:	defb $01			; $830A	
@@ -4172,7 +4186,7 @@ L_8391: 	LD A,(DE)					; $8391
 			JP NZ,DO_MENU				; $83A2
 			LD A,$04					; $83A5
 			CALL L_85B0					; $83A7
-			LD E,$22					; $83AA
+			LD E,SFX_GAMEOVER					; $83AA
 			CALL PLAY_SFX				; $83AC
 			LD B,$64					; $83AF
 L_83B1:		CALL SCROLL_BORDER			; $83B1
@@ -4845,7 +4859,7 @@ L_88F0:		LD A,(HL)			; $88F0
 			PUSH DE				; $890B
 			PUSH IY				; $890C
 			PUSH IX				; $890E
-			LD E,$1B			; $8910
+			LD E,SFX_EXPLODEA			; $8910
 			CALL PLAY_SFX			; $8912
 			LD A,$04			; $8915
 			CALL L_85B0			; $8917
@@ -5495,8 +5509,7 @@ L_8E31:
 			defb $A0,$78,$20,$20,$A0,$B0,$00,$20				; $8ECB .x  ... 
 			defb $A0,$A0,$00,$20,$A0,$00,$00,$FF				; $8ED3 ... ....
 
-L_8EDB:
-			LD A,(InputOff)				; $8EDB
+L_8EDB:		LD A,(InputOff)				; $8EDB
 			OR A				; $8EDE
 			JR NZ,L_8F58				; $8EDF
 			LD DE,(POS_XY)				; $8EE1
@@ -5510,8 +5523,7 @@ L_8EDB:
 			OR A				; $8EF4
 			RET NZ				; $8EF5
 			LD HL,$8E44				; $8EF6
-L_8EF9:
-			LD A,(HL)				; $8EF9
+L_8EF9:		LD A,(HL)				; $8EF9
 			CP $FF				; $8EFA
 			RET Z				; $8EFC
 			CALL L_67B9				; $8EFD
@@ -5523,8 +5535,7 @@ L_8EF9:
 			INC HL				; $8F07
 			OR A				; $8F08
 			JP Z,L_8EF9				; $8F09
-L_8F0C:
-			LD A,$64				; $8F0C
+L_8F0C:		LD A,$64				; $8F0C
 			LD (InputOff),A				; $8F0E
 			LD A,E				; $8F11
 			SUB $08				; $8F12
@@ -5553,7 +5564,7 @@ L_8F0C:
 			LD ($6AF3),A			; $8F49  ; mace
 			LD HL,LIVES				; $8F4C  ; lives location
 			DEC (HL)				; $8F4F  ; lose life
-			LD E,$20				; $8F50
+			LD E,SFX_EXPLODEB				; $8F50
 			CALL PLAY_SFX				; $8F52
 			JP L_78C8				; $8F55
 
@@ -5583,7 +5594,7 @@ L_8F58:
 InputOff:	defb $00                ; $8F94  
 
 L_8F95:
-			LD E,$22				; $8F95
+			LD E,SFX_GAMEOVER				; $8F95
 			CALL PLAY_SFX				; $8F97
 			LD HL,$C2F1				; $8F9A
 			LD (ICON_LD_ADDR+1),HL				; $8F9D
@@ -6240,7 +6251,7 @@ L_9566:
 			LD BC,$0006				; $9598
 			LDIR				; $959B
 			CALL CLR_SCREEN				; $959D
-			LD E,$28				; $95A0
+			LD E,SFX_HISCORE				; $95A0
 			CALL PLAY_SFX				; $95A2
 			LD HL,$96D0				; $95A5
 			LD DE,$96D1				; $95A8
@@ -7311,7 +7322,7 @@ L_A0D4:		INC HL				; $A0D4
 			LD ($7973),HL				; $A0DF
 			CALL L_7935				; $A0E2
 			CALL L_78AF				; $A0E5
-			LD E,$19				; $A0E8
+			LD E,SFX_PICKUP				; $A0E8
 			CALL PLAY_SFX				; $A0EA
 			POP IX				; $A0ED
 			POP HL				; $A0EF
@@ -7474,7 +7485,7 @@ SPRITE_24x16:
 			ADD HL,HL			; $A23C
 			ADD HL,DE			; $A23D
 			ADD HL,BC			; $A23E
-			LD ($A29A),HL		; $A23F
+			LD (LABELSPR),HL		; $A23F
 			POP DE				; $A242
 			LD A,E				; $A243
 			AND $7C				; $A244
@@ -7492,7 +7503,7 @@ SPRITE_24x16:
 			LD C,D				; $A256
 			POP DE				; $A257
 			EXX					; $A258
-			LD DE,($A29A)		; $A259
+			LD DE,(LABELSPR)		; $A259
 			LD B,$10			; $A25D
 L_A25F:
 			LD H,$64			; $A25F
@@ -7542,19 +7553,16 @@ L_A25F:
 			INC DE				; $A28F
 			EXX					; $A290
 			DJNZ L_A25F			; $A291
-			LD HL,($A29A)		; $A293
+			LD HL,(LABELSPR)	; $A293
 			POP DE				; $A296
 			POP BC				; $A297
 			POP AF				; $A298
 			RET					; $A299
 
-LABELA29C 	EQU LABELSPR-1
-			LD SP,HL			; $A29A  		 ;Self-Modifying 
-LABELSPR:	ADD A,$65			; $A29B, $A29C   ;Self-Modifying 
-
-			; LD H,L  ; $65  <<<<  $A29C JUMP POINT   
-
-			LD L,$00			; $A29D  
+			; Self modifying code (on $A29A,$A29B)
+LABELSPR:	LD SP,HL			; $A29A  ; Opcode "LD SP,HL" replaced
+			ADD A,$65			; $A29B  ; Opcode "ADD A": replaced
+			LD L,$00			; $A29D   
 			SRL H				; $A29F
 			RR L				; $A2A1
 			LD B,H				; $A2A3
@@ -7580,7 +7588,7 @@ LABELSPR:	ADD A,$65			; $A29B, $A29C   ;Self-Modifying
 			ADD HL,HL			; $A2BD
 			ADD HL,DE			; $A2BE
 			ADD HL,BC			; $A2BF
-			LD ($A29A),HL		; $A2C0
+			LD (LABELSPR),HL		; $A2C0
 			POP DE				; $A2C3
 			LD A,E				; $A2C4
 			AND $7C				; $A2C5
@@ -7640,7 +7648,7 @@ L_A31B:
 			LD C,D				; $A323
 			POP DE				; $A324
 			EXX				; $A325
-			LD DE,($A29A)				; $A326
+			LD DE,(LABELSPR)				; $A326
 			LD B,$10				; $A32A
 L_A32C:
 			LD H,$64				; $A32C
@@ -7690,7 +7698,7 @@ L_A32C:
 			INC DE				; $A35C
 			EXX				; $A35D
 			DJNZ L_A32C				; $A35E
-			LD HL,($A29A)				; $A360
+			LD HL,(LABELSPR)				; $A360
 			POP DE				; $A363
 			POP BC				; $A364
 			POP AF				; $A365
@@ -7724,7 +7732,7 @@ L_A367:
 			ADD HL,HL				; $A388
 			ADD HL,DE				; $A389
 			ADD HL,BC				; $A38A
-			LD ($A29A),HL				; $A38B
+			LD (LABELSPR),HL				; $A38B
 			POP DE				; $A38E
 			LD A,E				; $A38F
 			AND $7C				; $A390
@@ -7788,7 +7796,7 @@ L_A402:
 			LD C,D				; $A402
 			POP DE				; $A403
 			EXX				; $A404
-			LD DE,($A29A)				; $A405
+			LD DE,(LABELSPR)				; $A405
 			LD B,$10				; $A409
 L_A40B:
 			LD H,$64				; $A40B
@@ -7838,7 +7846,7 @@ L_A40B:
 			INC DE				; $A43B
 			EXX				; $A43C
 			DJNZ L_A40B				; $A43D
-			LD HL,($A29A)				; $A43F
+			LD HL,(LABELSPR)				; $A43F
 			POP DE				; $A442
 			POP BC				; $A443
 			POP AF				; $A444
@@ -7986,7 +7994,7 @@ DRAW4X4SPRITE:
 			ADD HL,HL			; $A4E7  ; x32  
 			LD BC,$D479			; $A4E8  ; sprites base
 			ADD HL,BC			; $A4EB  ; base + index
-			LD ($A29A),HL		; $A4EC	 ; save for animation
+			LD (LABELSPR),HL		; $A4EC	 ; save for animation
 
 			; Get Screen Coordinates
 			LD A,E				; $A4EF	 ; Y coord
@@ -8050,11 +8058,7 @@ DRAW_BY_LINE:
 			EXX					; $A52F
 
 			DJNZ DRAW_BY_LINE	; $A530  ; next scanline
-			LD HL,($A29A)		; $A532  ; restore modified HL
-
-;	NOP
-;	NOP
-;	nop
+			LD HL,(LABELSPR)		; $A532  ; restore modified HL
 
 			POP DE				; $A535
 			POP BC				; $A536
@@ -10612,7 +10616,7 @@ L_EFB0:		LD BC,$FFFD					; $EFB0  ; AY address port
 			JP P,L_EFB0					; $EFBD  ; do all 14 registers
 			RET							; $EFC0  ; reset done
 
-; Envelope Pointer Calculation Routine (for SFX)
+; SFX: Envelope
 ; 1st lookup table: $F3A6 to $F4A4.
 ; 2nd 
 CALC_ENVELOPE_ADDR:		
@@ -10627,7 +10631,7 @@ CALC_ENVELOPE_ADDR:
 			INC HL						; $EFCB	 ; next byte
 			LD D,(HL)					; $EFCC  ; DE = offset into 2nd table
 			LD HL,ENVELOPE_DATA			; $EFCD  ; Base of Envelope data
-			ADD HL,DE					; $EFD0  ; Addinf offset to get specific envelope
+			ADD HL,DE					; $EFD0  ; 
 			RET							; $EFD1
 
 
