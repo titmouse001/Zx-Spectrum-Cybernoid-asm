@@ -3126,27 +3126,27 @@ L_7B8D:
 ; Each super weapon structure takes 16 bytes 
 BOMBS_LABEL:   		defb "BOMBS      "      ; $7BAA  "BOMBS" (space padded to 11 chars)
     				defb $00           		; $7BB5 - current count
-    				defb $5C, $7C      		; $7BB6 - Super Weapon routine address
+    				defw TABLE_JMP_BOMBS	; $7BB6 - Super Weapon routine address
 BOMBS_MAX:     		defb $14               	; $7BB8 - starting amount
 BOMBS_USED:    		defb $14               	; $7BB9 - max
 MINES_LABEL:   		defb "MINES      "      ; $7BBA  "MINES"
     				defb $00           		; $7BC5 - current count
-    				defb $CE, $7D      		; $7BC6 - Super Weapon routine address
+    				defw TABLE_JMP_MINES	; $7BC6 - Super Weapon routine address
 MINES_MAX:     		defb $14               	; $7BC8 - starting amount
 MINES_USED:    		defb $14               	; $7BC9 - max
 SHIELD_LABEL:  		defb "SHIELD     "      ; $7BCA  "SHIELD"
     				defb $00           		; $7BD4 - current count
-    				defb $76, $7E      		; $7BD5 - Super Weapon routine address
+    				defw TABLE_JMP_SHIELD	; $7BD5 - Super Weapon routine address
 SHIELD_MAX:    		defb $01               	; $7BD8 - starting amount
 SHIELD_USED:   		defb $01               	; $7BD9 - max
 BOUNCE_LABEL:  		defb "BOUNCE     "    	; $7BDA  "BOUNCE"
     				defb $00           		; $7BE4 - current count
-    				defb $95, $7E      		; $7BE5 - Super Weapon routine address
+    				defw TABLE_JMP_BOUNCE 	; $7BE5 - Super Weapon routine address
 BOUNCE_MAX:    		defb $05               	; $7BE8 - starting amount
 BOUNCE_USED:   		defb $05               	; $7BE9 - max
 SEEKER_LABEL:  		defb "SEEKER     "      ; $7BEA  "SEEKER"W
     				defb $00           		; $7BF4 - current count
-    				defb $0E, $80      		; $7BF5 - Super Weapon routine address
+    				defw TABLE_JMP_SEEKER	; $7BF5 - Super Weapon routine address
 SEEKER_MAX:    		defb $05               	; $7BF8 - starting amount
 SEEKER_USED:   		defb $05               	; $7BF9 - max
 					
@@ -3233,6 +3233,8 @@ SUPER_WEAPON_AMOUNT:	defb 	$00		; $7C54
 			XOR A								; $7C55
 			LD (SUPER_WEAPON_AMOUNT),A			; $7C56
 			JP UPDATE_SUPER_WEAPON_DIGITS		; $7C59
+
+TABLE_JMP_BOMBS:
 			LD HL,$7D75							; $7C5C
 			LD A,($696C)						; $7C5F
 			CP $02								; $7C62
@@ -3369,11 +3371,9 @@ L_7D58:		XOR A						; $7D58
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $7DC3 ........
 			defb $00,$00,$FF                                    ; $7DCB ...
 
-; *******************************
-;  NOTE: (HL) JUMP POINT TO HERE 
-;  					(see $7C42)
-; *******************************
+TABLE_JMP_MINES:
 			LD DE,(POS_XY)				; $7DCE
+			;----------------------------------------
 			; Place mine center of Ship
 			INC D				; $7DD2	 ;
 			INC D				; $7DD3  ;
@@ -3382,6 +3382,7 @@ L_7D58:		XOR A						; $7D58
 			INC E				; $7DD6  ; 
 			INC E				; $7DD7  ; X+=4 (as X is half screen coords)
 			XOR A				; $7DD8
+			;----------------------------------------
 			CALL L_67B9				; $7DD9
 			LD HL,$7E57				; $7DDC
 L_7DDF:		LD A,(HL)				; $7DDF
@@ -3457,6 +3458,7 @@ L_7E31:		LD A,(HL)				; $7E31
 			defb $B8,$03,$83,$03,$50,$03,$21,$03				; $7E6B ....P.!.
 			defb $F4,$02,$FF                                    ; $7E73 ...
 
+TABLE_JMP_SHIELD:
 			LD A,($7E94)				; $7E76
 			OR A				; $7E79
 			JP NZ,UPDATE_SUPER_WEAPON_DIGITS				; $7E7A
@@ -3473,6 +3475,7 @@ L_7E31:		LD A,(HL)				; $7E31
 
 			NOP				; $7E94
 
+TABLE_JMP_BOUNCE:
 			LD A,($800D)				; $7E95
 			OR A				; $7E98
 			JP NZ,UPDATE_SUPER_WEAPON_DIGITS				; $7E99
@@ -3700,6 +3703,8 @@ L_7FF4:
 			JP L_7FF4				; $800A
 
 			NOP				; $800D
+
+TABLE_JMP_SEEKER:			
 			LD IX,$80B1				; $800E
 			LD A,(IX+$02)				; $8012
 			OR A				; $8015
