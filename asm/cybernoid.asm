@@ -234,7 +234,7 @@ GO_25FPS:	XOR A					; $6574  ; frame count is a byte - reset
 			CALL L_8066				; $65D2
 			CALL L_A086				; $65D5		; logic for all pickups (mace, gems...)
 			CALL L_8EDB				; $65D8		; Ships collision logic against Enemies
-			CALL L_7E27				; $65DB
+			CALL L_7E27				; $65DB     ; check mines
 			CALL L_79FE				; $65DE
 
 			CALL INGAME_RESET		; $65E1
@@ -3125,233 +3125,236 @@ L_7B8D:
 ; Super Weapons Table
 ; Each super weapon structure takes 16 bytes 
 BOMBS_LABEL:   		defb "BOMBS      "      ; $7BAA  "BOMBS" (space padded to 11 chars)
-    				defb $00           		; $7BB5
-    				defb $5C, $7C      		; $7BB6 
-BOMBS_MAX:     		defb $14               	; $7BB8 - Maximum bombs allowed
-BOMBS_USED:    		defb $14               	; $7BB9 - Bombs currently used
+    				defb $00           		; $7BB5 - current count
+    				defb $5C, $7C      		; $7BB6 - Super Weapon routine address
+BOMBS_MAX:     		defb $14               	; $7BB8 - starting amount
+BOMBS_USED:    		defb $14               	; $7BB9 - max
 MINES_LABEL:   		defb "MINES      "      ; $7BBA  "MINES"
-    				defb $00           		; $7BC5
-    				defb $CE, $7D      		; $7BC6 
-MINES_MAX:     		defb $14               	; $7BC8 - Maximum mines allowed
-MINES_USED:    		defb $14               	; $7BC9 - Mines currently used
+    				defb $00           		; $7BC5 - current count
+    				defb $CE, $7D      		; $7BC6 - Super Weapon routine address
+MINES_MAX:     		defb $14               	; $7BC8 - starting amount
+MINES_USED:    		defb $14               	; $7BC9 - max
 SHIELD_LABEL:  		defb "SHIELD     "      ; $7BCA  "SHIELD"
-    				defb $00           		; $7BD4
-    				defb $76, $7E      		; $7BD5 
-SHIELD_MAX:    		defb $01               	; $7BD8 - Maximum shield allowed
-SHIELD_USED:   		defb $01               	; $7BD9 - Shield currently used
+    				defb $00           		; $7BD4 - current count
+    				defb $76, $7E      		; $7BD5 - Super Weapon routine address
+SHIELD_MAX:    		defb $01               	; $7BD8 - starting amount
+SHIELD_USED:   		defb $01               	; $7BD9 - max
 BOUNCE_LABEL:  		defb "BOUNCE     "    	; $7BDA  "BOUNCE"
-    				defb $00           		; $7BE4
-    				defb $95, $7E      		; $7BE5 
-BOUNCE_MAX:    		defb $05               	; $7BE8 - Maximum bounce allowed
-BOUNCE_USED:   		defb $05               	; $7BE9 - Bounce currently used
+    				defb $00           		; $7BE4 - current count
+    				defb $95, $7E      		; $7BE5 - Super Weapon routine address
+BOUNCE_MAX:    		defb $05               	; $7BE8 - starting amount
+BOUNCE_USED:   		defb $05               	; $7BE9 - max
 SEEKER_LABEL:  		defb "SEEKER     "      ; $7BEA  "SEEKER"W
-    				defb $00           		; $7BF4
-    				defb $0E, $80      		; $7BF5 
-SEEKER_MAX:    		defb $05               	; $7BF8 - Maximum seeker allowed
-SEEKER_USED:   		defb $05               	; $7BF9 - Seeker currently used
+    				defb $00           		; $7BF4 - current count
+    				defb $0E, $80      		; $7BF5 - Super Weapon routine address
+SEEKER_MAX:    		defb $05               	; $7BF8 - starting amount
+SEEKER_USED:   		defb $05               	; $7BF9 - max
 					
-SELECTED_WEAPON:	defb $00 				; $7BFA  ; super weapon currently picked
-					defb $00  				; $7BFB  ; not used
 
 
-L_7BFC:
-			LD DE,$0010				; $7BFC
-			LD B,$05				; $7BFF
-			LD IX,$7BAA				; $7C01
-L_7C05:
-			LD A,(IX+$0E)				; $7C05
+; 'SELECTED_WEAPON' - 16bit Offset, low byte fixed at $00
+; Example: bombs:$0000, mines:$0100, ... seeker:$0400
+SELECTED_WEAPON: defb $00, $00   		; $7BFA 
+				
+L_7BFC:		LD DE,$0010					; $7BFC
+			LD B,$05					; $7BFF
+			LD IX,$7BAA					; $7C01
+L_7C05:		LD A,(IX+$0E)				; $7C05
 			LD (IX+$0B),A				; $7C08
-			ADD IX,DE				; $7C0B
-			DJNZ L_7C05				; $7C0D
-			RET				; $7C0F
+			ADD IX,DE					; $7C0B
+			DJNZ L_7C05					; $7C0D
+			RET							; $7C0F
 
 L_7C10:		LD A,(InputOff)				; $7C10
 			OR A						; $7C13
-			RET NZ						; $7C14
-			LD DE,(POS_XY)				; $7C15
-			LD A,E						; $7C19
-			CP $79						; $7C1A
+			RET NZ						; $7C14  ; Fire disabled - do nothing
+
+			LD DE,(POS_XY)				; $7C15  ; get ships coords
+			LD A,E						; $7C19  ; X pos
+			; limit super weapon at screen edges ???
+			CP $79						; $7C1A  ; Xpos
 			RET NC						; $7C1C
 			LD A,D						; $7C1D
-			CP $B1						; $7C1E
+			CP $B1						; $7C1E  ; Ypos
 			RET NC						; $7C20
-			CP $20						; $7C21
+			CP $20						; $7C21	 ; Ypos
 			RET C						; $7C23
+
 			LD A,(SUPER_WEAPON_TIMER)	; $7C24
-			CP $05						; $7C27  ;  Active time for super weapons
-			RET C						; $7C29
-			LD HL,(SELECTED_WEAPON)		; $7C2A	 ;  Super weapons base
-			ADD HL,HL					; $7C2D  ;  X2
-			ADD HL,HL					; $7C2E  ;  X4
-			ADD HL,HL					; $7C2F  ;  X8
-			ADD HL,HL					; $7C30  ;  X16 (struct is 16bytes)
-			LD BC,BOMBS_LABEL+11		; $7C31  ; note: starting just past 11char string 
-			ADD HL,BC					; $7C34	 ; index into super weapon
-			LD A,(HL)					; $7C35
-			OR A						; $7C36
-			RET Z						; $7C37  ; Super weapon is empty
+			CP $05						; $7C27  ; Hold time to activate super weapons
+			RET C						; $7C29  ; not yet active
+
+			; Index the selected super weapon structure
+			LD HL,(SELECTED_WEAPON)		; $7C2A	 ; Super weapons offset
+			ADD HL,HL					; $7C2D  ; X2
+			ADD HL,HL					; $7C2E  ; X4
+			ADD HL,HL					; $7C2F  ; X8
+			ADD HL,HL					; $7C30  ; X16 (struct is 16bytes)
+			LD BC,BOMBS_LABEL+11		; $7C31  ; Base 
+			ADD HL,BC					; $7C34	 ; HL+=(index*16)
+			LD A,(HL)					; $7C35  ; get amount left
+			OR A						; $7C36	 ; 
+			RET Z						; $7C37  ; Empty, do nothing and return
 			PUSH HL						; $7C38
-			INC HL						; $7C39
-			LD A,(HL)					; $7C3A
+
+			; --------------------------------------------------------
+			; Activate Super weapon
+			INC HL						; $7C39  ; move to function address in table
+			LD A,(HL)					; $7C3A  ; low byte
 			INC HL						; $7C3B
-			LD H,(HL)					; $7C3C
-			LD L,A						; $7C3D
+			LD H,(HL)					; $7C3C  ; high byte
+			LD L,A						; $7C3D  ; Jump address
 			XOR A						; $7C3E
-			LD ($7C54),A				; $7C3F
-			JP (HL)						; $7C42
-L_7C43:		POP HL						; $7C43
-			LD A,($7C54)				; $7C44
-			OR A						; $7C47
-			RET Z						; $7C48
-			LD A,(HL)					; $7C49
-			DEC A						; $7C4A	 ; shields
-			LD (HL),A					; $7C4B
-			LD DE,$0211					; $7C4C
-			LD C,$47					; $7C4F
-			JP Display3DigitNumber		; $7C51
+			LD (SUPER_WEAPON_AMOUNT),A	; $7C3F  ; shared store for all weapon amounts
 
-			NOP				; $7C54
-			XOR A				; $7C55
-			LD ($7C54),A				; $7C56
-			JP L_7C43				; $7C59
+			; ***************************
+			; *** (HL) JMP POINT HERE ***
+			; ***************************
+			JP (HL)						; $7C42 ; Jump to Super Weapon Routine
+			; --------------------------------------------------------
 
-			LD HL,$7D75				; $7C5C
-			LD A,($696C)				; $7C5F
-			CP $02				; $7C62
-			JP Z,L_7C6A				; $7C64
-			LD HL,$7D85				; $7C67
-L_7C6A:
-			LD IX,$7D95				; $7C6A
-			LD A,(EventDelay)				; $7C6E
-			AND $03				; $7C71
-			JP NZ,L_7C43				; $7C73
-			LD BC,$0007				; $7C76
-L_7C79:
-			LD A,(IX+$00)				; $7C79
-			CP $FF				; $7C7C
-			JP Z,L_7C43				; $7C7E
-			LD A,(IX+$02)				; $7C81
-			OR A				; $7C84
-			JR Z,L_7C8C				; $7C85
-			ADD IX,BC				; $7C87
-			JP L_7C79				; $7C89
+			; --------------------------------------------------------
+			; Super Weapon Amount Left
+UPDATE_SUPER_WEAPON_DIGITS:		
+			POP HL						; $7C43
+			LD A,(SUPER_WEAPON_AMOUNT)				; $7C44  ; Weapon Amount Left
+			OR A						; $7C47  ;
+			RET Z						; $7C48  ; Empty, do nothing and return
+			LD A,(HL)					; $7C49	 ; get amount
+			DEC A						; $7C4A	 ; reduce super weapon
+			LD (HL),A					; $7C4B  ; store
+			LD DE,$0211					; $7C4C  ; Y=2, X=32 (half for X)
+			LD C,$47					; $7C4F  ; Col=%01000111
+			JP Display3DigitNumber		; $7C51  ; update amount
+			; --------------------------------------------------------
 
-L_7C8C:
-			LD A,$02				; $7C8C
-			CALL L_85B0				; $7C8E
-			PUSH DE				; $7C91
-			PUSH HL				; $7C92
-			PUSH IX				; $7C93
-			LD E,SFX_MISSILE				; $7C95
+SUPER_WEAPON_AMOUNT:	defb 	$00		; $7C54
+
+			XOR A								; $7C55
+			LD (SUPER_WEAPON_AMOUNT),A			; $7C56
+			JP UPDATE_SUPER_WEAPON_DIGITS		; $7C59
+			LD HL,$7D75							; $7C5C
+			LD A,($696C)						; $7C5F
+			CP $02								; $7C62
+			JP Z,L_7C6A							; $7C64
+			LD HL,$7D85							; $7C67
+L_7C6A:		LD IX,$7D95							; $7C6A
+			LD A,(EventDelay)					; $7C6E
+			AND $03								; $7C71
+			JP NZ,UPDATE_SUPER_WEAPON_DIGITS	; $7C73
+			LD BC,$0007							; $7C76
+L_7C79:		LD A,(IX+$00)						; $7C79
+			CP $FF								; $7C7C
+			JP Z,UPDATE_SUPER_WEAPON_DIGITS		; $7C7E
+			LD A,(IX+$02)						; $7C81
+			OR A								; $7C84
+			JR Z,L_7C8C							; $7C85
+			ADD IX,BC							; $7C87
+			JP L_7C79							; $7C89
+L_7C8C:		LD A,$02					; $7C8C
+			CALL L_85B0					; $7C8E
+			PUSH DE						; $7C91
+			PUSH HL						; $7C92
+			PUSH IX						; $7C93
+			LD E,SFX_MISSILE			; $7C95
 			CALL PLAY_SFX				; $7C97
-			POP IX				; $7C9A
-			POP HL				; $7C9C
-			POP DE				; $7C9D
+			POP IX						; $7C9A
+			POP HL						; $7C9C
+			POP DE						; $7C9D
 			LD (IX+$02),$10				; $7C9E
 			LD (IX+$03),L				; $7CA2
 			LD (IX+$04),H				; $7CA5
 			LD HL,($6969)				; $7CA8
-			LD DE,$0402				; $7CAB
-			ADD HL,DE				; $7CAE
+			LD DE,$0402					; $7CAB
+			ADD HL,DE					; $7CAE
 			LD (IX+$00),L				; $7CAF
 			LD (IX+$01),H				; $7CB2
-			LD A,(DIRECTION)				; $7CB5
-			ADD A,A				; $7CB8
+			LD A,(DIRECTION)			; $7CB5
+			ADD A,A						; $7CB8
 			LD (IX+$05),A				; $7CB9
-			EX DE,HL				; $7CBC
-			CP $FE				; $7CBD
-			LD A,$01				; $7CBF
-			JR Z,L_7CC4				; $7CC1
-			XOR A				; $7CC3
-L_7CC4:
-			LD (IX+$06),A				; $7CC4
-			CALL L_80BD				; $7CC7
-			LD A,$01				; $7CCA
-			LD ($7C54),A				; $7CCC
-			JP L_7C43				; $7CCF
-
-L_7CD2:
-			LD A,$02				; $7CD2
-			CALL L_67B9				; $7CD4
-			LD IX,$7D95				; $7CD7
-L_7CDB:
-			LD A,(IX+$00)				; $7CDB
-			CP $FF				; $7CDE
-			RET Z				; $7CE0
+			EX DE,HL					; $7CBC
+			CP $FE						; $7CBD
+			LD A,$01					; $7CBF
+			JR Z,L_7CC4						; $7CC1
+			XOR A							; $7CC3
+L_7CC4:		LD (IX+$06),A					; $7CC4
+			CALL L_80BD						; $7CC7
+			LD A,$01							; $7CCA
+			LD (SUPER_WEAPON_AMOUNT),A			; $7CCC
+			JP UPDATE_SUPER_WEAPON_DIGITS		; $7CCF
+L_7CD2:		LD A,$02							; $7CD2
+			CALL L_67B9							; $7CD4
+			LD IX,$7D95					; $7CD7
+L_7CDB:		LD A,(IX+$00)				; $7CDB
+			CP $FF						; $7CDE
+			RET Z						; $7CE0
 			LD A,(IX+$02)				; $7CE1
-			OR A				; $7CE4
+			OR A						; $7CE4
 			JR NZ,L_7CEF				; $7CE5
-L_7CE7:
-			LD BC,$0007				; $7CE7
-			ADD IX,BC				; $7CEA
-			JP L_7CDB				; $7CEC
-
-L_7CEF:
-			LD C,(IX+$02)				; $7CEF
-			LD B,$00				; $7CF2
+L_7CE7:		LD BC,$0007					; $7CE7
+			ADD IX,BC					; $7CEA
+			JP L_7CDB					; $7CEC
+L_7CEF:		LD C,(IX+$02)				; $7CEF
+			LD B,$00					; $7CF2
 			LD L,(IX+$03)				; $7CF4
 			LD H,(IX+$04)				; $7CF7
-			DEC HL				; $7CFA
-			ADD HL,BC				; $7CFB
-			DEC C				; $7CFC
-			JR Z,L_7D02				; $7CFD
+			DEC HL						; $7CFA
+			ADD HL,BC					; $7CFB
+			DEC C						; $7CFC
+			JR Z,L_7D02					; $7CFD
 			LD (IX+$02),C				; $7CFF
-L_7D02:
-			LD E,(IX+$00)				; $7D02
+L_7D02:		LD E,(IX+$00)				; $7D02
 			LD D,(IX+$01)				; $7D05
-			LD A,C				; $7D08
-			CP $0B				; $7D09
+			LD A,C						; $7D08
+			CP $0B						; $7D09
 			JR NC,L_7D15				; $7D0B
-			LD A,(EventDelay)				; $7D0D
-			AND $01				; $7D10
+			LD A,(EventDelay)			; $7D0D
+			AND $01						; $7D10
 			CALL Z,L_8ABF				; $7D12
-L_7D15:
-			LD A,(IX+$06)				; $7D15
-			CALL L_80BD				; $7D18    ; rocket tail delete
+L_7D15:		LD A,(IX+$06)				; $7D15
+			CALL L_80BD					; $7D18    ; rocket tail delete
 			LD A,(IX+$05)				; $7D1B
-			LD B,A				; $7D1E
-			PUSH HL				; $7D1F
-			CALL GET_ANIM_ADDR_AS_HL				; $7D20
-			LD A,(HL)				; $7D23
-			POP HL				; $7D24
-			OR A				; $7D25
+			LD B,A						; $7D1E
+			PUSH HL						; $7D1F
+			CALL GET_ANIM_ADDR_AS_HL	; $7D20
+			LD A,(HL)					; $7D23
+			POP HL						; $7D24
+			OR A						; $7D25
 			JR NZ,L_7D58				; $7D26
-			LD A,B				; $7D28
-			ADD A,E				; $7D29
-			CP $7C				; $7D2A
+			LD A,B						; $7D28
+			ADD A,E						; $7D29
+			CP $7C						; $7D2A
 			JR NC,L_7D58				; $7D2C
-			LD E,A				; $7D2E
+			LD E,A						; $7D2E
 			LD (IX+$00),A				; $7D2F
 			LD A,(IX+$01)				; $7D32
-			LD D,A				; $7D35
-			CALL L_815D				; $7D36
+			LD D,A						; $7D35
+			CALL L_815D					; $7D36
 			JR NZ,L_7D58				; $7D39
-			LD A,(HL)				; $7D3B
-			ADD A,D				; $7D3C
-			LD D,A				; $7D3D
-			CP $B8				; $7D3E
+			LD A,(HL)					; $7D3B
+			ADD A,D						; $7D3C
+			LD D,A						; $7D3D
+			CP $B8						; $7D3E
 			JR NC,L_7D58				; $7D40
-			CALL L_9A75				; $7D42
+			CALL L_9A75					; $7D42
 			JR NZ,L_7D58				; $7D45
 			LD (IX+$01),D				; $7D47
 			LD A,(IX+$06)				; $7D4A
-			LD C,$47				; $7D4D
-			CALL L_A4AD				; $7D4F
-			CALL L_80BD				; $7D52
-   			JP L_7CE7				; $7D55
-
-L_7D58:
-			XOR A				; $7D58
+			LD C,$47					; $7D4D
+			CALL L_A4AD					; $7D4F
+			CALL L_80BD					; $7D52
+   			JP L_7CE7					; $7D55
+L_7D58:		XOR A						; $7D58
 			LD (IX+$02),A				; $7D59
-			CALL L_6C9A				; $7D5C
-			LD A,$01				; $7D5F
-			CALL L_67B9				; $7D61
-			CALL L_74E2				; $7D64
-			CALL L_74E2				; $7D67
-			CALL L_74E2				; $7D6A
-			LD A,$02				; $7D6D
-			CALL L_67B9				; $7D6F
-			JP L_7CE7				; $7D72
+			CALL L_6C9A					; $7D5C
+			LD A,$01					; $7D5F
+			CALL L_67B9					; $7D61
+			CALL L_74E2					; $7D64
+			CALL L_74E2					; $7D67
+			CALL L_74E2					; $7D6A
+			LD A,$02					; $7D6D
+			CALL L_67B9					; $7D6F
+			JP L_7CE7					; $7D72
 
 			defb $06,$04,$04,$03,$03,$03                        ; $7D75 ......
 			defb $02,$02,$02,$01,$01,$01,$00,$00				; $7D7B ........
@@ -3366,19 +3369,22 @@ L_7D58:
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $7DC3 ........
 			defb $00,$00,$FF                                    ; $7DCB ...
 
+; *******************************
+;  NOTE: (HL) JUMP POINT TO HERE 
+;  					(see $7C42)
+; *******************************
 			LD DE,(POS_XY)				; $7DCE
-			INC D				; $7DD2
-			INC D				; $7DD3
-			INC D				; $7DD4
-			INC D				; $7DD5
-			INC E				; $7DD6
-			INC E				; $7DD7
+			; Place mine center of Ship
+			INC D				; $7DD2	 ;
+			INC D				; $7DD3  ;
+			INC D				; $7DD4  ;
+			INC D				; $7DD5  ; Y+=4
+			INC E				; $7DD6  ; 
+			INC E				; $7DD7  ; X+=4 (as X is half screen coords)
 			XOR A				; $7DD8
 			CALL L_67B9				; $7DD9
 			LD HL,$7E57				; $7DDC
-L_7DDF:
-L_7DDF:
-			LD A,(HL)				; $7DDF
+L_7DDF:		LD A,(HL)				; $7DDF
 			CP $FF				; $7DE0
 			JR Z,L_7DF7				; $7DE2
 			LD C,A				; $7DE4
@@ -3391,15 +3397,12 @@ L_7DDF:
 			JR Z,L_7DDF				; $7DEB
 			CALL L_6802				; $7DED
 			OR A				; $7DF0
-			JP NZ,L_7C43				; $7DF1
+			JP NZ,UPDATE_SUPER_WEAPON_DIGITS				; $7DF1
 			JP L_7DDF				; $7DF4
-
-L_7DF7:
-			LD HL,$7E57				; $7DF7
-L_7DFA:
-			LD A,(HL)				; $7DFA
+L_7DF7: 	LD HL,$7E57				; $7DF7
+L_7DFA:		LD A,(HL)				; $7DFA
 			CP $FF				; $7DFB
-			JP Z,L_7C43				; $7DFD
+			JP Z,UPDATE_SUPER_WEAPON_DIGITS				; $7DFD
 			INC HL				; $7E00
 			INC HL				; $7E01
 			LD A,(HL)				; $7E02
@@ -3407,32 +3410,26 @@ L_7DFA:
 			JR Z,L_7E0A				; $7E04
 			INC HL				; $7E06
 			JP L_7DFA				; $7E07
-
-L_7E0A:
-			LD (HL),$01				; $7E0A
+L_7E0A:		LD (HL),$01				; $7E0A
 			DEC HL				; $7E0C
 			LD (HL),D				; $7E0D
 			DEC HL				; $7E0E
 			LD (HL),E				; $7E0F
 			LD A,$04				; $7E10
 			CALL L_80BD				; $7E12
-			LD ($7C54),A				; $7E15
+			LD (SUPER_WEAPON_AMOUNT),A				; $7E15
 			LD A,$03				; $7E18
 			CALL L_85B0				; $7E1A
 			PUSH DE				; $7E1D
 			LD E,SFX_MINE				; $7E1E
 			CALL PLAY_SFX				; $7E20
 			POP DE				; $7E23
-			JP L_7C43				; $7E24
-
-L_7E27:
-			LD A,$02				; $7E27
+			JP UPDATE_SUPER_WEAPON_DIGITS				; $7E24
+L_7E27:		LD A,$02				; $7E27
 			CALL L_67B9				; $7E29
 			LD C,$47				; $7E2C
 			LD HL,$7E57				; $7E2E
-L_7E31:
-L_7E31:
-			LD A,(HL)				; $7E31
+L_7E31:		LD A,(HL)				; $7E31
 			CP $FF				; $7E32
 			RET Z				; $7E34
 			LD E,A				; $7E35
@@ -3462,7 +3459,7 @@ L_7E31:
 
 			LD A,($7E94)				; $7E76
 			OR A				; $7E79
-			JP NZ,L_7C43				; $7E7A
+			JP NZ,UPDATE_SUPER_WEAPON_DIGITS				; $7E7A
 			LD A,$04				; $7E7D
 			CALL L_85B0				; $7E7F
 			PUSH DE				; $7E82
@@ -3471,14 +3468,14 @@ L_7E31:
 			POP DE				; $7E88
 			LD A,$5A				; $7E89
 			LD ($7E94),A				; $7E8B
-			LD ($7C54),A				; $7E8E
-			JP L_7C43				; $7E91
+			LD (SUPER_WEAPON_AMOUNT),A				; $7E8E
+			JP UPDATE_SUPER_WEAPON_DIGITS				; $7E91
 
 			NOP				; $7E94
 
 			LD A,($800D)				; $7E95
 			OR A				; $7E98
-			JP NZ,L_7C43				; $7E99
+			JP NZ,UPDATE_SUPER_WEAPON_DIGITS				; $7E99
 			LD A,$96				; $7E9C
 			LD ($800D),A				; $7E9E
 			LD A,$01				; $7EA1
@@ -3515,7 +3512,7 @@ L_7E31:
 			SUB $04				; $7EDB
 			LD E,A				; $7EDD
 			CALL L_7EE4				; $7EDE
-			JP L_7C43				; $7EE1
+			JP UPDATE_SUPER_WEAPON_DIGITS				; $7EE1
 
 L_7EE4:
 			LD HL,$7F08				; $7EE4
@@ -3543,7 +3540,7 @@ L_7EE7:
 			LD (HL),E				; $7EFE
 			LD A,$05				; $7EFF
 			CALL L_80BD				; $7F01
-			LD ($7C54),A				; $7F04
+			LD (SUPER_WEAPON_AMOUNT),A				; $7F04
 			RET				; $7F07
 
 			defb $01,$CE,$01                                    ; $7F08 ...
@@ -3706,7 +3703,7 @@ L_7FF4:
 			LD IX,$80B1				; $800E
 			LD A,(IX+$02)				; $8012
 			OR A				; $8015
-			JP NZ,L_7C43				; $8016
+			JP NZ,UPDATE_SUPER_WEAPON_DIGITS				; $8016
 			LD BC,$0008				; $8019
 			LD IY,$6CFC				; $801C
 L_8020:
@@ -3739,10 +3736,10 @@ L_8049:
 			LD DE,(POS_XY)				; $8052
 			CALL L_8B71				; $8056
 			LD A,$01				; $8059
-			LD ($7C54),A				; $805B
+			LD (SUPER_WEAPON_AMOUNT),A				; $805B
 			LD E,SFX_SEEKER				; $805E
 			CALL PLAY_SFX				; $8060
-			JP L_7C43				; $8063
+			JP UPDATE_SUPER_WEAPON_DIGITS				; $8063
 
 L_8066:
 			LD IX,$80B1				; $8066
