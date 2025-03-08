@@ -97,7 +97,7 @@ GO_25FPS:	XOR A					; $6574  ; frame count is a byte - reset
 			CALL L_7CD2				; $6593		 ; process player bombs (rockets)
 			CALL L_7B4A				; $6596 	 ; process enemy shots
 			CALL L_7C10				; $6599  	; ... player bombs (rockets)
-			CALL ExplosiveFXSprite		; $659C
+			CALL EXPLOSIVEFXSPRITE		; $659C
 			CALL ANIMATE_SPRITE		; $659F		; animated icons (pump)
 			CALL BONUS_TEXT			; $65A2		; bonus scores, like "250" on big items 
 			CALL L_7F1D				; $65A5
@@ -265,17 +265,20 @@ L_66A1:
 			NOP				; $66A8
 			NOP				; $66A9
 
+;---------------------------------------------------------------------
+; Clear Screen (works backwards)
 CLR_SCREEN:	
 			LD C,$00				; $66AA
 			LD HL,$5AFF				; $66AC
 			LD DE,$5AFE				; $66AF
 			LD (HL),C				; $66B2
-			LD BC,$0300				; $66B3
+			LD BC,$0300				; $66B3 ; Attribute memory
 			LDDR					; $66B6
 			LD (HL),$00				; $66B8
-			LD BC,$17FF				; $66BA
+			LD BC,$17FF				; $66BA ; Screen bitmap
 			LDDR					; $66BD
 			RET						; $66BF
+;---------------------------------------------------------------------
 
 ; future thing - this CLR_GAME_SCREEN could be more like above with 32 skipped, 
 ;				 maybe the game had borders at some point ?
@@ -446,7 +449,7 @@ L_67A3:
 			POP DE				; $67AB
 			RET				; $67AC
 
-L_67AD:
+CLR_SCRN_ATTRIBUTES:
 			LD HL,$5800				; $67AD
 			LD DE,$5B00				; $67B0
 			LD BC,$0300				; $67B3
@@ -973,9 +976,10 @@ L_6AE2:		LD A,($6AF3)			; $6AE2
 ; --------------------------------------------------------------------------
 
 ; --------------------------------------------------------------------------
-; Draw List Of Icons 16x16
+; Draw List Of Icons (16x16)
 ; Input: HL=Draw List
-DRAW_LIST:	ld a,(HL)				; $6B29
+DRAW_LIST:	
+			ld a,(HL)				; $6B29
 			inc hl					; $6B2A
 			CP $61					; $6B2B  
 			JP NC,SKIP_MENU_DRAW	; $6B2D  ; Bytes >= $61
@@ -1108,7 +1112,7 @@ L_6BCF:		CALL ICON16x16			; $6BCF
 			JP DRAW_LIST			; $6BD6
 L_6BD9:	
 			;------------------------------------------------------------------	
-			; Patch Icon Soruce Address
+			; Patch Title Data Source Address
 			CP $E6							; $6BD9 
 			JR NZ,L_6BEA					; $6BDB
 			LD A,(HL)						; $6BDD
@@ -1123,7 +1127,7 @@ L_6BEA:		CP $E7							; $6BEA  ;$E7:store
 			PUSH HL							; $6BEE
 			LD HL,(ICON_LD_ADDR+1)			; $6BEF  ; Get icon address
 			PUSH HL							; $6BF2
-			LD HL,$C2F1						; $6BF3
+			LD HL,FONT_DATA					; $6BF3
 			LD (ICON_LD_ADDR+1),HL			; $6BF6
 			LD A,$20						; $6BF9  ; Tile ID
 			CALL ICON16x16					; $6BFB
@@ -1605,7 +1609,7 @@ DATA_02:
 
 ;------------------------------------------------------
 ; Debris, explosions and volcanic eruptions
-ExplosiveFXSprite:
+EXPLOSIVEFXSPRITE:
 			LD HL,$6EC4			; $7069   ; Explosive data
 L_706C:
 			LD A,(HL)			; $706C
@@ -1914,18 +1918,17 @@ SKIP_SPECIAL:
 			JP NZ,L_72C2					; $72B5
 			LD A,D							; $72B8
 			CP $B0							; $72B9
-			JR Z,BACKGROUND_DONE						; $72BB
+			JR Z,BACKGROUND_DONE			; $72BB
 			ADD A,$10						; $72BD
 			LD D,A							; $72BF
 			LD E,$00						; $72C0
 L_72C2:		LD A,C							; $72C2
-			DJNZ SPECIAL_TITLES						; $72C3
-
+			DJNZ SPECIAL_TITLES				; $72C3
 			JP TILE_GROUP_LOOP				; $72C5
 
 BACKGROUND_DONE:		
 			CALL L_742E						; $72C8
-			LD IX,DATA_08						; $72CB
+			LD IX,DATA_08					; $72CB
 			LD DE,$2000						; $72CF  ; y/x coords
 L_72D2:		CALL GET_ANIM_ADDR_AS_HL		; $72D2
 			LD A,(HL)						; $72D5
@@ -1935,6 +1938,7 @@ L_72D2:		CALL GET_ANIM_ADDR_AS_HL		; $72D2
 			JP L_72EC						; $72DC
 L_72DF:		OR A							; $72DF
 			CALL NZ,L_732A					; $72E0
+
 			CALL L_8748						; $72E3
 			CALL L_6E07						; $72E6
 			CALL L_73AA						; $72E9
@@ -1944,67 +1948,67 @@ L_72EC:		CALL L_8FD6						; $72EC
 			CALL GENERATE_FLYING_ENEMIES	; $72F2  ; Generate flying enemies
 			CALL PLACE_PICKUPS				; $72F5  ; first time pick up (mace,+1 items)
 
-			LD A,E							; $72F8
-			ADD A,$08				; $72F9
-			LD E,A				; $72FB
-			CP $80				; $72FC
+			LD A,E						; $72F8
+			ADD A,$08					; $72F9
+			LD E,A						; $72FB
+			CP $80						; $72FC
 			JP NZ,L_72D2				; $72FE
-			LD A,D				; $7301
-			CP $B0				; $7302
-			JR Z,L_730E				; $7304
-			ADD A,$10				; $7306
-			LD D,A				; $7308
-			LD E,$00				; $7309
-			JP L_72D2				; $730B
+			LD A,D						; $7301
+			CP $B0						; $7302
+			JR Z,L_730E					; $7304
+			ADD A,$10					; $7306
+			LD D,A						; $7308
+			LD E,$00					; $7309
+			JP L_72D2					; $730B
 L_730E:		LD (IX+$00),$FF				; $730E
-			CALL L_67AD				; $7312
-			CALL L_9BD8				; $7315
-			LD A,$01				; $7318
+			CALL CLR_SCRN_ATTRIBUTES	; $7312
+			CALL L_9BD8					; $7315
+			LD A,$01					; $7318
 			LD ($9BD3),A				; $731A
 			LD DE,(POS_XY)				; $731D
 			LD ($6AF1),DE				; $7321
-			LD B,D				; $7325
-			LD C,E				; $7326
-			JP L_6953				; $7327
-L_732A:		CP $E9				; $732A
-			RET NC				; $732C
+			LD B,D						; $7325
+			LD C,E						; $7326
+			JP L_6953					; $7327
+L_732A:		CP $E9						; $732A
+			RET NC						; $732C
 
-			PUSH AF				; $732D
-			PUSH DE				; $732E
-			PUSH HL				; $732F
+			PUSH AF					; $732D
+			PUSH DE					; $732E
+			PUSH HL					; $732F
 			LD DE,$0005				; $7330
-			LD B,A				; $7333
+			LD B,A					; $7333
 			LD HL,$736D				; $7334
 L_7337:		LD A,(HL)				; $7337
 			ADD HL,DE				; $7338
-			CP $FF				; $7339
+			CP $FF					; $7339
 			JR Z,L_735B				; $733B
-			CP B				; $733D
-			JR NZ,L_7337				; $733E
+			CP B					; $733D
+			JR NZ,L_7337			; $733E
 			SBC HL,DE				; $7340
-			INC HL				; $7342
+			INC HL					; $7342
 			EX DE,HL				; $7343
-			POP HL				; $7344
-			PUSH HL				; $7345
+			POP HL					; $7344
+			PUSH HL					; $7345
 			LD A,(DE)				; $7346
 			LD (HL),A				; $7347
-			INC HL				; $7348
-			INC DE				; $7349
+			INC HL					; $7348
+			INC DE					; $7349
 			LD A,(DE)				; $734A
 			LD (HL),A				; $734B
-			INC DE				; $734C
+			INC DE					; $734C
 			LD BC,$001F				; $734D
 			ADD HL,BC				; $7350
 			LD A,(DE)				; $7351
 			LD (HL),A				; $7352
-			INC HL				; $7353
-			INC DE				; $7354
+			INC HL					; $7353
+			INC DE					; $7354
 			LD A,(DE)				; $7355
 			LD (HL),A				; $7356
-			POP HL				; $7357
-			POP DE				; $7358
-			POP AF				; $7359
-			RET				; $735A
+			POP HL					; $7357
+			POP DE					; $7358
+			POP AF					; $7359
+			RET						; $735A
 
 L_735B:
 			POP HL				; $735B
@@ -2152,7 +2156,7 @@ RESET_GAME:
 			LD (DIRECTION),A						; $7495
 			XOR A								; $7498
 			LD (EGG_TIMER),A					; $7499
-			LD ($7643),A						; $749C
+			LD (DATA_11),A						; $749C
 			LD ($6AEE),A						; $749F
 			LD ($6AF3),A						; $74A2
 			LD (InputOff),A						; $74A5
@@ -2257,199 +2261,199 @@ L_752F:
 			defb $0A,$09,$4C,$44,$09,$43,$2C,$44				; $757B ..LD.C,D
 			defb $FF                                            ; $7583 .
 
-L_7584:
-			LD HL,$75A3				; $7584
-L_7587:
-			LD A,(HL)				; $7587
-			CP $FF				; $7588
-			RET Z				; $758A
-			LD E,A				; $758B
-			INC E				; $758C
-			INC E				; $758D
-			INC HL				; $758E
+L_7584:		LD HL,DATA_12			; $7584
+L_7587:		LD A,(HL)				; $7587
+			CP $FF					; $7588
+			RET Z					; $758A
+			LD E,A					; $758B
+			INC E					; $758C
+			INC E					; $758D
+			INC HL					; $758E
 			LD D,(HL)				; $758F
-			LD A,D				; $7590
-			SUB $08				; $7591
-			LD D,A				; $7593
-			INC HL				; $7594
+			LD A,D					; $7590
+			SUB $08					; $7591
+			LD D,A					; $7593
+			INC HL					; $7594
 			LD A,$01				; $7595
 			CALL L_6679				; $7597
 			ADD A,$42				; $759A
-			LD C,A				; $759C
+			LD C,A					; $759C
 			CALL L_6E8B				; $759D
 			JP L_7587				; $75A0
 
+DATA_12:
 			defb $49,$54,$45,$20,$41,$44,$44,$52				; $75A3 ITE ADDR
 			defb $45,$53,$53,$0D,$0A,$09,$45,$58				; $75AB ESS...EX
 			defb $58,$0D,$0A,$0D,$FF                            ; $75B3 X....
 
-L_75B8:
-			LD DE,($7644)				; $75B8
-			LD A,E				; $75BC
-			CP $FF				; $75BD
-			RET Z				; $75BF
-			LD A,($7643)				; $75C0
-			OR A				; $75C3
-			JP Z,L_75DC				; $75C4
-			DEC A				; $75C7
-			LD ($7643),A				; $75C8
-			RET NZ				; $75CB
-			CALL L_7647				; $75CC
+L_75B8:		LD DE,($7644)				; $75B8
+			LD A,E						; $75BC
+			CP $FF						; $75BD
+			RET Z						; $75BF
+			LD A,(DATA_11)				; $75C0
+			OR A						; $75C3
+			JP Z,L_75DC					; $75C4
+			DEC A						; $75C7
+			LD (DATA_11),A				; $75C8
+			RET NZ						; $75CB
+			CALL L_7647					; $75CC
 			LD A,($74E1)				; $75CF
-			INC A				; $75D2
-			CP $03				; $75D3
-			JP NZ,RESET_GAME				; $75D5
-			XOR A				; $75D8
+			INC A						; $75D2
+			CP $03						; $75D3
+			JP NZ,RESET_GAME			; $75D5
+			XOR A						; $75D8
 			JP RESET_GAME				; $75D9
-L_75DC:
-			LD HL,(POS_XY)				; $75DC
-			LD A,D				; $75DF
-			SUB $10				; $75E0
-			CP H				; $75E2
-			RET NC				; $75E3
-			LD A,E				; $75E4
-			INC L				; $75E5
-			INC L				; $75E6
-			CP L				; $75E7
-			RET NC				; $75E8
-			ADD A,$08				; $75E9
-			DEC L				; $75EB
-			DEC L				; $75EC
-			DEC L				; $75ED
-			DEC L				; $75EE
-			CP L				; $75EF
-			RET C				; $75F0
-			LD HL,$C6F9				; $75F1
-			LD A,$83				; $75F4
-			CALL DRAW4X4SPRITE				; $75F6
-			LD A,$0C				; $75F9
-			CALL L_9FA2				; $75FB
-			LD A,E				; $75FE
-			ADD A,$08				; $75FF
-			LD E,A				; $7601
-			LD HL,$C6F9				; $7602
-			LD A,$84				; $7605
-			CALL DRAW4X4SPRITE				; $7607
-			LD A,$0D				; $760A
-			CALL L_9FA2				; $760C
-			LD A,D				; $760F
-			SUB $10				; $7610
-			LD D,A				; $7612
-			LD A,E				; $7613
-			SUB $04				; $7614
-			LD E,A				; $7616
-			LD A,$0E				; $7617
-			CALL L_9FA2				; $7619
-			LD A,$FF				; $761C
+L_75DC:		LD HL,(POS_XY)				; $75DC
+			LD A,D						; $75DF
+			SUB $10						; $75E0
+			CP H						; $75E2
+			RET NC						; $75E3
+			LD A,E						; $75E4
+			INC L						; $75E5
+			INC L						; $75E6
+			CP L						; $75E7
+			RET NC						; $75E8
+			ADD A,$08					; $75E9
+			DEC L						; $75EB
+			DEC L						; $75EC
+			DEC L						; $75ED
+			DEC L						; $75EE
+			CP L						; $75EF
+			RET C						; $75F0
+			LD HL,$C6F9					; $75F1
+			LD A,$83					; $75F4
+			CALL DRAW4X4SPRITE			; $75F6
+			LD A,$0C					; $75F9
+			CALL L_9FA2					; $75FB
+			LD A,E						; $75FE
+			ADD A,$08					; $75FF
+			LD E,A						; $7601
+			LD HL,$C6F9					; $7602
+			LD A,$84					; $7605
+			CALL DRAW4X4SPRITE			; $7607
+			LD A,$0D					; $760A
+			CALL L_9FA2					; $760C
+			LD A,D						; $760F
+			SUB $10						; $7610
+			LD D,A						; $7612
+			LD A,E						; $7613
+			SUB $04						; $7614
+			LD E,A						; $7616
+			LD A,$0E					; $7617
+			CALL L_9FA2					; $7619
+			LD A,$FF					; $761C
 			LD (InputOff),A				; $761E
-			LD A,$40				; $7621
-			LD ($7643),A				; $7623
+			LD A,$40					; $7621
+			LD (DATA_11),A				; $7623
 			LD DE,(POS_XY)				; $7626
-			LD B,D				; $762A
-			LD C,E				; $762B
-			LD HL,$C6F9				; $762C
+			LD B,D						; $762A
+			LD C,E						; $762B
+			LD HL,$C6F9					; $762C
 			LD ($696D),HL				; $762F
 			LD ($6AEF),HL				; $7632
 			LD ($6AF4),HL				; $7635
-			CALL L_6953				; $7638
-			XOR A				; $763B
+			CALL L_6953					; $7638
+			XOR A						; $763B
 			LD ($6AEE),A				; $763C
 			LD ($6AF3),A				; $763F
-			RET				; $7642
+			RET							; $7642
 
-			defb $00,$00,$00,$FF                                ; $7643 ....
+DATA_11:
+			defb $00,$00,$00,$FF    	; $7643 
 
-L_7647:		CALL CLR_GAME_SCREEN				; $7647
-			XOR A				; $764A
+L_7647:		CALL CLR_GAME_SCREEN		; $7647
+			XOR A						; $764A
 			LD ($696A),A				; $764B
-			LD A,$4A				; $764E
+			LD A,$4A					; $764E
 			LD ($744B),A				; $7650
-			CALL L_721E				; $7653
-			LD DE,$1038				; $7656
-			LD A,$0C				; $7659
-			CALL L_9FA2				; $765B
-			LD A,E				; $765E
-			ADD A,$08				; $765F
-			LD E,A				; $7661
-			LD A,$0D				; $7662
-			CALL L_9FA2				; $7664
-			LD A,D				; $7667
-			SUB $10				; $7668
-			LD D,A				; $766A
-			LD A,E				; $766B
-			SUB $04				; $766C
-			LD E,A				; $766E
-			LD A,$0E				; $766F
-			CALL L_9FA2				; $7671
-			LD B,$60				; $7674
-L_7676:
-			PUSH BC				; $7676
-			HALT				; $7677
-			HALT				; $7678
-			CALL L_A04E				; $7679
-			CALL L_A086				; $767C
-			POP BC				; $767F
-			DJNZ L_7676				; $7680
-			LD A,(EGG_TIMER)				; $7682
-			CP $11				; $7685
-			JP NC,L_76BB				; $7687
+			CALL L_721E					; $7653
+			LD DE,$1038					; $7656
+			LD A,$0C					; $7659
+			CALL L_9FA2					; $765B
+			LD A,E						; $765E
+			ADD A,$08					; $765F
+			LD E,A						; $7661
+			LD A,$0D					; $7662
+			CALL L_9FA2					; $7664
+			LD A,D						; $7667
+			SUB $10						; $7668
+			LD D,A						; $766A
+			LD A,E						; $766B
+			SUB $04						; $766C
+			LD E,A						; $766E
+			LD A,$0E					; $766F
+			CALL L_9FA2					; $7671
+			LD B,$60					; $7674
+			;---------------------------------------------
+L_7676:		PUSH BC						; $7676
+			HALT						; $7677
+			HALT						; $7678
+			CALL L_A04E					; $7679
+			CALL L_A086					; $767C
+			POP BC						; $767F
+			DJNZ L_7676					; $7680
+			;---------------------------------------------
+			LD A,(EGG_TIMER)			; $7682
+			CP $11						; $7685
+			JP NC,BAD_LUCK_MESSAGE		; $7687
 			LD HL,($7973)				; $768A
-			LD DE,$05DC				; $768D
-			AND A				; $7690
-			SBC HL,DE				; $7691
-			JR C,L_76BB				; $7693
-			LD HL,$796D				; $7695
-			LD DE,$771A				; $7698
-			LD BC,$0005				; $769B
-			LDIR				; $769E
-			LD HL,$76CC				; $76A0
+			LD DE,$05DC					; $768D
+			AND A						; $7690
+			SBC HL,DE					; $7691
+			JR C,BAD_LUCK_MESSAGE		; $7693
+			LD HL,$796D					; $7695
+			LD DE,$771A					; $7698
+			LD BC,$0005					; $769B
+			LDIR						; $769E
+			;---------------------------------------------
+			; Display - Well Done message
+			LD HL,WELL_DONE_TXT			; $76A0
 			CALL DRAW_LIST				; $76A3
-			LD HL,LIVES				; $76A6	; load lives
-			INC (HL)				; $76A9	; bonus life
-			LD DE,$7972				; $76AA
-			CALL L_78D4				; $76AD
-L_76B0:
+			LD HL,LIVES					; $76A6	; load lives
+			INC (HL)					; $76A9	; bonus life
+			LD DE,$7972					; $76AA
+			CALL L_78D4					; $76AD
+LOOP_WDM_FIRE:
 			CALL USER_INPUT				; $76B0
-			LD A,(FIRE_BUTTON)				; $76B3
-			OR A				; $76B6
-			JP Z,L_76B0				; $76B7
-			RET				; $76BA
-
-L_76BB:
-			LD HL,$7730				; $76BB
+			LD A,(FIRE_BUTTON)			; $76B3
+			OR A						; $76B6
+			JP Z,LOOP_WDM_FIRE			; $76B7
+			RET							; $76BA
+			;---------------------------------------------
+			; Display - Bad Luck message
+BAD_LUCK_MESSAGE:
+			LD HL,BAD_LUCK_TXT			; $76BB
 			CALL DRAW_LIST				; $76BE
-L_76C1:
+LOOP_BLM_FIRE:
 			CALL USER_INPUT				; $76C1
-			LD A,(FIRE_BUTTON)				; $76C4
-			OR A				; $76C7
-			JP Z,L_76C1				; $76C8
-			RET				; $76CB
+			LD A,(FIRE_BUTTON)			; $76C4
+			OR A						; $76C7
+			JP Z,LOOP_BLM_FIRE			; $76C8
+			RET							; $76CB
+			;-----------------------------------------------		
+WELL_DONE_TXT:												; $76CC   
+			defb SET_SOURCE_DATA 
+			defw FONT_DATA		
+			defb GLOBAL_COL,%01000101	 ; (bright cyan)						
+			defb SET_POS,19,3										
+			defb "WELL DONE CYBERNOID PILOT!" 
+			defb MOVE+2,228, "YOUR SKILL HAS EARNED ANOTHER"
+			defb MOVE+2,227,"CRAFT AND "								
+			defb INK_YELLOW,"000000"	
+			defb INK_CYAN," BONUS POINTS.",END_MARKER
+			; ----------------------------------------------
+BAD_LUCK_TXT:												; $7730
+			defb SET_SOURCE_DATA
+			defw FONT_DATA                				
+			defb GLOBAL_COL,%01000011	; (bright magenta)
+			defb SET_POS,19,3										 
+			defb "YOU HAVE FAILED TO RETREIVE"						 
+			defb $7A,$E2, "A CARGO VALUE OF 1500 WITHIN THE"		 
+			defb $7A,$E4, "TIME ALLOCATED - BAD LUCK"				 
+			defb END_MARKER											
+			; ---------------------------------------------
 
-			defb $E6,$F1,$C2,$E0,$45,$DF,$13                    ; $76CC ....E..
-			defb $03,$57,$45,$4C,$4C,$20,$44,$4F				; $76D3 .WELL DO
-			defb $4E,$45,$20,$43,$59,$42,$45,$52				; $76DB NE CYBER
-			defb $4E,$4F,$49,$44,$20,$50,$49,$4C				; $76E3 NOID PIL
-			defb $4F,$54,$21,$7A,$E4,$59,$4F,$55				; $76EB OT!z.YOU
-			defb $52,$20,$53,$4B,$49,$4C,$4C,$20				; $76F3 R SKILL 
-			defb $48,$41,$53,$20,$45,$41,$52,$4E				; $76FB HAS EARN
-			defb $45,$44,$20,$41,$4E,$4F,$54,$48				; $7703 ED ANOTH
-			defb $45,$52,$7A,$E3,$43,$52,$41,$46				; $770B ERz.CRAF
-			defb $54,$20,$41,$4E,$44,$20,$DD,$30				; $7713 T AND .0
-			defb $30,$30,$30,$30,$30,$DC,$20,$42				; $771B 00000. B
-			defb $4F,$4E,$55,$53,$20,$50,$4F,$49				; $7723 ONUS POI
-			defb $4E,$54,$53,$2E,$FF,$E6,$F1,$C2				; $772B NTS.....
-			defb $E0,$43,$DF,$13,$03,$59,$4F,$55				; $7733 .C...YOU
-			defb $20,$48,$41,$56,$45,$20,$46,$41				; $773B  HAVE FA
-			defb $49,$4C,$45,$44,$20,$54,$4F,$20				; $7743 ILED TO 
-			defb $52,$45,$54,$52,$45,$49,$56,$45				; $774B RETREIVE
-			defb $7A,$E2,$41,$20,$43,$41,$52,$47				; $7753 z.A CARG
-			defb $4F,$20,$56,$41,$4C,$55,$45,$20				; $775B O VALUE 
-			defb $4F,$46,$20,$31,$35,$30,$30,$20				; $7763 OF 1500 
-			defb $57,$49,$54,$48,$49,$4E,$20,$54				; $776B WITHIN T
-			defb $48,$45,$7A,$E4,$54,$49,$4D,$45				; $7773 HEz.TIME
-			defb $20,$41,$4C,$4C,$4F,$43,$41,$54				; $777B  ALLOCAT
-			defb $45,$44,$20,$2D,$20,$42,$41,$44				; $7783 ED - BAD
-			defb $20,$4C,$55,$43,$4B,$FF,$FF,$06				; $778B  LUCK...
+			defb $FF,$06
 			defb $00,$87,$00,$00,$87,$FF,$0C,$00				; $7793 ........
 			defb $87,$00,$00,$87,$FF,$09,$00,$0B				; $779B ........
 			defb $00,$00,$8B,$00,$00,$8B,$FF,$09				; $77A3 ........
@@ -2467,7 +2471,7 @@ L_76C1:
 
 L_77FF:
 			LD HL,$7814				; $77FF
-			CALL DRAW_LIST				; $7802
+			CALL DRAW_LIST			; $7802
 			CALL L_788E				; $7805
 			CALL L_78AF				; $7808
 			CALL L_78C8				; $780B
@@ -2497,7 +2501,7 @@ L_788E:
 			PUSH DE				; $7890
 			PUSH HL				; $7891
 			LD C,$45				; $7892
-			LD HL,$C2F1				; $7894
+			LD HL,FONT_DATA			; $7894
 			LD (ICON_LD_ADDR+1),HL				; $7897
 			LD HL,$78F9				; $789A
 			LD DE,$0108				; $789D
@@ -2515,7 +2519,7 @@ L_78A2:
 			RET				; $78AE
 
 L_78AF:
-			LD HL,$C2F1				; $78AF
+			LD HL,FONT_DATA				; $78AF
 			LD (ICON_LD_ADDR+1),HL				; $78B2
 			LD C,$43				; $78B5
 			LD HL,$796C				; $78B7
@@ -2611,12 +2615,12 @@ L_7950:
 			defb $00,$30,$30,$30,$30,$30,$30,$FF				; $796B .000000.
 			defb $00,$00,$00,$00                                ; $7973 ....
 
-; === Display Routine, uses custom font @ $C2F1 ===					
+; === Display Routine, uses custom font FONT_DATA ($C2F1) ===					
 ; note: the game code chops off the 3 digit! Can be fixed to display 3 digits.
 Display3DigitNumber:  ; L_7977:
 			PUSH BC					; $7977
 			PUSH HL					; $7978
-			LD HL,$C2F1				; $7979 ; font data
+			LD HL,FONT_DATA			; $7979 ; font data
 			LD (ICON_LD_ADDR+1),HL	; $797C	; modifies this "LD BC,$XXXX" @ICON_LD_ADDR+1 
 			LD B,$64				; $797F
 			CALL Display8x8Digits	; $7981 ; hundreds
@@ -2958,7 +2962,7 @@ L_7B6E:
 L_7B72:
 			LD C,$47				; $7B72
 			LD A,(SELECTED_WEAPON)				; $7B74
-			LD HL,$C2F1				; $7B77
+			LD HL,FONT_DATA				; $7B77
 			LD (ICON_LD_ADDR+1),HL				; $7B7A
 			ADD A,A				; $7B7D
 			ADD A,A				; $7B7E
@@ -3854,8 +3858,14 @@ MODE48K:	defb $0		; $81A5  ; looks like a dev skip 48k music thing
 DO_MENU:	CALL CLR_SCREEN				; $81A6  ; clear screen
 			CALL DRAW_MENU_BORDERS		; $81A9  ; Draw menu borders
 
-			LD HL,MENU_TEXT				; $81AC
+			LD HL,MENU_TEXT 			; $81AC
 			CALL DRAW_LIST				; $81AF  ; menu text
+
+			
+	; DEBUG TEST
+	 ;  LD HL,WELL_DONE_TXT
+	;	LD HL,BAD_LUCK_TXT
+	;	CALL DRAW_LIST		
 
 
 	
@@ -3930,7 +3940,8 @@ INVALID_KEY_PRESS:
 ; *** Menu text and control bytes ***
 MENU_TEXT:  						 ; $8235
             defb SETUP,$00     		 ; Setup (with index)
-            defb ICON_ADDR,$F1,$C2 	 ; Patch 'ICON_LD_ADDR'   
+            defb SET_SOURCE_DATA ;,$F1,$C2 	 ; Patch 'ICON_LD_ADDR'
+			defw FONT_DATA
             defb SET_POS,$09,$08 	 ; Set position (Y=9, X=8)    
             defb GLOBAL_COL,$45    	 ; Set global "standard" (%FBPPPIII) colour attribute 
             defb "BY RAFFAELE CECCO"     
@@ -4079,21 +4090,27 @@ DEFINE_KEYS:	defb $00,$00,$00,$00								; $83F1	x4 keys saved here
 				defb $00											; $83F3
 CHEAT_KEYS:		defb $59,$58,$45,$53								; $83F6 YXES
 
-				defb $E0											; 83FA
-				defb $43,$DF,$09,$07,$E6,$F1,$C2,$53				; $83FB C......S
-				defb $45,$4C,$45,$43,$54,$20,$4B,$45				; $8403 ELECT KE
-				defb $59,$20,$46,$4F,$52,$2E,$2E,$2E				; $840B Y FOR...
-				defb $2E,$DC,$7B,$EE,$4C,$45,$46,$54				; $8413 ..{.LEFT
-				defb $7A,$FC,$52,$49,$47,$48,$54,$7A				; $841B z.RIGHTz
-				defb $FB,$55,$50,$20,$20,$7A,$FC,$46				; $8423 .UP  z.F
-				defb $49,$52,$45,$70,$04,$E5,$09,$20				; $842B IREp... 
-				defb $DF,$14,$04,$D9,$43,$59,$42,$45				; $8433 ....CYBE
-				defb $52,$4E,$4F,$49,$44,$20,$2A,$20				; $843B RNOID * 
-				defb $31,$39,$38,$38,$20,$48,$45,$57				; $8443 1988 HEW
-				defb $53,$4F,$4E,$FF                                ; $844B SON.
+
+;HERE
+
+				;--------------------------------------------------------------
+				; Selected Keys Menu Test (for use with DRAW_LIST)
+				defb GLOBAL_COL,%01000011							; $83FA
+				defb SET_POS,9,7										
+				defb SET_SOURCE_DATA ; ,$F1,$C2                    		
+				defw FONT_DATA		
+				defb "SELECT KEY FOR...."						
+				defb INK_CYAN,MOVE+3,238, "LEFT"	
+				defb MOVE+2,$FC, "RIGHT"
+				defb MOVE+2,$FB, "UP  "								
+				defb MOVE+2,$FC, "FIRE"								
+				defb $70,$04,$E5,$09,$20							
+				defb SET_POS,20,4						
+				defb INK_RED,"CYBERNOID * 1988 HEWSON"						
+				defb END_MARKER	
+				;--------------------------------------------------------------
 
 DRAW_MENU_BORDERS:
-
 			; -------------------------------------------------------------
 			; Draw x4 Border Corners
             LD DE,$0000       		 	; $844F  ; Y,X coords (Top-left)
@@ -5433,36 +5450,36 @@ L_8F0C:		LD A,$64						; $8F0C
 			JP L_78C8					; $8F55
 
 L_8F58:
-			DEC A				; $8F58
+			DEC A						; $8F58
 			LD (InputOff),A				; $8F59
-			RET NZ				; $8F5C
+			RET NZ						; $8F5C
 			LD A,(LIVES)				; $8F5D   ;load lives
-			OR A				; $8F60
-			JP Z,L_8F95				; $8F61
-			LD HL,$0753				; $8F64
+			OR A						; $8F60
+			JP Z,L_8F95					; $8F61
+			LD HL,$0753					; $8F64
 			LD ($71B2),HL				; $8F67
-			LD A,$32				; $8F6A
+			LD A,$32					; $8F6A
 			LD ($7E94),A				; $8F6C
-			CALL L_7BFC				; $8F6F
-			CALL L_7B72				; $8F72
-			LD DE,(OLD_POS_XY)				; $8F75
+			CALL L_7BFC					; $8F6F
+			CALL L_7B72					; $8F72
+			LD DE,(OLD_POS_XY)			; $8F75
 			LD (POS_XY),DE				; $8F79
-			LD B,D				; $8F7D
-			LD C,E				; $8F7E
-			JP L_6953				; $8F7F
+			LD B,D						; $8F7D
+			LD C,E						; $8F7E
+			JP L_6953					; $8F7F
 
-			defb $E6                                        ; $8F82 .
+			defb $E6                                        ; $8F82
 			defb $F1,$C2,$DF,$0A,$0A,$E0,$46,$47			; $8F83 ......FG
-			defb $45,$54,$20,$52,$45,$41,$44,$59			; $8F8B ET READY
+			defb $45,$54,$20,$52,$45,$41,$44,$59			; $8F8B ET READY  
 			defb $FF 										; $8F93
-InputOff:	defb $00                ; $8F94  
+InputOff:	defb $00                						; $8F94  
 
 L_8F95:
 			LD E,SFX_GAMEOVER				; $8F95
 			CALL PLAY_SFX				; $8F97
-			LD HL,$C2F1				; $8F9A
+			LD HL,FONT_DATA				; $8F9A
 			LD (ICON_LD_ADDR+1),HL				; $8F9D
-			LD HL,$8FCD				; $8FA0
+			LD HL,GAME_OVER_TXT				; $8FA0
 			LD BC,$0945				; $8FA3
 			LD DE,$0E0B				; $8FA6
 L_8FA9:
@@ -5485,8 +5502,8 @@ L_8FC1:
 			CALL L_954F				; $8FC7
 			JP L_9433				; $8FCA
 
-			defb $47,$41,$4D,$45,$20,$4F                        ; $8FCD GAME O
-			defb $56,$45,$52                                    ; $8FD3 VER
+GAME_OVER_TXT:
+			defb "GAME OVER"		; $8FCD 
 
 L_8FD6:
 			CP $F0				; $8FD6
@@ -6011,7 +6028,7 @@ L_9433:
 			CALL DRAW_MENU_BORDERS				; $9436
 			LD HL,$947C				; $9439
 			CALL DRAW_LIST				; $943C
-			LD HL,$C2F1				; $943F
+			LD HL,FONT_DATA			; $943F
 			LD (ICON_LD_ADDR+1),HL				; $9442
 			LD HL,$949C				; $9445
 			LD B,$0A				; $9448
@@ -6048,7 +6065,11 @@ L_946C:
 			RET Z				; $9479
 			JR L_946C				; $947A
 
-			defb $E6,$F1,$C2,$DF,$09,$05,$E0                    ; $947C .......
+HI_SCORE_TXT:
+			defb SET_SOURCE_DATA         					    ; $947C
+			defw FONT_DATA	
+			defb SET_POS,$09,$05
+			defb GLOBAL_COL  
 			defb $44,$43,$59,$42,$45,$52,$4E,$4F				; $9483 DCYBERNO
 			defb $49,$44,$20,$48,$41,$4C,$4C,$20				; $948B ID HALL 
 			defb $4F,$46,$20,$46,$41,$4D,$45,$FF				; $9493 OF FAME.
@@ -6848,19 +6869,24 @@ GENERATE_FLYING_ENEMIES:
 			POP AF				; $9BBD
 			RET				; $9BBE
 
-			defb $E7,$9A,$01,$7F                                ; $9BBF ....
-			defb $48,$9B,$00,$BE,$C7,$9A,$01,$F9				; $9BC3 H.......
-			defb $07,$9B,$00,$11,$00,$00,$00,$00				; $9BCB ........
-			defb $00,$00,$00,$00,$00                            ; $9BD3 .....
+			defb $E7,$9A,$01,$7F          	;$9BBF
+			defb $48,$9B,$00,$BE			;$9BC3
+			defb $C7,$9A,$01,$F9			;$9BC7
+			defb $07,$9B,$00,$11			;$9BCB
+			defw $0000						;$9BCF
+			defb $00						;$9BD1
+			defb $00						;$9BD2
+			defb $00             			;$9BD3 
+			defb $00 						;$9BD4
+			defb $00	 					;$9BD5
+			defw $0000						;$9BD6
 
-L_9BD8:
-			LD A,($9BD5)				; $9BD8
+L_9BD8:		LD A,($9BD5)				; $9BD8
 			CP $FF				; $9BDB
 			RET Z				; $9BDD
 			LD HL,($9BCF)				; $9BDE
 			JP (HL)				; $9BE1
-L_9BE2:
-			LD A,($9BD5)				; $9BE2
+L_9BE2:		LD A,($9BD5)				; $9BE2
 			CP $FF				; $9BE5
 			RET Z				; $9BE7
 			LD A,($9BD3)				; $9BE8
@@ -6891,16 +6917,12 @@ L_9BE2:
 			LD HL,($9BD6)				; $9C1B
 			LD A,($9C55)				; $9C1E
 			JP L_9A2C				; $9C21
-
-L_9C24:
-			CP $68				; $9C24
+L_9C24:		CP $68				; $9C24
 			RET NC				; $9C26
 			LD HL,($9BD6)				; $9C27
 			LD A,($9C55)				; $9C2A
 			JP L_9A2C				; $9C2D
-
-L_9C30:
-			LD E,(HL)				; $9C30
+L_9C30:		LD E,(HL)				; $9C30
 			LD D,A				; $9C31
 			LD A,($9BD5)				; $9C32
 			CP $01				; $9C35
@@ -6911,9 +6933,7 @@ L_9C30:
 			LD HL,($9BD6)				; $9C40
 			LD A,($9C55)				; $9C43
 			JP L_9A2C				; $9C46
-
-L_9C49:
-			CP $90				; $9C49
+L_9C49:		CP $90				; $9C49
 			RET NC				; $9C4B
 			LD HL,($9BD6)				; $9C4C
 			LD A,($9C55)				; $9C4F
@@ -8983,11 +9003,12 @@ L_C067:
 			defb $2E,$00,$27,$28,$FF,$09,$00,$20				; $C2D3 ..'(... 
 			defb $00,$22,$00,$00,$29,$2A,$FF,$06				; $C2DB ."..)*..
 			defb $00,$FF,$0A,$14,$11,$0C,$0D,$0E				; $C2E3 ........
+			defb $0F,$0C,$01,$02,$03,$04						; $C2EB ........
 
-			defb $0F,$0C,$01,$02,$03,$04				; $C2EB ........
-
-			defb $05,$01								; $C2F1 ; patched with DRAW_LIST (commands $E6,$E7)
-
+;-----------------------------------------------------------------------------------
+FONT_DATA:
+			; 32 items - ascii front padding (non printable)
+			defb $05,$01										; $C2F1  
 			defb $02,$04,$03,$01,$15,$02,$01,$03				; $C2F3 ........
 			defb $02,$01,$01,$02,$03,$04,$05,$01				; $C2FB ........
 			defb $02,$03,$04,$05,$15,$01,$01,$02				; $C303 ........
@@ -9019,67 +9040,71 @@ L_C067:
 			defb $03,$FF,$05,$A8,$9A,$9B,$9B,$9B				; $C3D3 ........
 			defb $9C,$FF,$04,$A8,$4B,$04,$01,$02				; $C3DB ....K...
 			defb $03,$04,$05,$01,$02,$03,$04,$05				; $C3E3 ........
-			defb $01,$02,$03,$04,$05,$03,$00,$00				; $C3EB ........
-			defb $00,$00,$00,$00,$00,$00,$00,$10				; $C3F3 ........
-			defb $10,$10,$10,$00,$10,$00,$00,$24				; $C3FB .......$
-			defb $24,$00,$00,$00,$00,$00,$00,$10				; $C403 $.......
-			defb $00,$00,$00,$00,$00,$00,$00,$10				; $C40B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$10				; $C413 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$10				; $C41B ........
-			defb $00,$00,$00,$00,$00,$00,$08,$08				; $C423 ........
-			defb $10,$00,$00,$00,$00,$00,$00,$1C				; $C42B ........
-			defb $10,$10,$10,$10,$1C,$00,$00,$38				; $C433 .......8
-			defb $08,$08,$08,$08,$38,$00,$FF,$81				; $C43B ....8...
-			defb $BD,$A1,$A1,$BD,$81,$FF,$00,$00				; $C443 ........
-			defb $08,$08,$3E,$08,$08,$00,$00,$00				; $C44B ..>.....
-			defb $00,$00,$00,$08,$08,$10,$00,$00				; $C453 ........
-			defb $00,$7E,$00,$00,$00,$00,$00,$00				; $C45B .~......
-			defb $00,$00,$00,$00,$18,$00,$00,$02				; $C463 ........
-			defb $04,$08,$10,$20,$40,$00,$00,$7E				; $C46B ... @..~
-			defb $46,$4A,$52,$62,$7E,$00,$00,$10				; $C473 FJRb~...
-			defb $30,$10,$10,$10,$7C,$00,$00,$7E				; $C47B 0...|..~
-			defb $02,$7E,$40,$40,$7E,$00,$00,$7E				; $C483 .~@@~..~
-			defb $02,$3C,$02,$02,$7E,$00,$00,$42				; $C48B .<..~..B
-			defb $42,$7E,$02,$02,$02,$00,$00,$7E				; $C493 B~.....~
-			defb $40,$7E,$02,$02,$7E,$00,$00,$7E				; $C49B @~..~..~
-			defb $40,$7E,$42,$42,$7E,$00,$00,$7E				; $C4A3 @~BB~..~
-			defb $02,$02,$02,$02,$02,$00,$00,$7E				; $C4AB .......~
-			defb $42,$7E,$42,$42,$7E,$00,$00,$7E				; $C4B3 B~BB~..~
-			defb $42,$42,$7E,$02,$02,$00,$00,$00				; $C4BB BB~.....
-			defb $00,$38,$38,$00,$38,$38,$00,$00				; $C4C3 .88.88..
-			defb $38,$38,$00,$38,$38,$70,$00,$1C				; $C4CB 88.88p..
-			defb $38,$70,$E0,$70,$38,$1C,$00,$00				; $C4D3 8p.p8...
-			defb $FE,$00,$00,$FE,$00,$00,$00,$70				; $C4DB .......p
-			defb $38,$1C,$0E,$1C,$38,$70,$00,$7C				; $C4E3 8...8p.|
-			defb $E6,$0C,$38,$38,$00,$38,$00,$7C				; $C4EB ..88.8.|
-			defb $E6,$EE,$EA,$EE,$E0,$7C,$00,$7E				; $C4F3 .....|.~
-			defb $42,$7E,$42,$42,$42,$00,$00,$7E				; $C4FB B~BBB..~
-			defb $42,$7C,$42,$42,$7E,$00,$00,$7E				; $C503 B|BB~..~
-			defb $40,$40,$40,$40,$7E,$00,$00,$7C				; $C50B @@@@~..|
-			defb $42,$42,$42,$42,$7E,$00,$00,$7E				; $C513 BBBB~..~
-			defb $40,$7E,$40,$40,$7E,$00,$00,$7E				; $C51B @~@@~..~
-			defb $40,$7E,$40,$40,$40,$00,$00,$7E				; $C523 @~@@@..~
-			defb $42,$40,$46,$42,$7E,$00,$00,$42				; $C52B B@FB~..B
-			defb $42,$7E,$42,$42,$42,$00,$00,$7C				; $C533 B~BBB..|
-			defb $10,$10,$10,$10,$7C,$00,$00,$7C				; $C53B ....|..|
-			defb $10,$10,$10,$10,$70,$00,$00,$44				; $C543 ....p..D
-			defb $48,$70,$48,$44,$44,$00,$00,$40				; $C54B HpHDD..@
-			defb $40,$40,$40,$40,$7C,$00,$00,$42				; $C553 @@@@|..B
-			defb $66,$5A,$42,$42,$42,$00,$00,$42				; $C55B fZBBB..B
-			defb $62,$52,$4A,$46,$42,$00,$00,$7E				; $C563 bRJFB..~
-			defb $42,$42,$42,$42,$7E,$00,$00,$7E				; $C56B BBBB~..~
-			defb $42,$42,$7E,$40,$40,$00,$00,$7E				; $C573 BB~@@..~
-			defb $42,$42,$42,$44,$7A,$00,$00,$7E				; $C57B BBBDz..~
-			defb $42,$7E,$48,$44,$42,$00,$00,$7E				; $C583 B~HDB..~
-			defb $40,$7E,$02,$02,$7E,$00,$00,$7C				; $C58B @~..~..|
-			defb $10,$10,$10,$10,$10,$00,$00,$42				; $C593 .......B
-			defb $42,$42,$42,$42,$7E,$00,$00,$42				; $C59B BBBB~..B
-			defb $42,$42,$42,$24,$18,$00,$00,$42				; $C5A3 BBB$...B
-			defb $42,$42,$5A,$66,$42,$00,$00,$42				; $C5AB BBZfB..B
-			defb $24,$18,$18,$24,$42,$00,$00,$44				; $C5B3 $..$B..D
-			defb $28,$10,$10,$10,$10,$00,$00,$7E				; $C5BB (......~
-			defb $04,$08,$10,$20,$7E,$00,$63,$63				; $C5C3 ... ~.cc
-			defb $63,$63,$63,$63,$63,$63,$0E,$3E				; $C5CB cccccc.>
+			defb $01,$02,$03,$04,$05,$03						; $C3EB 
+
+
+			defb $00,$00,$00,$00,$00,$00,$00,$00	; SPACE
+			defb $00,$10,$10,$10,$10,$00,$10,$00	; !
+			defb $00,$24,$24,$00,$00,$00,$00,$00	; " 
+			defb $00,$10,$00,$00,$00,$00,$00,$00	; #
+			defb $00,$10,$00,$00,$00,$00,$00,$00	; $ 
+			defb $00,$10,$00,$00,$00,$00,$00,$00	; % 
+			defb $00,$10,$00,$00,$00,$00,$00,$00	; & 
+			defb $08,$08,$10,$00,$00,$00,$00,$00	; ' 
+			defb $00,$1C,$10,$10,$10,$10,$1C,$00	; ( 
+			defb $00,$38,$08,$08,$08,$08,$38,$00	; )
+			defb $FF,$81,$BD,$A1,$A1,$BD,$81,$FF	; * 
+			defb $00,$00,$08,$08,$3E,$08,$08,$00	; + 
+			defb $00,$00,$00,$00,$00,$08,$08,$10	; ' 
+			defb $00,$00,$00,$7E,$00,$00,$00,$00	; -
+			defb $00,$00,$00,$00,$00,$00,$18,$00	; . 
+			defb $00,$02,$04,$08,$10,$20,$40,$00	; / 
+			defb $00,$7E,$46,$4A,$52,$62,$7E,$00	; 0 
+			defb $00,$10,$30,$10,$10,$10,$7C,$00	; 1 
+			defb $00,$7E,$02,$7E,$40,$40,$7E,$00	; 2 
+			defb $00,$7E,$02,$3C,$02,$02,$7E,$00	; 3 
+			defb $00,$42,$42,$7E,$02,$02,$02,$00	; 4 
+			defb $00,$7E,$40,$7E,$02,$02,$7E,$00	; 5 
+			defb $00,$7E,$40,$7E,$42,$42,$7E,$00	; 6 
+			defb $00,$7E,$02,$02,$02,$02,$02,$00	; 7 
+			defb $00,$7E,$42,$7E,$42,$42,$7E,$00	; 8 
+			defb $00,$7E,$42,$42,$7E,$02,$02,$00	; 9 
+			defb $00,$00,$00,$38,$38,$00,$38,$38	; : 
+			defb $00,$00,$38,$38,$00,$38,$38,$70	; ; 
+			defb $00,$1C,$38,$70,$E0,$70,$38,$1C	; < 
+			defb $00,$00,$FE,$00,$00,$FE,$00,$00	; = 
+			defb $00,$70,$38,$1C,$0E,$1C,$38,$70	; > 
+			defb $00,$7C,$E6,$0C,$38,$38,$00,$38	; ? 
+			defb $00,$7C,$E6,$EE,$EA,$EE,$E0,$7C	; @
+			defb $00,$7E,$42,$7E,$42,$42,$42,$00	; A 
+			defb $00,$7E,$42,$7C,$42,$42,$7E,$00	; B 
+			defb $00,$7E,$40,$40,$40,$40,$7E,$00	; C 
+			defb $00,$7C,$42,$42,$42,$42,$7E,$00	; D 
+			defb $00,$7E,$40,$7E,$40,$40,$7E,$00	; E 
+			defb $00,$7E,$40,$7E,$40,$40,$40,$00	; F 
+			defb $00,$7E,$42,$40,$46,$42,$7E,$00	; G 
+			defb $00,$42,$42,$7E,$42,$42,$42,$00	; H 
+			defb $00,$7C,$10,$10,$10,$10,$7C,$00	; I 		
+			defb $00,$7C,$10,$10,$10,$10,$70,$00	; J 		
+			defb $00,$44,$48,$70,$48,$44,$44,$00	; K 		
+			defb $00,$40,$40,$40,$40,$40,$7C,$00	; L 
+			defb $00,$42,$66,$5A,$42,$42,$42,$00	; M 
+			defb $00,$42,$62,$52,$4A,$46,$42,$00	; N 
+			defb $00,$7E,$42,$42,$42,$42,$7E,$00	; O 
+			defb $00,$7E,$42,$42,$7E,$40,$40,$00	; P 
+			defb $00,$7E,$42,$42,$42,$44,$7A,$00	; Q 
+			defb $00,$7E,$42,$7E,$48,$44,$42,$00	; R 
+			defb $00,$7E,$40,$7E,$02,$02,$7E,$00	; S 
+			defb $00,$7C,$10,$10,$10,$10,$10,$00	; T 		
+			defb $00,$42,$42,$42,$42,$42,$7E,$00	; U
+			defb $00,$42,$42,$42,$42,$24,$18,$00	; V
+			defb $00,$42,$42,$42,$5A,$66,$42,$00	; W	
+			defb $00,$42,$24,$18,$18,$24,$42,$00	; X	
+			defb $00,$44,$28,$10,$10,$10,$10,$00	; Y	
+			defb $00,$7E,$04,$08,$10,$20,$7E,$00	; Z
+			
+			defb $63,$63,$63,$63
+			defb $63,$63,$63,$63,$0E,$3E				 
 			defb $7E,$FE,$00,$FF,$7F,$0F,$C0,$50				; $C5D3 ~......P
 			defb $AC,$55,$00,$FF,$FC,$E0,$00,$77				; $C5DB .U.....w
 			defb $EF,$5F,$00,$7B,$FB,$7B,$00,$C0				; $C5E3 ._.{.{..

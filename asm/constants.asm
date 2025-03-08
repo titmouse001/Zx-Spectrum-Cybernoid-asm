@@ -23,12 +23,12 @@ SFX_HISCORE				EQU 40
 ; ******************************
 ;
 ; Command Definitions 
-SET_POS				EQU $DF		; Set absolute position (Y,X)
 MOVE				EQU $78		; Base value for relative moves ($79-$8F)
+SET_POS				EQU $DF		; Set absolute position (Y,X)
 GLOBAL_COL			EQU $E0		; Set global color attribute (paper + default ink)
-END_MARKER			EQU $FF		; End of draw list
-ICON_ADDR			EQU $E6		; Patch icon source address (L,H)
+SET_SOURCE_DATA		EQU $E6		; Patch icon source address (L,H)
 SETUP				EQU $EB		; Configure rendering routine via lookup table
+END_MARKER			EQU $FF		; End of draw list
 
 ; Ink Colors  (for bright variants add 8)
 INK_BLACK			EQU $CF+0+8	
