@@ -7,7 +7,21 @@
 #include 	"Constants.asm"
 ;------------------------------------------------------------------
 
-			; Note: Section ($6103-$6503) is in a range for clearing early at startup
+			;--------------------------------------------------------------------------
+			; Note: $6103-$6503 is cleared early at startup
+			;--------------------------------------------------------------------------
+			; $6300-6400 is the game's screen Ypos lookup table (initialied at statup)
+			; High byte table $6400
+			;  Low byte table $6300
+			;--------------------------------------------------------------------------
+			; Technical Note: XOR Sprite Drawing
+			; -----------------------------------
+			; The game uses XOR drawing for two reasons:
+			; - Efficient Drawing: XOR helps to give a more flicker-free ERASURE by 
+			; simply redrawing the sprite at the same position (no need to store/restore backgrounds)
+			; - CRT Sync: When combined with vertical blank synchronization (VSYNC waits),
+			; XOR helps reduce tearing artifacts like on 50Hz PAL TVs.
+			    
 			defb $3E										; $6103
 			defs $619A-$6104,0								; $6104-$6199
 			defb $DB,$02,$4D,$00,$04,$65,$00,$00,$03		; $619A
@@ -92,21 +106,21 @@ GO_25FPS:	XOR A					; $6574  ; frame count is a byte - reset
 			CALL USER_INPUT			; $6584 	; User controlls
 			CALL MOVE_SHIP			; $6587
 			CALL L_75B8				; $658A
-
 			CALL PLR_FIRE_SHOTS		; $658D 	; Fire New Shots + SFX
-			CALL PLR_UPDATE_SHOTS				; $6590 	; move player shots
-
-			CALL L_7CD2				; $6593		; move player bombs (rockets)
-
+			CALL PLR_UPDATE_SHOTS	; $6590 	; move player shots
+			CALL UPDATE_PLR_BOMBS	; $6593		; move player bombs (rockets)
 			CALL SELECT_PLR_WEAPON  ; $6596 	
-
-
-			CALL L_7C10				; $6599  	; player bombs (rockets)
+			CALL FIRE_SUPER_WEAPONS	; $6599  
 			CALL EXPLOSIVEFXSPRITE	; $659C
 			CALL ANIMATE_SPRITE		; $659F		; animated icons (pump)
 			CALL BONUS_TEXT			; $65A2		; bonus scores, like "250" on big items 
-			CALL L_7F1D				; $65A5
-			CALL L_7FE7				; $65A8
+
+			CALL UPDATE_BOUNCY_BALLS	; $65A5
+			CALL TIMEOUT_BOUNCY_BALLS	; $65A8
+
+
+
+
 			CALL L_8ADA				; $65AB  	; tracer effect (mace,bombs)
 			CALL L_89D7				; $65AE
 			CALL L_8923				; $65B1
@@ -1551,7 +1565,7 @@ L_6EA0:
 			INC HL				; $6EB2
 			LD (HL),B				; $6EB3
 			EX AF,AF'				; $6EB4
-			CALL L_80BD				; $6EB5
+			CALL DRAW_SPRITE16X8				; $6EB5
 			POP BC				; $6EB8
 			PUSH BC				; $6EB9
 			INC HL				; $6EBA
@@ -1643,7 +1657,7 @@ L_707A:
 			INC HL				; $707E
 			LD D,(HL)			; $707F
 			LD A,B				; $7080
-			CALL L_80BD			; $7081
+			CALL DRAW_SPRITE16X8			; $7081
 			INC HL				; $7084
 			LD A,E				; $7085
 			ADD A,(HL)			; $7086
@@ -1664,7 +1678,7 @@ L_707A:
 			INC HL				; $7099
 			LD (HL),D			; $709A
 			LD A,B				; $709B
-			CALL L_80BD			; $709C
+			CALL DRAW_SPRITE16X8			; $709C
 			CALL L_A4AD			; $709F  ;  Draw explosion
 			POP HL				; $70A2
 			LD BC,$0006			; $70A3
@@ -1849,9 +1863,9 @@ L_720E:		LD (POS_XY),DE		; $720E
 			LD DE,($744B)		; $7216
 			ADD A,E				; $721A
 			LD ($744B),A		; $721B
-L_721E:		XOR A				; $721E
+RESET_GAME_VARS:		XOR A				; $721E
 			LD ($7E94),A		; $721F
-			LD ($800D),A		; $7222
+			LD (TIMEOUT_BALLS),A		; $7222
 			LD (EventDelay),A	; $7225
 			LD ($80B3),A		; $7228
 			LD A,$FF			; $722B
@@ -2180,7 +2194,7 @@ RESET_GAME:
 			CALL L_7935							; $74B1
 			CALL CLR_SCREEN						; $74B4
 			CALL L_77FF							; $74B7
-			CALL L_721E							; $74BA
+			CALL RESET_GAME_VARS							; $74BA
 			LD DE,(POS_XY)						; $74BD
 			LD B,D								; $74C1
 			LD C,E								; $74C2
@@ -2382,7 +2396,7 @@ L_7647:		CALL CLR_GAME_SCREEN		; $7647
 			LD ($696A),A				; $764B
 			LD A,$4A					; $764E
 			LD ($744B),A				; $7650
-			CALL L_721E					; $7653
+			CALL RESET_GAME_VARS		; $7653
 			LD DE,$1038					; $7656
 			LD A,$0C					; $7659
 			CALL L_9FA2					; $765B
@@ -3062,7 +3076,8 @@ L_7C05:		LD A,(IX+$0E)				; $7C05
 			DJNZ L_7C05					; $7C0D
 			RET							; $7C0F
 
-L_7C10:		LD A,(InputOff)				; $7C10
+FIRE_SUPER_WEAPONS:		
+			LD A,(InputOff)				; $7C10
 			OR A						; $7C13
 			RET NZ						; $7C14  ; Fire disabled - do nothing
 
@@ -3111,10 +3126,10 @@ L_7C10:		LD A,(InputOff)				; $7C10
 			; --------------------------------------------------------
 
 			; --------------------------------------------------------
-			; Super Weapon Amount Left
+			; Dispaly Super Weapon Amount
 UPDATE_SUPER_WEAPON_DIGITS:		
 			POP HL						; $7C43
-			LD A,(SUPER_WEAPON_AMOUNT)				; $7C44  ; Weapon Amount Left
+			LD A,(SUPER_WEAPON_AMOUNT)	; $7C44  ; Weapon Amount Left
 			OR A						; $7C47  ;
 			RET Z						; $7C48  ; Empty, do nothing and return
 			LD A,(HL)					; $7C49	 ; get amount
@@ -3177,11 +3192,11 @@ L_7C8C:		LD A,$02					; $7C8C
 			JR Z,L_7CC4						; $7CC1
 			XOR A							; $7CC3
 L_7CC4:		LD (IX+$06),A					; $7CC4
-			CALL L_80BD						; $7CC7
+			CALL DRAW_SPRITE16X8						; $7CC7
 			LD A,$01							; $7CCA
 			LD (SUPER_WEAPON_AMOUNT),A			; $7CCC
 			JP UPDATE_SUPER_WEAPON_DIGITS		; $7CCF
-L_7CD2:		LD A,$02							; $7CD2
+UPDATE_PLR_BOMBS:		LD A,$02							; $7CD2
 			CALL L_67B9							; $7CD4
 			LD IX,$7D95					; $7CD7
 L_7CDB:		LD A,(IX+$00)				; $7CDB
@@ -3211,7 +3226,7 @@ L_7D02:		LD E,(IX+$00)				; $7D02
 			AND $01						; $7D10
 			CALL Z,SPARKLE_EFFECT				; $7D12
 L_7D15:		LD A,(IX+$06)				; $7D15
-			CALL L_80BD					; $7D18    ; rocket tail delete
+			CALL DRAW_SPRITE16X8					; $7D18    ; rocket tail delete
 			LD A,(IX+$05)				; $7D1B
 			LD B,A						; $7D1E
 			PUSH HL						; $7D1F
@@ -3241,7 +3256,7 @@ L_7D15:		LD A,(IX+$06)				; $7D15
 			LD A,(IX+$06)				; $7D4A
 			LD C,$47					; $7D4D
 			CALL L_A4AD					; $7D4F
-			CALL L_80BD					; $7D52
+			CALL DRAW_SPRITE16X8					; $7D52
    			JP L_7CE7					; $7D55
 L_7D58:		XOR A						; $7D58
 			LD (IX+$02),A				; $7D59
@@ -3315,7 +3330,7 @@ L_7E0A:		LD (HL),$01				; $7E0A
 			DEC HL				; $7E0E
 			LD (HL),E				; $7E0F
 			LD A,$04				; $7E10
-			CALL L_80BD				; $7E12
+			CALL DRAW_SPRITE16X8				; $7E12
 			LD (SUPER_WEAPON_AMOUNT),A				; $7E15
 			LD A,$03				; $7E18
 			CALL L_85B0				; $7E1A
@@ -3346,7 +3361,7 @@ L_7E31:		LD A,(HL)				; $7E31
 			LD (HL),$00				; $7E49
 			INC HL				; $7E4B
 			LD A,$04				; $7E4C
-			CALL L_80BD				; $7E4E
+			CALL DRAW_SPRITE16X8				; $7E4E
 			CALL SPARKLE_EFFECT				; $7E51
 			JP L_7E31				; $7E54
 
@@ -3358,171 +3373,182 @@ MINES_DATA:
 			defb $F4,$02,$FF                                    ; $7E73 ...
 
 TABLE_JMP_SHIELD:
-			LD A,($7E94)				; $7E76
-			OR A				; $7E79
-			JP NZ,UPDATE_SUPER_WEAPON_DIGITS				; $7E7A
-			LD A,$04				; $7E7D
-			CALL L_85B0				; $7E7F
-			PUSH DE				; $7E82
-			LD E,SFX_SHIELD				; $7E83
-			CALL PLAY_SFX				; $7E85
-			POP DE				; $7E88
-			LD A,$5A				; $7E89
-			LD ($7E94),A				; $7E8B
+			LD A,($7E94)							; $7E76
+			OR A									; $7E79
+			JP NZ,UPDATE_SUPER_WEAPON_DIGITS		; $7E7A
+			LD A,$04								; $7E7D
+			CALL L_85B0								; $7E7F
+			PUSH DE									; $7E82
+			LD E,SFX_SHIELD							; $7E83
+			CALL PLAY_SFX							; $7E85
+			POP DE									; $7E88
+			LD A,$5A								; $7E89
+			LD ($7E94),A							; $7E8B
 			LD (SUPER_WEAPON_AMOUNT),A				; $7E8E
-			JP UPDATE_SUPER_WEAPON_DIGITS				; $7E91
+			JP UPDATE_SUPER_WEAPON_DIGITS			; $7E91
 
 			NOP				; $7E94
 
 TABLE_JMP_BOUNCE:
-			LD A,($800D)				; $7E95
-			OR A				; $7E98
-			JP NZ,UPDATE_SUPER_WEAPON_DIGITS				; $7E99
-			LD A,$96				; $7E9C
-			LD ($800D),A				; $7E9E
-			LD A,$01				; $7EA1
-			CALL L_85B0				; $7EA3
-			PUSH DE				; $7EA6
-			LD E,SFX_BOUNCE1				; $7EA7
-			CALL PLAY_SFX				; $7EA9
-			POP DE				; $7EAC
-			LD DE,(POS_XY)				; $7EAD
-			LD A,E				; $7EB1
-			AND $FC				; $7EB2
-			LD E,A				; $7EB4
-			LD A,D				; $7EB5
-			AND $F8				; $7EB6
-			LD D,A				; $7EB8
-			LD C,$02				; $7EB9
-			LD B,$04				; $7EBB
-			CALL L_7EE4				; $7EBD
-			LD C,$FE				; $7EC0
-			LD B,$04				; $7EC2
-			LD A,E				; $7EC4
-			ADD A,$04				; $7EC5
-			LD E,A				; $7EC7
-			CALL L_7EE4				; $7EC8
-			LD C,$FE				; $7ECB
-			LD B,$FC				; $7ECD
-			LD A,D				; $7ECF
-			ADD A,$08				; $7ED0
-			LD D,A				; $7ED2
-			CALL L_7EE4				; $7ED3
-			LD C,$02				; $7ED6
-			LD B,$FC				; $7ED8
-			LD A,E				; $7EDA
-			SUB $04				; $7EDB
-			LD E,A				; $7EDD
-			CALL L_7EE4				; $7EDE
-			JP UPDATE_SUPER_WEAPON_DIGITS				; $7EE1
+			LD A,(TIMEOUT_BALLS)							; $7E95
+			OR A									; $7E98
+			JP NZ,UPDATE_SUPER_WEAPON_DIGITS		; $7E99
+			LD A,$96								; $7E9C
+			LD (TIMEOUT_BALLS),A							; $7E9E
+			LD A,$01								; $7EA1
+			CALL L_85B0								; $7EA3
+			PUSH DE									; $7EA6
+			LD E,SFX_BOUNCE1						; $7EA7
+			CALL PLAY_SFX							; $7EA9
+			POP DE									; $7EAC
+			LD DE,(POS_XY)							; $7EAD
+			LD A,E									; $7EB1
+			AND $FC									; $7EB2
+			LD E,A									; $7EB4
+			LD A,D									; $7EB5
+			AND $F8									; $7EB6
+			LD D,A									; $7EB8
+			LD C,$02								; $7EB9
+			LD B,$04								; $7EBB
+			CALL L_7EE4								; $7EBD
+			LD C,$FE								; $7EC0
+			LD B,$04								; $7EC2
+			LD A,E									; $7EC4
+			ADD A,$04								; $7EC5
+			LD E,A									; $7EC7
+			CALL L_7EE4								; $7EC8
+			LD C,$FE								; $7ECB
+			LD B,$FC								; $7ECD
+			LD A,D									; $7ECF
+			ADD A,$08								; $7ED0
+			LD D,A									; $7ED2
+			CALL L_7EE4								; $7ED3
+			LD C,$02								; $7ED6
+			LD B,$FC								; $7ED8
+			LD A,E									; $7EDA
+			SUB $04									; $7EDB
+			LD E,A									; $7EDD
+			CALL L_7EE4								; $7EDE
+			JP UPDATE_SUPER_WEAPON_DIGITS			; $7EE1
 
-L_7EE4:
-			LD HL,$7F08				; $7EE4
-L_7EE7:
-			LD A,(HL)				; $7EE7
-			CP $FF				; $7EE8
-			RET Z				; $7EEA
-			INC HL				; $7EEB
-			INC HL				; $7EEC
-			INC HL				; $7EED
-			INC HL				; $7EEE
-			LD A,(HL)				; $7EEF
-			INC HL				; $7EF0
-			OR A				; $7EF1
-			JR NZ,L_7EE7				; $7EF2
-			DEC HL				; $7EF4
-			LD (HL),$01				; $7EF5
-			DEC HL				; $7EF7
-			LD (HL),B				; $7EF8
-			DEC HL				; $7EF9
-			LD (HL),C				; $7EFA
-			DEC HL				; $7EFB
-			LD (HL),D				; $7EFC
-			DEC HL				; $7EFD
-			LD (HL),E				; $7EFE
-			LD A,$05				; $7EFF
-			CALL L_80BD				; $7F01
-			LD (SUPER_WEAPON_AMOUNT),A				; $7F04
-			RET				; $7F07
+L_7EE4:		LD HL,BOUNCE_DATA				; $7EE4
+L_7EE7:		LD A,(HL)						; $7EE7
+			CP $FF							; $7EE8
+			RET Z							; $7EEA
+			INC HL							; $7EEB
+			INC HL							; $7EEC
+			INC HL							; $7EED
+			INC HL							; $7EEE
+			LD A,(HL)						; $7EEF
+			INC HL							; $7EF0
+			OR A							; $7EF1
+			JR NZ,L_7EE7					; $7EF2
+			DEC HL							; $7EF4
+			LD (HL),$01						; $7EF5
+			DEC HL							; $7EF7
+			LD (HL),B						; $7EF8
+			DEC HL							; $7EF9
+			LD (HL),C						; $7EFA
+			DEC HL							; $7EFB
+			LD (HL),D						; $7EFC
+			DEC HL							; $7EFD
+			LD (HL),E						; $7EFE
+			LD A,$05						; $7EFF
+			CALL DRAW_SPRITE16X8						; $7F01
+			LD (SUPER_WEAPON_AMOUNT),A		; $7F04
+			RET								; $7F07
+
 BOUNCE_DATA:
-			defb $01,$CE,$01                                    ; $7F08 ...
-			defb $CF,$01,$D9,$01,$E3,$01,$ED,$01				; $7F0B ........
-			defb $F7,$01,$01,$02,$0B,$02,$12,$02				; $7F13 ........
-			defb $28,$FF                                        ; $7F1B (.
+			; structure: [X][Y][XVel][YVel][Active]
+			defb $01,$CE,$01                            ; $7F08
+			defb $CF,$01,$D9,$01,$E3,$01,$ED,$01		; $7F0B
+			defb $F7,$01,$01,$02,$0B,$02,$12,$02		; $7F13
+			defb $28,$FF                                ; $7F1B
 
-L_7F1D:		LD A,$02				; $7F1D
+UPDATE_BOUNCY_BALLS:		
+			LD A,$02				; $7F1D
 			CALL L_67B9				; $7F1F
-			LD HL,$7F08				; $7F22
+			LD HL,BOUNCE_DATA		; $7F22
 L_7F25:		LD A,(HL)				; $7F25
-			CP $FF				; $7F26
-			RET Z				; $7F28
-			LD E,(HL)				; $7F29
-			INC HL				; $7F2A
-			LD D,(HL)				; $7F2B
-			INC HL				; $7F2C
-			LD C,(HL)				; $7F2D
-			INC HL				; $7F2E
-			LD B,(HL)				; $7F2F
-			INC HL				; $7F30
-			LD A,(HL)				; $7F31
-			INC HL				; $7F32
-			OR A				; $7F33
-			JR Z,L_7F25				; $7F34
-			LD A,C				; $7F36
-			CP $FE				; $7F37
+			CP $FF					; $7F26
+			RET Z					; $7F28  ; end marker, return
+			; --------------------------------------
+			; Unpack ball data
+			LD E,(HL)				; $7F29  ; Xpos
+			INC HL					; $7F2A
+			LD D,(HL)				; $7F2B  ; Ypos
+			INC HL					; $7F2C
+			LD C,(HL)				; $7F2D  ; Xvel
+			INC HL					; $7F2E
+			LD B,(HL)				; $7F2F  ; Yvel
+			INC HL					; $7F30
+			LD A,(HL)				; $7F31  ; Active flag
+			INC HL					; $7F32
+			OR A					; $7F33
+			JR Z,L_7F25				; $7F34  ; Skip inactive balls
+			; --------------------------------------
+			; X-axis collision 
+			LD A,C					; $7F36
+			CP $FE					; $7F37
 			JR Z,L_7F45				; $7F39
 			CALL L_8115				; $7F3B
-			OR A				; $7F3E
-			CALL NZ,L_7F97				; $7F3F
+			OR A					; $7F3E
+			CALL NZ,L_7F97			; $7F3F
 			JP L_7F4C				; $7F42
 L_7F45:		CALL L_8139				; $7F45
-			OR A				; $7F48
-			CALL NZ,L_7F97				; $7F49
-L_7F4C:		LD A,B				; $7F4C
-			CP $FC				; $7F4D
+			OR A					; $7F48
+			CALL NZ,L_7F97			; $7F49
+			; --------------------------------------
+			; Y-axis collision handling
+L_7F4C:		LD A,B					; $7F4C
+			CP $FC					; $7F4D
 			JR Z,L_7F5B				; $7F4F
 			CALL L_815D				; $7F51
-			OR A				; $7F54
-			CALL NZ,L_7FBF				; $7F55
+			OR A					; $7F54
+			CALL NZ,L_7FBF			; $7F55
 			JP L_7F62				; $7F58
 L_7F5B:		CALL L_8181				; $7F5B
-			OR A				; $7F5E
-			CALL NZ,L_7FBF				; $7F5F
+			OR A					; $7F5E
+			CALL NZ,L_7FBF			; $7F5F
+			; --------------------------------------
+			; Update ball position
 L_7F62:		LD A,$05				; $7F62
-			CALL L_80BD				; $7F64
-			LD A,C				; $7F67
-			ADD A,E				; $7F68
-			LD E,A				; $7F69
-			LD A,B				; $7F6A
-			ADD A,D				; $7F6B
-			LD D,A				; $7F6C
-			PUSH HL				; $7F6D
-			DEC HL				; $7F6E
-			DEC HL				; $7F6F
+			CALL DRAW_SPRITE16X8				; $7F64
+			LD A,C					; $7F67
+			ADD A,E					; $7F68
+			LD E,A					; $7F69
+			LD A,B					; $7F6A
+			ADD A,D					; $7F6B
+			LD D,A					; $7F6C
+			PUSH HL					; $7F6D
+			DEC HL					; $7F6E
+			DEC HL					; $7F6F
 			LD (HL),B				; $7F70
-			DEC HL				; $7F71
+			DEC HL					; $7F71
 			LD (HL),C				; $7F72
-			DEC HL				; $7F73
+			DEC HL					; $7F73
 			LD (HL),D				; $7F74
-			DEC HL				; $7F75
+			DEC HL					; $7F75
 			LD (HL),E				; $7F76
-			POP HL				; $7F77
+			POP HL					; $7F77
 			LD A,$05				; $7F78
-			CALL L_80BD				; $7F7A
+			CALL DRAW_SPRITE16X8				; $7F7A
 			LD C,$47				; $7F7D
 			CALL L_A4AD				; $7F7F
-			CALL ENEMY_COLLISIONS				; $7F82
-			LD A,($800D)				; $7F85
-			OR A				; $7F88
+			CALL ENEMY_COLLISIONS	; $7F82
+			LD A,(TIMEOUT_BALLS)			; $7F85
+			OR A					; $7F88
 			JP Z,L_7F25				; $7F89
-			CP $0A				; $7F8C
-			JP NC,L_7F25				; $7F8E
-			CALL SPARKLE_EFFECT				; $7F91
+			CP $0A					; $7F8C
+			JP NC,L_7F25			; $7F8E
+			CALL SPARKLE_EFFECT		; $7F91
 			JP L_7F25				; $7F94
-L_7F97:		LD A,C				; $7F97
-			NEG				; $7F98
-			LD C,A				; $7F9A
-			CALL SPARKLE_EFFECT				; $7F9B
+			; --------------------------------------
+			; X-axis bounce
+L_7F97:		LD A,C					; $7F97
+			NEG						; $7F98
+			LD C,A					; $7F9A
+			CALL SPARKLE_EFFECT		; $7F9B
 			LD A,$01				; $7F9E
 			CALL L_67B9				; $7FA0
 			CALL L_74E2				; $7FA3
@@ -3530,19 +3556,21 @@ L_7F97:		LD A,C				; $7F97
 			CALL L_74E2				; $7FA9
 			LD A,$02				; $7FAC
 			CALL L_67B9				; $7FAE
-			PUSH BC				; $7FB1
-			PUSH DE				; $7FB2
-			PUSH HL				; $7FB3
-			LD E,SFX_BOUNCE2				; $7FB4
-			CALL PLAY_SFX				; $7FB6
-			POP HL				; $7FB9
-			POP DE				; $7FBA
-			POP BC				; $7FBB
-			JP CHECK_SCENE_COLLISION				; $7FBC
-L_7FBF:		LD A,B				; $7FBF
-			NEG				; $7FC0
-			LD B,A				; $7FC2
-			CALL SPARKLE_EFFECT				; $7FC3
+			PUSH BC					; $7FB1
+			PUSH DE					; $7FB2
+			PUSH HL					; $7FB3
+			LD E,SFX_BOUNCE2		; $7FB4
+			CALL PLAY_SFX			; $7FB6
+			POP HL					; $7FB9
+			POP DE					; $7FBA
+			POP BC					; $7FBB
+			JP CHECK_SCENE_COLLISION	; $7FBC
+			; --------------------------------------
+			; Y-axis bounce (mirrors X-axis logic)
+L_7FBF:		LD A,B					; $7FBF
+			NEG						; $7FC0
+			LD B,A					; $7FC2
+			CALL SPARKLE_EFFECT		; $7FC3
 			LD A,$01				; $7FC6
 			CALL L_67B9				; $7FC8
 			CALL L_74E2				; $7FCB
@@ -3550,41 +3578,45 @@ L_7FBF:		LD A,B				; $7FBF
 			CALL L_74E2				; $7FD1
 			LD A,$02				; $7FD4
 			CALL L_67B9				; $7FD6
-			PUSH BC				; $7FD9
-			PUSH DE				; $7FDA
-			PUSH HL				; $7FDB
-			LD E,SFX_BOUNCE2				; $7FDC
-			CALL PLAY_SFX				; $7FDE
-			POP HL				; $7FE1
-			POP DE				; $7FE2
-			POP BC				; $7FE3
-			JP CHECK_SCENE_COLLISION				; $7FE4
-L_7FE7:		LD A,($800D)				; $7FE7
-			OR A				; $7FEA
-			RET Z				; $7FEB
-			DEC A				; $7FEC
-			LD ($800D),A				; $7FED
-			RET NZ				; $7FF0
-			LD HL,$7F08				; $7FF1
-L_7FF4:		LD A,(HL)				; $7FF4
-			CP $FF				; $7FF5
-			RET Z				; $7FF7
-			LD E,A				; $7FF8
-			INC HL				; $7FF9
+			PUSH BC					; $7FD9
+			PUSH DE					; $7FDA
+			PUSH HL					; $7FDB
+			LD E,SFX_BOUNCE2		; $7FDC
+			CALL PLAY_SFX			; $7FDE
+			POP HL					; $7FE1
+			POP DE					; $7FE2
+			POP BC					; $7FE3
+			JP CHECK_SCENE_COLLISION	; $7FE4
+			; --------------------------------------
+TIMEOUT_BOUNCY_BALLS:		
+		    LD A,(TIMEOUT_BALLS)			; $7FE7
+			OR A					; $7FEA
+			RET Z					; $7FEB
+			DEC A					; $7FEC
+			LD (TIMEOUT_BALLS),A			; $7FED
+			RET NZ					; $7FF0
+			LD HL,BOUNCE_DATA		; $7FF1
+RESET_BALL_LOOP:		
+			LD A,(HL)				; $7FF4
+			CP $FF					; $7FF5  ; end marker
+			RET Z					; $7FF7
+			LD E,A					; $7FF8
+			INC HL					; $7FF9
 			LD D,(HL)				; $7FFA
-			INC HL				; $7FFB
-			INC HL				; $7FFC
-			INC HL				; $7FFD
+			INC HL					; $7FFB
+			INC HL					; $7FFC
+			INC HL					; $7FFD
 			LD A,(HL)				; $7FFE
-			LD (HL),$00				; $7FFF
-			INC HL				; $8001
-			OR A				; $8002
-			JR Z,L_7FF4				; $8003
-			LD A,$05				; $8005
-			CALL L_80BD				; $8007
-			JP L_7FF4				; $800A
+			LD (HL),$00				; $7FFF  ; Deactivate ball
+			INC HL					; $8001
+			OR A					; $8002
+			JR Z,RESET_BALL_LOOP	; $8003
+			LD A,$05				; $8005  ; sprite index
+			CALL DRAW_SPRITE16X8				; $8007  ; Remove last ball
+			JP RESET_BALL_LOOP		; $800A
 
-			NOP				; $800D
+TIMEOUT_BALLS:
+			defb  $00						; $800D
 
 TABLE_JMP_SEEKER:			
 			LD IX,$80B1				; $800E
@@ -3675,80 +3707,103 @@ L_809E:
 
 			LD BC,$018F				; $80B9
 			EX AF,AF'				; $80BC
-L_80BD:
-			PUSH AF				; $80BD
-			PUSH BC				; $80BE
-			PUSH DE				; $80BF
-			PUSH HL				; $80C0
-			ADD A,A				; $80C1
-			ADD A,A				; $80C2
-			ADD A,A				; $80C3
-			ADD A,A				; $80C4
-			LD L,A				; $80C5
-			LD H,$00				; $80C6
+
+			; --------------------------------------------------------------------
+			; Draws 16x8 sprites (using XOR logic)
+DRAW_SPRITE16X8:		
+			; Inputs: A=SpriteID, D=Ypos, E=Xpos, C=Colour
+			; Uses self-modifying code for screen address optimization
+			PUSH AF					; $80BD
+			PUSH BC					; $80BE
+			PUSH DE					; $80BF
+			PUSH HL					; $80C0
+			; Calculate sprite data offset (16 bytes per sprite)
+			ADD A,A					; $80C1
+			ADD A,A					; $80C2
+			ADD A,A					; $80C3
+			ADD A,A					; $80C4
+			LD L,A					; $80C5
+			LD H,$00				; $80C6  ;  Clear upper byte
 			ADD HL,HL				; $80C8
-			ADD HL,HL				; $80C9
-			LD C,D				; $80CA
-			LD A,E				; $80CB
-			AND $7C				; $80CC
-			RRCA				; $80CE
-			RRCA				; $80CF
-			LD ($80EF),A				; $80D0
-			LD ($8102),A				; $80D3
-			LD A,E				; $80D6
-			AND $03				; $80D7
-			ADD A,A				; $80D9
-			ADD A,A				; $80DA
-			ADD A,A				; $80DB
-			ADD A,A				; $80DC
-			LD E,A				; $80DD
-			LD D,$00				; $80DE
+			ADD HL,HL				; $80C9  ; HL*=4 (64 bytes per sprite group)
+			; Prepare screen address 
+			LD C,D					; $80CA  ; Ypos
+			LD A,E					; $80CB  ; Xpos
+			AND $7C					; $80CC  ; %01111100: Xpos bits for 16px-wide handling
+			RRCA					; $80CE  
+			RRCA					; $80CF  ; scale down to 32column (256px width/8)
+ 			; Self-modify screen address (Xpos)
+			LD (LEFT_OFFSET+1),A	; $80D0 ; left half X-offset , A=(Xpos&0x7C)>>2
+			LD (RIGHT_OFFSET+1),A	; $80D3 ; right half X-offset
+			; Calculate offset
+			LD A,E					; $80D6
+			AND $03					; $80D7  ; 0-3 offset
+			ADD A,A					; $80D9
+			ADD A,A					; $80DA
+			ADD A,A					; $80DB
+			ADD A,A					; $80DC
+			LD E,A					; $80DD
+			LD D,$00				; $80DE  ; Clear upper byte
 			ADD HL,DE				; $80E0
-			LD DE,$EC61				; $80E1
+			; Set sprite data pointer
+			LD DE,SPRITE_DATA		; $80E1  ; graphics
 			ADD HL,DE				; $80E4
 			EX DE,HL				; $80E5
-			LD B,$04				; $80E6
-L_80E8:
-			LD H,$64				; $80E8
-			LD L,C				; $80EA
-			LD A,(HL)				; $80EB
-			DEC H				; $80EC
+			;---------------------------------------------------------
+			LD B,$04				; $80E6  ; do 4 times (16px height)
+LOOP_SPRITE16:
+			; screen address (left half)
+			;------------
+			LD H,$64				; $80E8  ; High byte table $6400
+			LD L,C					; $80EA  ; Y position index
+			LD A,(HL)				; $80EB  ; keep
+			;------------
+			DEC H					; $80EC  ; Low byte table $6300
 			LD H,(HL)				; $80ED
-			OR $00				; $80EE
-			LD L,A				; $80F0
-			INC C				; $80F1
-			LD A,(DE)				; $80F2
-			INC DE				; $80F3
-			XOR (HL)				; $80F4
-			LD (HL),A				; $80F5
-			INC L				; $80F6
-			LD A,(DE)				; $80F7
-			INC DE				; $80F8
-			XOR (HL)				; $80F9
-			LD (HL),A				; $80FA
+			;------------
+LEFT_OFFSET: OR $00					; $80EE  ; *** SELF-MODIFIED *** X offset
+			LD L,A					; $80F0  ; HL=Final screen address
+			;-----------------------------------------
+            ; Draw left byte
+            INC C                   ; $80F1 ; Next screen line 
+            LD A,(DE)               ; $80F2 ; sprite data
+            INC DE                  ; $80F3 ; next sprite data (right half)
+            XOR (HL)                ; $80F4 ; Merge with screen: A = screen_byte XOR sprite_byte
+            LD (HL),A               ; $80F5 ; Update screen 
+            INC L                   ; $80F6 ; Move right
+            ; Draw right byte
+            LD A,(DE)               ; $80F7 ; 
+            INC DE                  ; $80F8 ; 
+            XOR (HL)                ; $80F9 ; 
+            LD (HL),A               ; $80FA ; 
+			;-----------------------------------------
+			; screen address (right half)
 			LD H,$64				; $80FB
-			LD L,C				; $80FD
+			LD L,C					; $80FD
 			LD A,(HL)				; $80FE
-			DEC H				; $80FF
+			DEC H					; $80FF
 			LD H,(HL)				; $8100
-			OR $00				; $8101
-			LD L,A				; $8103
-			INC C				; $8104
+RIGHT_OFFSET: OR $00				; $8101
+			LD L,A					; $8103  ; HL=Final screen address
+			;-----------------------------------------
+			INC C					; $8104  ; Ready next line
 			LD A,(DE)				; $8105
-			INC DE				; $8106
+			INC DE					; $8106  ; next sprite data
 			XOR (HL)				; $8107
 			LD (HL),A				; $8108
-			INC L				; $8109
+			INC L					; $8109  ; Move right
 			LD A,(DE)				; $810A
-			INC DE				; $810B
+			INC DE					; $810B  ; next sprite data
 			XOR (HL)				; $810C
 			LD (HL),A				; $810D
-			DJNZ L_80E8				; $810E
-			POP HL				; $8110
-			POP DE				; $8111
-			POP BC				; $8112
-			POP AF				; $8113
-			RET				; $8114
+			DJNZ LOOP_SPRITE16		; $810E
+			;------------------------------------------
+			POP HL					; $8110
+			POP DE					; $8111
+			POP BC					; $8112
+			POP AF					; $8113
+			RET						; $8114
+			;---------------------------------------------------------
 
 L_8115:
 			PUSH BC				; $8115
@@ -4996,10 +5051,10 @@ L_8ADD:		LD E,(HL)				; $8ADD
 			ADD HL,BC				; $8AF2
 			INC HL				; $8AF3
 			LD A,(HL)				; $8AF4
-			CALL L_80BD				; $8AF5
+			CALL DRAW_SPRITE16X8				; $8AF5
 			DEC HL				; $8AF8
 			LD A,(HL)				; $8AF9
-			CALL L_80BD				; $8AFA
+			CALL DRAW_SPRITE16X8				; $8AFA
 			LD A,$05				; $8AFD
 			CALL L_6679				; $8AFF
 			ADD A,$42				; $8B02
@@ -5170,7 +5225,7 @@ L_8CBA:
 			LD (IX+$0B),L				; $8CBB
 			LD (IX+$0A),A				; $8CBE
 			LD (IX+vibrato_depth),H				; $8CC1
-			CALL L_80BD				; $8CC4
+			CALL DRAW_SPRITE16X8				; $8CC4
 			CALL L_8B71				; $8CC7
 			LD A,(IX+$02)				; $8CCA
 			LD (IX+vibrato_speed),A				; $8CCD
@@ -5200,7 +5255,7 @@ L_8CEF:
 			LD E,(IX+$00)				; $8CEF
 			LD D,(IX+$01)				; $8CF2
 			LD A,(IX+$0A)				; $8CF5
-			CALL L_80BD				; $8CF8
+			CALL DRAW_SPRITE16X8				; $8CF8
 			LD B,(IX+$0B)				; $8CFB
 L_8CFE:
 			CALL L_8BCA				; $8CFE
@@ -5216,7 +5271,7 @@ L_8CFE:
 			JR NZ,L_8D32				; $8D14
 L_8D16:
 			LD A,(IX+$0A)				; $8D16
-			CALL L_80BD				; $8D19
+			CALL DRAW_SPRITE16X8				; $8D19
 			PUSH DE				; $8D1C
 			INC D				; $8D1D
 			INC D				; $8D1E
@@ -10354,7 +10409,11 @@ DATA_C6F9
 			defb $00,$44,$44,$00,$44,$00,$45,$44				; $EC43 .DD.D.ED
 			defb $45,$44,$04,$04,$04,$04,$45,$44				; $EC4B ED....ED
 			defb $47,$45,$04,$04,$44,$04,$45,$45				; $EC53 GE..D.EE
-			defb $44,$44,$45,$44,$45,$44,$C0,$00				; $EC5B DDEDED..
+			defb $44,$44,$45,$44,$45,$44				; $EC5B DDEDED..
+
+SPRITE_DATA:
+			defb $C0,$00			; $EC61
+
 			defb $E0,$00,$14,$00,$77,$00,$14,$00				; $EC63 ....w...
 			defb $E0,$00,$C0,$00,$00,$00,$30,$00				; $EC6B ......0.
 			defb $38,$00,$05,$00,$1D,$C0,$05,$00				; $EC73 8.......
