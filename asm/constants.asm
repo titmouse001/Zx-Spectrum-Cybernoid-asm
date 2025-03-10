@@ -1,3 +1,6 @@
+ROM48K_ADDRESS         EQU $386E	; 48K Speccy ROM holds $FF here	
+
+
 ; ********************************
 ; *** Sound Effect Definitions ***
 ; ********************************
@@ -16,6 +19,13 @@ SFX_EXPLODEB			EQU 32
 SFX_MACEHIT				EQU 33
 SFX_GAMEOVER			EQU 34
 SFX_HISCORE				EQU 40
+
+;----------------------------
+; Weapon Item Index (Index into 'SPRITE24x16_DATA' graphics)
+WEAPON_ITEM_BACKSHOT_L    EQU 7
+WEAPON_ITEM_BACKSHOT_R    EQU 8
+WEAPON_ITEM_MACE          EQU 17  ; Also used as seeker
+;-----------------------------
 
 ;-----------------------------------------
 ; ******************************
