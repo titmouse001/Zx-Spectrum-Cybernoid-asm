@@ -1,16 +1,36 @@
 @echo off
-:: Outputs: "cybernoid.tap" & "cybernoid.lst"
-:: Note: "cybernoid.lst" is a nice-to-have with extra details like clock cycles []
 
-@if exist cybernoid.tap del cybernoid.tap
+set "REFERENCE_PATH=RefNoLabels\cybernoid-tap.tap"
+set "OUTPUT_FILE=cybernoid.tap"
+
+:: ----------------------------------------------------------------------------------
+:: Delete the old TAP file to prevent accidental reuse if assembly fails
+:: ----------------------------------------------------------------------------------
+if exist "%OUTPUT_FILE%" del "%OUTPUT_FILE%"
+
+:: ----------------------------------------------------------------------------------
+:: Assemble the source file to generate "cybernoid.tap" & "cybernoid.lst"
+:: ----------------------------------------------------------------------------------
 zasm-tool\zasm.exe --z80 --opcodes --labels --cycles cybernoid.asm
 
-:: No making any changes yet - ensure that reworking anything still produces the same binary.
-fc /b cybernoid.tap RefNoLabels/cybernoid-tap.tap >nul
+echo.
+
+:: ----------------------------------------
+:: Compare the new tap with the reference 
+:: ------------------------------------------
+fc /b "%OUTPUT_FILE%" "%REFERENCE_PATH%" >nul
+
 if %errorlevel% equ 0 (
-    echo All good! Binary matches reference.
+    echo     [SUCCESS] Binary matches reference
+    echo     --------------------------------
+    echo       Build Validation Successful  
+    echo     --------------------------------
+    color 0A
 ) else (
-    echo FAILED: Binary does not match reference!
+    echo     [FAILURE] Binary mismatch detected!
+    color 0C
 )
 
+echo.
+echo.
 pause

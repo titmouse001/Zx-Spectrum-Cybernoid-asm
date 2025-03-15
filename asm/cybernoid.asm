@@ -91,51 +91,50 @@ GO_25FPS:	XOR A						; $6574  ; reset for next 25FPS test
 			LD HL,GAME_COUNTER_8BIT		; $6578
 			INC (HL)					; $657B	 ; Timing counter (byte wraps)
 			; ----------------------------------------------------------------------
-			LD HL,SPRITE_LIST					; $657C
+			LD HL,SPRITE_LIST			; $657C
 			LD (HL),$FF					; $657F ; Next item as END-MARKER
-			LD (SPRITE_LIST_PTR),HL				; $6581 ; Next item is then First location to read 
+			LD (SPRITE_LIST_PTR),HL		; $6581 ; Next item is then First location to read 
 			; ----------------------------------------------------------------------
-
-			CALL USER_INPUT				; $6584 	; User controlls
-			CALL MOVE_SHIP				; $6587
-			CALL L_75B8					; $658A
+			CALL USER_INPUT				; $6584 	; Store user inputs using QAOP or Joystick
+			CALL MOVE_SHIP				; $6587		; Move players ship
+			CALL END_LEVEL				; $658A		; Detects End-Level platform
 			CALL PLR_FIRE_SHOTS			; $658D 	; Fire New Shots + SFX
 			CALL PLR_UPDATE_SHOTS		; $6590 	; move player shots
 			CALL UPDATE_PLR_BOMBS		; $6593		; move player bombs (rockets)
-			CALL SELECT_PLR_WEAPON  	; $6596 	
-			CALL FIRE_SUPER_WEAPONS		; $6599  
-			CALL DEBRIS_SPRITES			; $659C
+			CALL SELECT_PLR_WEAPON  	; $6596 	; Player weapon slection using 1-5 keys
+			CALL FIRE_SUPER_WEAPONS		; $6599  	; Activate any super weapons (driven by table-of-functions)
+			CALL DEBRIS_SPRITES			; $659C		; Volcanoes, Trails
 			CALL ANIMATE_SPRITE			; $659F		; animated icons (pump)
 			CALL BONUS_TEXT				; $65A2		; bonus scores, like "250" on big items 
-			CALL UPDATE_BOUNCY_BALLS	; $65A5
-			CALL TIMEOUT_BOUNCY_BALLS	; $65A8
-			CALL DRAW_TRACER_EFFECT		; $65AB  	; tracer effect (mace,bombs)
-		
-			CALL L_89D7				; $65AE   ; ??? LARGE EXPOSION (WHEN PLAYER IS DESTROYED)
+			CALL UPDATE_BOUNCY_BALLS	; $65A5		; Player super weapon launches 4 bouncing balls
+			CALL TIMEOUT_BOUNCY_BALLS	; $65A8		; Lifetime of weapon
+			CALL DRAW_TRACER_EFFECT		; $65AB  	; Tracer effect (mace,bombs)		
 			
-			CALL ENEMY_SPRITE_HIT	; $65B1
+			CALL EXPLOSION_CLUSTER		; $65AE  	; explosions + sound 
+			CALL DO_EXPLOSIONS			; $65B1		; Draw explosions with random colours
 
-			CALL L_7584				; $65B4
+			CALL VOLCANO_EJECTA			; $65B4  	;  Volcano Ejecta
+			CALL STATIC_ENEMY_GUNS		; $65B7		; Enemy static guns (plant,ball turret)
+			CALL DRAW_ENEMY_SHOTS		; $65BA		; Enemies shoot + shots hit scene with sparkle
+			CALL LANE_GUARDIANS			; $65BD		; Enemy Tunnel Aliens
+			CALL SNAKES					; $65C0		; Enemy snakes
+			CALL PROXIMITY_ROCKET		; $65C3		; Trigger Launch - Enemy scene rockets
+			CALL DO_ROCKET				; $65C6		; Move & check against scene
+			CALL ENEMY_SHIPS			; $65C9		; flying Enemies
+			CALL DRAW_ENEMY_SHIPS		; $65CC		; Draw Flying Enemies
+			CALL DRAW_PICKUPS			; $65CF		; Draw PickUps (mace, rear gun)
+			CALL DO_SEEKER				; $65D2		; Draw
+			CALL DO_PICKUPS				; $65D5		; logic for all pickups (mace, gems...)
 
-			CALL STATIC_ENEMY_GUNS	; $65B7		; Enemy static guns (plant,ball turret)
-			CALL DRAW_ENEMY_SHOTS	; $65BA		; Enemies shoot + shots hit scene with sparkle
-			CALL LANE_GUARDIANS		; $65BD		; Enemy Tunnel Aliens
-			CALL SNAKES				; $65C0		; Enemy snakes
-			CALL LAUNCH_ROCKETS		; $65C3		; Enemy scene edge rockets
-			CALL L_970F				; $65C6
-	
-			CALL L_9BE2				; $65C9		; flying Enemies
-			CALL L_98B4				; $65CC		; Draw Flying Enemies
-			CALL L_A04E				; $65CF		; Draw PickUps (mace, rear gun)
-			CALL L_8066				; $65D2
-			CALL L_A086				; $65D5		; logic for all pickups (mace, gems...)
-			CALL L_8EDB				; $65D8		; Ships collision logic against Enemies
-			CALL L_7E27				; $65DB     ; check mines
-			CALL L_79FE				; $65DE
-
-			CALL INGAME_RESET		; $65E1
-			CALL PAUSE_GAME			; $65E4
-		JP INGAME_LOOP				; $65E7
+			CALL PLAYER_COLLISION		; $65D8		; Player collision
+	;	NOP
+	;	NOP
+	;	NOP
+			CALL DO_MINES				; $65DB     ; check mines
+			CALL DO_EGG_TIMER			; $65DE		; Games countdown timer
+			CALL INGAME_RESET			; $65E1
+			CALL PAUSE_GAME				; $65E4
+		JP INGAME_LOOP					; $65E7
 
 GAME_COUNTER_8BIT:	defb 0					; $65EA  ; timing (hold delay when firing bombs (rockets))
 
@@ -232,13 +231,15 @@ ANY_KEY_DOWN:   XOR A    ; $6672  ; A==0, Not a valid port, but works!
 ; but does not distinguish between the 8 half-rows (5 keys per row).
 ; -------------------------------------------------------------
 
+; DATA_12 = (DATA_12 + 7) * 13 (mod 65536).
 
-L_6679:		PUSH HL				; $6679
+GET_RAND_VALUE:		
+			PUSH HL				; $6679
 			PUSH DE				; $667A
 			PUSH BC				; $667B
 			INC A				; $667C
 			PUSH AF				; $667D
-			LD HL,($66A8)				; $667E
+			LD HL,(RAND_STATE)				; $667E
 			LD DE,$0007				; $6681
 			ADD HL,DE				; $6684
 			LD E,L				; $6685
@@ -250,7 +251,7 @@ L_6679:		PUSH HL				; $6679
 			ADD HL,HL				; $668B
 			ADD HL,BC				; $668C
 			ADD HL,DE				; $668D
-			LD ($66A8),HL				; $668E
+			LD (RAND_STATE),HL				; $668E
 			LD A,L				; $6691
 			XOR H				; $6692
 			LD E,A				; $6693
@@ -269,8 +270,7 @@ L_66A1:		DJNZ L_669C				; $66A1
 			POP HL				; $66A6
 			RET				; $66A7
 
-			NOP				; $66A8
-			NOP				; $66A9
+RAND_STATE:			defw 	$0000 	; $66A8
 
 ;---------------------------------------------------------------------
 ; Clear Screen (works backwards)
@@ -621,7 +621,7 @@ MOVE_SHIP:  LD A,(InputOff)			; $68AC
 			RET NZ					; $68B0
 
 			LD ($696F),A			; $68B1 ; zero
-			LD DE,(POS_XY)			; $68B4 ; get x,y coords
+			LD DE,(POS_XY)			; $68B4 ; get E=x,D=y coords
 			LD ($6A08),DE			; $68B8 ; take copy  ? BUT NOT USED ?
 			LD HL,(LEFT_BUTTON)		; $68BC ; get left and right
 
@@ -1261,11 +1261,11 @@ L_6C6B:		LD A,(DE)			; $6C6B ; char data
 
 L_6C88:
 			LD A,$06				; $6C88
-			CALL L_6679				; $6C8A
+			CALL GET_RAND_VALUE				; $6C8A
 			SUB $03				; $6C8D
 			LD C,A				; $6C8F
 			LD A,$0C				; $6C90
-			CALL L_6679				; $6C92
+			CALL GET_RAND_VALUE				; $6C92
 			INC A				; $6C95
 			NEG				; $6C96
 			LD B,A				; $6C98
@@ -1392,7 +1392,7 @@ L_6D96:		PUSH BC				; $6D96
 			LD HL,SPRITE24x16_DATA				; $6D99
 			CALL DRAW4X4SPRITE				; $6D9C
 
-			CALL L_88EA				; $6D9F
+			CALL ADD_EXPLOSION_WITH_SFX				; $6D9F
 			LD L,A				; $6DA2
 			LD H,$00				; $6DA3
 			ADD HL,HL				; $6DA5
@@ -1543,7 +1543,7 @@ L_6E95:
 			JR L_6E95				; $6E9E
 L_6EA0:
 			LD A,$01				; $6EA0
-			CALL L_6679				; $6EA2
+			CALL GET_RAND_VALUE				; $6EA2
 			ADD A,$02				; $6EA5
 			LD (HL),A				; $6EA7
 			EX AF,AF'				; $6EA8
@@ -1985,7 +1985,7 @@ L_72DF:		OR A							; $72DF
 L_72EC:		CALL L_8FD6						; $72EC
 			CALL L_91B1						; $72EF
 
-			CALL GENERATE_FLYING_ENEMIES	; $72F2  ; Generate flying enemies
+			CALL SPAWN_ENEMY_SHIPS	; $72F2  ; Generate flying enemies
 			CALL PLACE_PICKUPS				; $72F5  ; first time pick up (mace,+1 items)
 
 			LD A,E						; $72F8
@@ -2287,7 +2287,7 @@ L_7502:		LD E,A				; $7502
 			LD A,(HL)				; $7510
 			OR A				; $7511
 			JR Z,L_752F				; $7512
-			CALL L_88EA				; $7514
+			CALL ADD_EXPLOSION_WITH_SFX				; $7514
 			LD A,(HL)				; $7517
 			LD HL,SPRITE24x16_DATA				; $7518
 			CALL DRAW4X4SPRITE				; $751B
@@ -2313,7 +2313,8 @@ L_752F:
 			defb $0A,$09,$4C,$44,$09,$43,$2C,$44				; $757B ..LD.C,D
 			defb $FF                                            ; $7583 .
 
-L_7584:		LD HL,DATA_12			; $7584
+VOLCANO_EJECTA:		
+			LD HL,VOLCANO_LIST		; $7584
 L_7587:		LD A,(HL)				; $7587
 			CP $FF					; $7588
 			RET Z					; $758A
@@ -2327,18 +2328,18 @@ L_7587:		LD A,(HL)				; $7587
 			LD D,A					; $7593
 			INC HL					; $7594
 			LD A,$01				; $7595
-			CALL L_6679				; $7597
+			CALL GET_RAND_VALUE				; $7597
 			ADD A,$42				; $759A
 			LD C,A					; $759C
 			CALL L_6E8B				; $759D
 			JP L_7587				; $75A0
 
-DATA_12:
+VOLCANO_LIST:
 			defb $49,$54,$45,$20,$41,$44,$44,$52				; $75A3 ITE ADDR
 			defb $45,$53,$53,$0D,$0A,$09,$45,$58				; $75AB ESS...EX
 			defb $58,$0D,$0A,$0D,$FF                            ; $75B3 X....
 
-L_75B8:		; ---------------------------------------------------------
+END_LEVEL:		; ---------------------------------------------------------
 			LD DE,(DATA_11+1)			; $75B8
 			LD A,E						; $75BC
 			CP $FF						; $75BD  ; End Marker
@@ -2445,8 +2446,8 @@ L_7647:		CALL CLR_GAME_SCREEN		; $7647
 L_7676:		PUSH BC						; $7676
 			HALT						; $7677
 			HALT						; $7678
-			CALL L_A04E					; $7679
-			CALL L_A086					; $767C
+			CALL DRAW_PICKUPS					; $7679
+			CALL DO_PICKUPS					; $767C
 			POP BC						; $767F
 			DJNZ L_7676					; $7680
 			;---------------------------------------------
@@ -2774,7 +2775,8 @@ EGG_TIMER_MASK
 ; COUNTDOWN_TIMER: Current timer (16bit)
 ; $7A1D: Timer reset  (16bit)
 ; $79D3: Display state counter (8bit)
-L_79FE:		LD HL,(COUNTDOWN_TIMER)				; $79FE
+DO_EGG_TIMER:		
+			LD HL,(COUNTDOWN_TIMER)				; $79FE
 			DEC HL								; $7A01
 			LD (COUNTDOWN_TIMER),HL				; $7A02
 			LD A,L								; $7A05
@@ -3370,7 +3372,7 @@ L_7E0A:		LD (HL),$01				; $7E0A
 			CALL PLAY_SFX				; $7E20
 			POP DE				; $7E23
 			JP UPDATE_SUPER_WEAPON_DIGITS				; $7E24
-L_7E27:		LD A,$02				; $7E27
+DO_MINES:		LD A,$02				; $7E27
 			CALL L_67B9				; $7E29
 			LD C,$47				; $7E2C
 			LD HL,MINES_DATA				; $7E2E
@@ -3649,7 +3651,7 @@ RESET_BALL_LOOP:
 TIMEOUT_BALLS:		defb  $00		; $800D
 
 TABLE_JMP_SEEKER:			
-			LD IX,$80B1							; $800E
+			LD IX,SEEKER_LIST							; $800E
 			LD A,(IX+$02)						; $8012
 			OR A								; $8015
 			JP NZ,UPDATE_SUPER_WEAPON_DIGITS	; $8016
@@ -3659,10 +3661,10 @@ L_8020:		LD A,(IY+$00)						; $8020
 			CP $FF								; $8023
 			JR NZ,L_8038						; $8025
 			LD A,$78							; $8027
-			CALL L_6679							; $8029
+			CALL GET_RAND_VALUE					; $8029
 			LD C,A								; $802C
 			LD A,$90							; $802D
-			CALL L_6679							; $802F
+			CALL GET_RAND_VALUE					; $802F
 			ADD A,$20							; $8032
 			LD B,A								; $8034
 			JP L_8049							; $8035
@@ -3683,7 +3685,9 @@ L_8049:		LD HL,SPRITE24x16_DATA				; $8049
 			LD E,SFX_SEEKER						; $805E
 			CALL PLAY_SFX						; $8060
 			JP UPDATE_SUPER_WEAPON_DIGITS		; $8063
-L_8066:		LD IX,$80B1							; $8066
+
+DO_SEEKER:		
+			LD IX,SEEKER_LIST							; $8066
 			LD A,(IX+$02)						; $806A
 			OR A								; $806D
 			RET Z								; $806E
@@ -3727,9 +3731,8 @@ L_809E:		LD L,(IX+$0A)				; $809E
 			JP DO_SCENE_COLLISION		; $80AE
 			; ---------------------------------------
 
-			defb $01,$02              		; $80AB
-			defb $67,$01,$C8,$80,$C8,$FF    ; $80B3
-
+SEEKER_LIST:
+			defb $01,$02,$67,$01,$C8,$80,$C8,$FF  ; $80B1
 			LD BC,$018F						; $80B9
 			EX AF,AF'						; $80BC
 
@@ -4813,7 +4816,8 @@ TABLE_TO_TABLE_CLEAR_INFO:
 			defb $3B,$00
 			defb $00,$00              			; END MARKERS    
 
-L_88EA:		PUSH AF				; $88EA
+ADD_EXPLOSION_WITH_SFX:		
+			PUSH AF				; $88EA
 			PUSH BC				; $88EB
 			PUSH HL				; $88EC
 			LD HL,$896E			; $88ED
@@ -4850,50 +4854,65 @@ L_891F:		POP HL				; $891F
 			POP AF				; $8921
 			RET					; $8922
 
-ENEMY_SPRITE_HIT:		
-			LD IX,$896E			; $8923
-L_8927:		LD A,(IX+$00)		; $8927
-			CP $FF				; $892A
-			RET Z				; $892C
-			OR A				; $892D
-			JR Z,L_895E			; $892E
-			LD E,(IX+$01)		; $8930
-			LD D,(IX+$02)		; $8933
-			LD L,A				; $8936
-			LD H,$00			; $8937
-			DEC A				; $8939
-			LD (IX+$00),A		; $893A
-			LD BC,$8964			; $893D
-			ADD HL,BC			; $8940
-			LD A,(HL)			; $8941  ; frame
-			LD L,(IX+$03)		; $8942
-			LD H,(IX+$04)		; $8945
-			LD B,D				; $8948
-			LD C,E				; $8949
-			CALL SPRITE_24x16	; $894A
-			LD (IX+$03),L		; $894D
-			LD (IX+$04),H		; $8950
-			LD A,$06			; $8953
-			CALL L_6679			; $8955
-			ADD A,$41			; $8958
-			LD C,A				; $895A
-			CALL SET_SCRN_ATTR	; $895B
-L_895E:		LD DE,$0005			; $895E
-			ADD IX,DE			; $8961
-			JR L_8927			; $8963
-
-			defb $00,$0C,$0C,$0B,$0B,$0A                        ; $8965 ......
-			defb $0A,$09,$09,$2A,$7F,$00,$00,$7B				; $896B ...*...{
-			defb $DF,$45,$AA,$3F,$AA,$55,$A2,$15				; $8973 .E.?.U..
-			defb $AA,$55,$A2,$15,$AA,$15,$A2,$15				; $897B .U......
-			defb $AA,$15,$A2,$15,$2A,$15,$A2,$51				; $8983 ....*..Q
-			defb $2A,$15,$A2,$51,$3F,$51,$A2,$F3				; $898B *..Q?Q..
-			defb $B7,$00,$00,$F3,$51,$2A,$51,$A2				; $8993 ....Q*Q.
-			defb $51,$F3,$F3,$A2,$00,$FF                        ; $899B Q.....
+;   EXPLOSION_COORDS_LIST structure
+;     Byte 0: Frame counter  ($FF=list terminator, 0=slot available)
+;     Byte 1: Xpos
+;     Byte 2: Ypos
+;     Bytes 3-4: Previous screen coordinates
+DO_EXPLOSIONS:		
+			LD IX,EXPLOSION_COORDS_LIST		; $8923
+EXPLOSIONS_LOOP:
+			LD A,(IX+$00)			; $8927  ; Explosion frame
+			CP $FF					; $892A
+			RET Z					; $892C  ; Exit, end of list
+			OR A					; $892D
+			JR Z,EXPLOSION_IN_USE	; $892E  ; Skip active
+			LD E,(IX+$01)			; $8930	 ; X
+			LD D,(IX+$02)			; $8933  ; Y
+			LD L,A					; $8936  ; frame 
+			LD H,$00				; $8937  ; as 16-bit index
+			DEC A					; $8939  ; next frame
+			LD (IX+$00),A			; $893A
+			LD BC,SPRITE_EXPLOSION_ID_LIST-1			; $893D  ; base, but NOTE -1 on label (ok as frames never reach 0)
+			ADD HL,BC				; $8940	 ; frame data offset
+			LD A,(HL)				; $8941  ; sprite ID for frame
+			LD L,(IX+$03)			; $8942  ; erase these previous coords drawn
+			LD H,(IX+$04)			; $8945
+			LD B,D					; $8948 
+			LD C,E					; $8949 
+			CALL SPRITE_24x16		; $894A
+			LD (IX+$03),L			; $894D ; store latest to erase later
+			LD (IX+$04),H			; $8950
+			;--------------------------------
+			LD A,$06				; $8953 
+			CALL GET_RAND_VALUE		; $8955  	
+			ADD A,$41				; $8958
+			LD C,A					; $895A
+			CALL SET_SCRN_ATTR		; $895B  ; Random Colour
+			;--------------------------------
+EXPLOSION_IN_USE:		
+			LD DE,$0005				; $895E  ; Next coord item
+			ADD IX,DE				; $8961
+			JR EXPLOSIONS_LOOP		; $8963
+			
+SPRITE_EXPLOSION_ID_LIST: 	 ;  IMPORTANT NOTE: ABOVE DOES -1 TO USE THIS ADDRERSS (OPTIMISED THING)
+			defb $00,$0C,$0C,$0B,$0B,$0A,$0A,$09,$09    ; $8965 
+			; This checks out as Sprite Explosion ID's are: 9,10,11,12 
+			; So we read the above from last to first (ends in frame 0)
+			; Sprite ID zero is blank so that also checks out.
+EXPLOSION_COORDS_LIST:	
+			defb $2A,$7F,$00,$00,$7B					; $896E
+			defb $DF,$45,$AA,$3F,$AA,$55,$A2,$15		; $8973 
+			defb $AA,$55,$A2,$15,$AA,$15,$A2,$15		; $897B 
+			defb $AA,$15,$A2,$15,$2A,$15,$A2,$51		; $8983 
+			defb $2A,$15,$A2,$51,$3F,$51,$A2,$F3		; $898B 
+			defb $B7,$00,$00,$F3,$51,$2A,$51,$A2		; $8993 
+			defb $51,$F3,$F3,$A2,$00,$FF                ; $899B 
 
 
 ; ship being destroyed setup?
-L_89A1:		PUSH AF					; $89A1   
+ADD_ITEM_TO_LIST:		
+			PUSH AF					; $89A1   
 			PUSH BC					; $89A2
 			PUSH DE					; $89A3
 			PUSH HL					; $89A4
@@ -4903,21 +4922,20 @@ L_89A1:		PUSH AF					; $89A1
 			LD DE,$0005				; $89A9  ; structure size
 			LD IX,DATA_04			; $89AC	 ; base
 			EX AF,AF'				; $89B0
-CHECK_FREE:
-			LD A,(IX+$00)			; $89B1
+LIST_LOOP:	LD A,(IX+$00)			; $89B1
 			CP $FF					; $89B4
-			JR Z,COMPLETE			; $89B6 ; End
+			JR Z,END_OF_LIST		; $89B6 ; End marker
 			OR A					; $89B8
-			JR Z,OCCUPIED			; $89B9 ; not free
+			JR Z,SLOT_USED			; $89B9 ; not free
 			ADD IX,DE				; $89BB ; onto next part 
-			JP CHECK_FREE			; $89BD
-OCCUPIED:	EX AF,AF'				; $89C0
+			JP LIST_LOOP			; $89BD
+SLOT_USED:	EX AF,AF'				; $89C0
 			LD (IX+$00),A			; $89C1
 			LD (IX+$01),L			; $89C4
 			LD (IX+$02),H			; $89C7
 			LD (IX+$03),C			; $89CA
 			LD (IX+$04),B			; $89CD
-COMPLETE:
+END_OF_LIST:
 			POP IX					; $89D0
 			POP HL					; $89D2
 			POP DE					; $89D3
@@ -4925,27 +4943,28 @@ COMPLETE:
 			POP AF					; $89D5
 			RET						; $89D6
 
-L_89D7:		LD IX,$8A0B				; $89D7
-L_89DB:		LD A,(IX+$00)				; $89DB
-			CP $FF				; $89DE
-			RET Z				; $89E0
-			OR A				; $89E1
-			JR NZ,L_89EC				; $89E2
+EXPLOSION_CLUSTER:		
+			LD IX,DATA_04			; $89D7
+L_89DB:		LD A,(IX+$00)			; $89DB
+			CP $FF					; $89DE
+			RET Z					; $89E0
+			OR A					; $89E1
+			JR NZ,L_89EC			; $89E2
 L_89E4:		LD DE,$0005				; $89E4
 			ADD IX,DE				; $89E7
 			JP L_89DB				; $89E9
-L_89EC:		DEC (IX+$00)				; $89EC
-			LD E,(IX+$01)				; $89EF
-			LD A,(IX+$03)				; $89F2
-			CALL L_6679				; $89F5
-			ADD A,E				; $89F8
-			LD E,A				; $89F9
-			LD D,(IX+$02)				; $89FA
-			LD A,(IX+$04)				; $89FD
-			CALL L_6679				; $8A00
-			ADD A,D				; $8A03
-			LD D,A				; $8A04
-			CALL L_88EA				; $8A05
+L_89EC:		DEC (IX+$00)			; $89EC
+			LD E,(IX+$01)			; $89EF
+			LD A,(IX+$03)			; $89F2
+			CALL GET_RAND_VALUE				; $89F5
+			ADD A,E					; $89F8
+			LD E,A					; $89F9
+			LD D,(IX+$02)			; $89FA
+			LD A,(IX+$04)			; $89FD
+			CALL GET_RAND_VALUE				; $8A00
+			ADD A,D					; $8A03
+			LD D,A					; $8A04
+			CALL ADD_EXPLOSION_WITH_SFX				; $8A05
 			JP L_89E4				; $8A08
 
 DATA_04:
@@ -5083,7 +5102,7 @@ TRACER_LOOP:
 			LD A,(HL)				; $8AF9
 			CALL DRAW_SPRITE16X8	; $8AFA
 			LD A,$05				; $8AFD
-			CALL L_6679				; $8AFF
+			CALL GET_RAND_VALUE				; $8AFF
 			ADD A,$42				; $8B02
 			LD C,A					; $8B04
 			CALL L_A4AD				; $8B05
@@ -5299,7 +5318,7 @@ L_8D16:		LD A,(IX+$0A)				; $8D16
 			INC E						; $8D21
 			INC E						; $8D22
 			LD A,$03					; $8D23
-			CALL ADD_SPRITE_TO_LIST		; $8D25
+			CALL PLAYER_HAZARD_LIST		; $8D25
 			POP DE						; $8D28
 			LD C,(IX+$0C)				; $8D29
 			CALL L_A4AD					; $8D2C
@@ -5362,12 +5381,12 @@ L_8D6C:		INC HL					; $8D6C
 			defb $8E,$FF                                        ; $8D93 ..
 
 			LD A,$0C				; $8D95
-			CALL L_6679				; $8D97
+			CALL GET_RAND_VALUE				; $8D97
 			OR A				; $8D9A
 			JP NZ,L_8D4F				; $8D9B
 			LD BC,(POS_XY)				; $8D9E
 			LD A,$1F				; $8DA2
-			CALL L_6679				; $8DA4
+			CALL GET_RAND_VALUE				; $8DA4
 			ADD A,C				; $8DA7
 			SUB $0C				; $8DA8
 			CP $7C				; $8DAA
@@ -5375,7 +5394,7 @@ L_8D6C:		INC HL					; $8D6C
 			LD C,A				; $8DAE
 L_8DAF:
 			LD A,$3F				; $8DAF
-			CALL L_6679				; $8DB1
+			CALL GET_RAND_VALUE				; $8DB1
 			ADD A,B				; $8DB4
 			SUB $18				; $8DB5
 			LD B,A				; $8DB7
@@ -5388,12 +5407,12 @@ L_8DAF:
 			JP L_8D4F				; $8DC5
 
 			LD A,$06				; $8DC8
-			CALL L_6679				; $8DCA
+			CALL GET_RAND_VALUE				; $8DCA
 			OR A				; $8DCD
 			JP NZ,L_8D4F				; $8DCE
 			LD BC,(POS_XY)				; $8DD1
 			LD A,$1F				; $8DD5
-			CALL L_6679				; $8DD7
+			CALL GET_RAND_VALUE				; $8DD7
 			ADD A,C				; $8DDA
 			SUB $0C				; $8DDB
 			CP $7C				; $8DDD
@@ -5401,7 +5420,7 @@ L_8DAF:
 			LD C,A				; $8DE1
 L_8DE2:
 			LD A,$3F				; $8DE2
-			CALL L_6679				; $8DE4
+			CALL GET_RAND_VALUE				; $8DE4
 			ADD A,B				; $8DE7
 			SUB $18				; $8DE8
 			LD B,A				; $8DEA
@@ -5412,7 +5431,7 @@ L_8DE2:
 			JP L_8D4F				; $8DF4
 
 			LD A,$16				; $8DF7
-			CALL L_6679				; $8DF9
+			CALL GET_RAND_VALUE				; $8DF9
 			OR A				; $8DFC
 			JP NZ,L_8D4F				; $8DFD
 			LD C,$00				; $8E00
@@ -5425,7 +5444,7 @@ L_8E02:
 			JP L_8D4F				; $8E0C
 
 			LD A,$16				; $8E0F
-			CALL L_6679				; $8E11
+			CALL GET_RAND_VALUE				; $8E11
 			OR A				; $8E14
 			JP NZ,L_8D4F				; $8E15
 			LD C,$7B				; $8E18
@@ -5437,7 +5456,7 @@ L_8E02:
 		
 ;-------------------------------------------------------------------------
 ; Store list of sprites (x, y, frame)
-ADD_SPRITE_TO_LIST:  						; :)
+PLAYER_HAZARD_LIST:  						; :)
 			PUSH HL                			; 
 			LD HL,(SPRITE_LIST_PTR)       	; Load current sprite list 
 			LD (HL),A              			; Store X
@@ -5478,7 +5497,8 @@ SPRITE_LIST:
 			defb $A0,$78,$20,$20,$A0,$B0,$00,$20	; 
 			defb $A0,$A0,$00,$20,$A0,$00,$00,$FF	; $8ED3
 
-L_8EDB:		LD A,(InputOff)				; $8EDB
+PLAYER_COLLISION:		
+			LD A,(InputOff)				; $8EDB
 			OR A						; $8EDE
 			JR NZ,L_8F58				; $8EDF
 			LD DE,(POS_XY)				; $8EE1
@@ -5491,7 +5511,7 @@ L_8EDB:		LD A,(InputOff)				; $8EDB
 			LD A,(SHIELD_AMOUNT)		; $8EF1  ; Use high byte for later logic
 			OR A						; $8EF4
 			RET NZ						; $8EF5
-;HERE
+
 			LD HL,SPRITE_LIST				; $8EF6
 WALK_LIST:	LD A,(HL)						; $8EF9
 			CP $FF							; $8EFA
@@ -5516,8 +5536,8 @@ L_8F0C:		LD A,$64						; $8F0C
 			LD D,A							; $8F18
 			LD BC,$2010						; $8F19
 			LD A,$14						; $8F1C
-			CALL L_89A1						; $8F1E
-			CALL L_89A1						; $8F21	
+			CALL ADD_ITEM_TO_LIST						; $8F1E
+			CALL ADD_ITEM_TO_LIST						; $8F21	
 			LD DE,(POS_XY)					; $8F24
 			LD B,D							; $8F28
 			LD C,E							; $8F29
@@ -5570,8 +5590,7 @@ L_8F95:
 			LD HL,GAME_OVER_TXT				; $8FA0
 			LD BC,$0945				; $8FA3
 			LD DE,$0E0B				; $8FA6
-L_8FA9:
-			PUSH BC				; $8FA9
+L_8FA9:		PUSH BC				; $8FA9
 			LD A,(HL)				; $8FAA
 			CALL ICON16x16				; $8FAB
 			INC HL				; $8FAE
@@ -5583,8 +5602,7 @@ L_8FA9:
 			CALL INIT_MENU_SCREEN_TABLES				; $8FB9
 			LD BC,$0000				; $8FBC
 			LD A,$07				; $8FBF
-L_8FC1:
-			CALL WAIT_21xBC				; $8FC1
+L_8FC1:		CALL WAIT_21xBC				; $8FC1
 			DEC A				; $8FC4
 			JR NZ,L_8FC1				; $8FC5
 			CALL L_954F				; $8FC7
@@ -5676,7 +5694,7 @@ L_905D:		LD E,(IX+$00)				; $905D
 			LD (IX+$03),L				; $9084
 			LD (IX+$04),H				; $9087
 			LD A,$01				; $908A
-			CALL ADD_SPRITE_TO_LIST				; $908C
+			CALL PLAYER_HAZARD_LIST				; $908C
 			LD BC,$0747				; $908F
 			CALL L_A47B				; $9092
 			LD E,(IX+$05)				; $9095
@@ -5696,7 +5714,7 @@ L_905D:		LD E,(IX+$00)				; $905D
 			LD (IX+$08),L				; $90B6
 			LD (IX+$09),H				; $90B9
 			LD A,$01				; $90BC
-			CALL ADD_SPRITE_TO_LIST				; $90BE
+			CALL PLAYER_HAZARD_LIST				; $90BE
 			LD BC,$0747				; $90C1
 			CALL L_A47B				; $90C4
 			JP L_9055				; $90C7
@@ -5720,7 +5738,7 @@ L_90CA:		LD E,(IX+$05)				; $90CA
 			LD (IX+$08),L				; $90F1
 			LD (IX+$09),H				; $90F4
 			LD A,$01				; $90F7
-			CALL ADD_SPRITE_TO_LIST				; $90F9
+			CALL PLAYER_HAZARD_LIST				; $90F9
 			LD BC,$0747				; $90FC
 			CALL L_A47B				; $90FF
 			LD E,(IX+$00)				; $9102
@@ -5740,7 +5758,7 @@ L_90CA:		LD E,(IX+$05)				; $90CA
 			LD (IX+$03),L				; $9123
 			LD (IX+$04),H				; $9126
 			LD A,$01				; $9129
-			CALL ADD_SPRITE_TO_LIST				; $912B
+			CALL PLAYER_HAZARD_LIST				; $912B
 			LD BC,$0747				; $912E
 			CALL L_A47B				; $9131
 			JP L_9055				; $9134
@@ -5939,7 +5957,7 @@ L_9349:		LD C,(IX+$00)				; $9349
 			ADD A,$02				; $935E
 			CALL SPRITE_24x16				; $9360
 			LD A,$01				; $9363
-			CALL ADD_SPRITE_TO_LIST				; $9365
+			CALL PLAYER_HAZARD_LIST				; $9365
 			LD (IX+$05),L				; $9368
 			LD (IX+$06),H				; $936B
 			LD C,$47				; $936E
@@ -6127,18 +6145,15 @@ HI_SCORE_TXT:
 			defb $45,$01,$01,$A8,$45,$02,$A8,$A8				; $9543 E...E...
 			defb $45,$02,$00,$00                                ; $954B E...
 
-L_954F:
-			LD IX,$949C				; $954F
-L_9553:
-			BIT 7,(IX+$00)				; $9553
+L_954F:		LD IX,$949C				; $954F
+L_9553:		BIT 7,(IX+$00)				; $9553
 			JP NZ,L_9648				; $9557
 			PUSH IX				; $955A
 			LD DE,$000A				; $955C
 			ADD IX,DE				; $955F
 			LD HL,$78F9				; $9561
 			LD B,$06				; $9564
-L_9566:
-			LD A,(IX+$00)				; $9566
+L_9566:		LD A,(IX+$00)				; $9566
 			CP (HL)				; $9569
 			JP Z,L_9637				; $956A
 			JP NC,L_963E				; $956D
@@ -6178,22 +6193,16 @@ L_9566:
 			CALL DRAW_LIST				; $95B8
 			LD DE,$0F0C				; $95BB
 			LD HL,$96D0				; $95BE
-L_95C1:
-L_95C1:
-			LD C,$44				; $95C1
+L_95C1:		LD C,$44				; $95C1
 			LD A,$3F				; $95C3
 			CALL ICON16x16				; $95C5
-L_95C8:
-			LD BC,$03E8				; $95C8
+L_95C8:		LD BC,$03E8				; $95C8
 			CALL WAIT_21xBC				; $95CB
-L_95CE:
-			CALL ANY_KEY_DOWN				; $95CE
+L_95CE:		CALL ANY_KEY_DOWN				; $95CE
 			CALL NZ,SCROLL_BORDER				; $95D1
 			JR NZ,L_95CE				; $95D4
 			PUSH DE				; $95D6
-L_95D7:
-L_95D7:
-			CALL GET_KEY				; $95D7
+L_95D7:		CALL GET_KEY				; $95D7
 			OR A				; $95DA
 			CALL Z,SCROLL_BORDER				; $95DB
 			JR Z,L_95D7				; $95DE
@@ -6206,9 +6215,7 @@ L_95D7:
 			JR NZ,L_9610				; $95EB
 			PUSH DE				; $95ED
 			JR L_95D7				; $95EE
-
-L_95F0:
-			LD A,E				; $95F0
+L_95F0:		LD A,E				; $95F0
 			CP $13				; $95F1
 			JR NZ,L_95FE				; $95F3
 			LD A,(HL)				; $95F5
@@ -6216,9 +6223,7 @@ L_95F0:
 			JR Z,L_95FE				; $95F8
 			LD (HL),$20				; $95FA
 			JR L_95C1				; $95FC
-
-L_95FE:
-			LD A,E				; $95FE
+L_95FE:		LD A,E				; $95FE
 			CP $0C				; $95FF
 			JR Z,L_95C1				; $9601
 			LD A,$2D				; $9603
@@ -6228,9 +6233,7 @@ L_95FE:
 			LD (HL),$20				; $960B
 			DEC E				; $960D
 			JR L_95C1				; $960E
-
-L_9610:
-			LD (HL),A				; $9610
+L_9610:		LD (HL),A				; $9610
 			LD C,$46				; $9611
 			CALL ICON16x16				; $9613
 			LD A,E				; $9616
@@ -6239,36 +6242,27 @@ L_9610:
 			INC HL				; $961B
 			INC E				; $961C
 			JR L_95C1				; $961D
-
-L_961F:
-			POP DE				; $961F
+L_961F:		POP DE				; $961F
 			LD HL,$96D0				; $9620
 			LD BC,$0008				; $9623
 			LDIR				; $9626
-L_9628:
-			CALL ANY_KEY_DOWN				; $9628
+L_9628:		CALL ANY_KEY_DOWN				; $9628
 			CALL NZ,SCROLL_BORDER				; $962B
 			JP NZ,L_9628				; $962E
 			CALL L_9433				; $9631
 			JP MAIN				; $9634
-
-L_9637:
-			INC HL				; $9637
+L_9637:		INC HL				; $9637
 			INC IX				; $9638
 			DEC B				; $963A
 			JP NZ,L_9566				; $963B
-L_963E:
-			POP IX				; $963E
+L_963E:		POP IX				; $963E
 			LD DE,$0010				; $9640
 			ADD IX,DE				; $9643
 			JP L_9553				; $9645
-
-L_9648:
-			CALL ANY_KEY_DOWN				; $9648
+L_9648:		CALL ANY_KEY_DOWN				; $9648
 			JP NZ,L_9648				; $964B
 			LD BC,$0352				; $964E
-L_9651:
-			HALT				; $9651
+L_9651:		HALT				; $9651
 			PUSH BC				; $9652
 			CALL GET_KEY				; $9653
 			POP BC				; $9656
@@ -6296,103 +6290,95 @@ L_9651:
 			defb $20,$45,$4E,$44,$FF,$20,$20,$20				; $96CB  END.   
 			defb $20,$20,$20,$20,$20                            ; $96D3
 
-L_96D8:
-			LD IX,$979F				; $96D8
-			LD H,A				; $96DC
-L_96DD:
-			LD A,(IX+$00)				; $96DD
-			CP $FF				; $96E0
-			RET Z				; $96E2
+L_96D8:		LD IX,$979F					; $96D8
+			LD H,A						; $96DC
+L_96DD:		LD A,(IX+$00)				; $96DD
+			CP $FF						; $96E0
+			RET Z						; $96E2
 			LD A,(IX+$02)				; $96E3
-			OR A				; $96E6
-			JR Z,L_96F3				; $96E7
-			PUSH BC				; $96E9
-			LD BC,$0008				; $96EA
-			ADD IX,BC				; $96ED
-			POP BC				; $96EF
-			JP L_96DD				; $96F0
-
-L_96F3:
-			LD (IX+$00),E				; $96F3
+			OR A						; $96E6
+			JR Z,L_96F3					; $96E7
+			PUSH BC						; $96E9
+			LD BC,$0008					; $96EA
+			ADD IX,BC					; $96ED
+			POP BC						; $96EF
+			JP L_96DD					; $96F0
+L_96F3:		LD (IX+$00),E				; $96F3
 			LD (IX+$01),D				; $96F6
 			LD (IX+$02),H				; $96F9
-			LD DE,SPRITE24x16_DATA				; $96FC
+			LD DE,SPRITE24x16_DATA		; $96FC
 			LD (IX+$03),E				; $96FF
 			LD (IX+$04),D				; $9702
 			LD (IX+$05),L				; $9705
 			LD (IX+$06),C				; $9708
 			LD (IX+$07),B				; $970B
-			RET				; $970E
+			RET							; $970E
 
-L_970F:		LD IX,$979F				; $970F
+DO_ROCKET:	LD IX,$979F					; $970F
 L_9713:		LD A,(IX+$00)				; $9713
-			CP $FF				; $9716
-			RET Z				; $9718
+			CP $FF						; $9716
+			RET Z						; $9718
 			LD A,(IX+$02)				; $9719
-			OR A				; $971C
+			OR A						; $971C
 			JP NZ,L_9728				; $971D
-L_9720:		LD BC,$0008				; $9720
-			ADD IX,BC				; $9723
-			JP L_9713				; $9725
+ROCKET_LOOP:		LD BC,$0008			; $9720
+			ADD IX,BC					; $9723
+			JP L_9713					; $9725
 L_9728:		LD E,(IX+$00)				; $9728
 			LD D,(IX+$01)				; $972B
-			LD B,D				; $972E
-			LD C,E				; $972F
+			LD B,D						; $972E
+			LD C,E						; $972F
 			LD L,(IX+$03)				; $9730
 			LD H,(IX+$04)				; $9733
 			LD A,(IX+$05)				; $9736
-			AND $80				; $9739
+			AND $80						; $9739
 			JR NZ,L_974C				; $973B
-			LD A,D				; $973D
-			CP $B0				; $973E
-			JP Z,L_9787				; $9740
-			CALL CHECK_SCENE_DOWN				; $9743
-
-			JP NZ,L_9787				; $9746
-			JP L_9758				; $9749
-
-L_974C:		LD A,D				; $974C
-			CP $20				; $974D
-			JP Z,L_9787				; $974F
-			CALL CHECK_SCENE_UP				; $9752
-		
-			JP NZ,L_9787				; $9755
+			LD A,D						; $973D
+			CP $B0						; $973E
+			JP Z,ROCKET_NO_HIT			; $9740
+			CALL CHECK_SCENE_DOWN		; $9743
+			JP NZ,ROCKET_NO_HIT			; $9746
+			JP L_9758					; $9749
+L_974C:		LD A,D						; $974C
+			CP $20						; $974D
+			JP Z,ROCKET_NO_HIT			; $974F
+			CALL CHECK_SCENE_UP			; $9752
+			JP NZ,ROCKET_NO_HIT			; $9755
 L_9758:		LD A,(IX+$05)				; $9758
-			ADD A,D				; $975B
-			LD D,A				; $975C
+			ADD A,D						; $975B
+			LD D,A						; $975C
 			LD (IX+$01),D				; $975D
 			LD A,(IX+$02)				; $9760
-			CALL DRAW4X4SPRITE				; $9763
-			PUSH DE				; $9766
-			LD A,E				; $9767
-			ADD A,$02				; $9768
-			LD E,A				; $976A
-			LD A,D				; $976B
-			ADD A,$04				; $976C
-			LD D,A				; $976E
-			LD A,$02				; $976F
-			CALL ADD_SPRITE_TO_LIST				; $9771
-			POP DE				; $9774
+			CALL DRAW4X4SPRITE			; $9763
+			PUSH DE						; $9766
+			LD A,E						; $9767
+			ADD A,$02					; $9768
+			LD E,A						; $976A
+			LD A,D						; $976B
+			ADD A,$04					; $976C
+			LD D,A						; $976E
+			LD A,$02					; $976F
+			CALL PLAYER_HAZARD_LIST		; $9771  ;  dangerous object added 
+			POP DE						; $9774
 			LD (IX+$03),L				; $9775
 			LD (IX+$04),H				; $9778
 			LD C,(IX+$06)				; $977B
 			LD B,(IX+$07)				; $977E
-			CALL L_A47B				; $9781
-			JP L_9720				; $9784
-
-L_9787:
-			XOR A				; $9787
+			CALL L_A47B					; $9781
+			JP ROCKET_LOOP				; $9784
+ROCKET_NO_HIT:		
+			XOR A						; $9787
 			LD (IX+$02),A				; $9788
-			CALL DRAW4X4SPRITE				; $978B
-			DEC E				; $978E
-			DEC E				; $978F
-			LD A,D				; $9790
-			SUB $04				; $9791
-			LD D,A				; $9793
-			LD BC,$180C				; $9794
-			LD A,$0F				; $9797
-			CALL L_89A1				; $9799
-			JP L_9720				; $979C
+			CALL DRAW4X4SPRITE			; $978B   ; removes last draw rocket
+			DEC E						; $978E
+			DEC E						; $978F
+			LD A,D						; $9790
+			SUB $04						; $9791
+			LD D,A						; $9793
+			LD BC,$180C					; $9794
+			LD A,$0F					; $9797
+			CALL ADD_ITEM_TO_LIST		; $9799  ; Add scattered explosions
+			JP ROCKET_LOOP				; $979C
 
 DATA_05:
 			defb $00,$00,$00,$00                                ; $979F ....
@@ -6410,7 +6396,7 @@ DATA_05:
 			defb $CF,$8A,$CF,$CF,$33,$22,$9B,$33				; $97E3 ....3".3
 			defb $33,$22,$9B,$33,$FF                            ; $97EB 3".3.
 
-LAUNCH_ROCKETS:
+PROXIMITY_ROCKET
 			LD HL,$9879				; $97F0
 L_97F3:
 			LD A,(HL)				; $97F3
@@ -6486,15 +6472,13 @@ L_9817:		INC HL				; $9817
 			defb $22,$00,$9B,$22,$33,$22,$9B,$22				; $9883 ".."3"."
 			defb $33,$22,$FF                                    ; $988B 3".
 
-L_988E:
-			PUSH AF				; $988E
+L_988E:		PUSH AF				; $988E
 			PUSH BC				; $988F
 			PUSH IX				; $9890
 			PUSH HL				; $9892
 			LD BC,$0008				; $9893
 			LD IX,DATA_08				; $9896
-L_989A:
-			LD L,(IX+$00)				; $989A
+L_989A:		LD L,(IX+$00)				; $989A
 			LD H,(IX+$01)				; $989D
 			AND A				; $98A0
 			SBC HL,DE				; $98A1
@@ -6502,18 +6486,16 @@ L_989A:
 			ADD IX,BC				; $98A5
 			JP L_989A				; $98A7
 
-L_98AA:
-			LD (IX+$04),$00				; $98AA
+L_98AA:		LD (IX+$04),$00				; $98AA
 			POP HL				; $98AE
 			POP IX				; $98AF
 			POP BC				; $98B1
 			POP AF				; $98B2
 			RET				; $98B3
 
-L_98B4:
+DRAW_ENEMY_SHIPS:		
 			LD IX,$99B3				; $98B4
-L_98B8:
-			LD A,(IX+$00)				; $98B8
+L_98B8:		LD A,(IX+$00)				; $98B8
 			CP $FF				; $98BB
 			RET Z				; $98BD
 			OR A				; $98BE
@@ -6526,8 +6508,7 @@ L_98B8:
 			LD A,(IX+$07)				; $98CF
 			OR A				; $98D2
 			JR NZ,L_98F5				; $98D3
-L_98D5:
-			LD A,(BC)				; $98D5
+L_98D5:		LD A,(BC)				; $98D5
 			CP $E2				; $98D6
 			JP Z,L_9902				; $98D8
 			CP $E1				; $98DB
@@ -6544,10 +6525,7 @@ L_98D5:
 			LD (IX+$05),C				; $98EC
 			LD (IX+$06),B				; $98EF
 			JP L_9939				; $98F2
-
-L_98F5:
-L_98F5:
-			DEC (IX+$07)				; $98F5
+L_98F5:		DEC (IX+$07)				; $98F5
 			LD A,(BC)				; $98F8
 			ADD A,E				; $98F9
 			LD E,A				; $98FA
@@ -6556,9 +6534,7 @@ L_98F5:
 			ADD A,D				; $98FD
 			LD D,A				; $98FE
 			JP L_9939				; $98FF
-
-L_9902:
-			INC BC				; $9902
+L_9902:		INC BC				; $9902
 			LD A,(BC)				; $9903
 			DEC A				; $9904
 			LD (IX+$07),A				; $9905
@@ -6566,16 +6542,12 @@ L_9902:
 			LD (IX+$05),C				; $9909
 			LD (IX+$06),B				; $990C
 			JR L_98F5				; $990F
-
-L_9911:
-			LD C,(IX+$03)				; $9911
+L_9911:		LD C,(IX+$03)				; $9911
 			LD B,(IX+$04)				; $9914
 			LD (IX+$05),C				; $9917
 			LD (IX+$06),B				; $991A
 			JP L_98D5				; $991D
-
-L_9920:
-			INC BC				; $9920
+L_9920:		INC BC				; $9920
 			LD (IX+$05),C				; $9921
 			LD (IX+$06),B				; $9924
 			PUSH BC				; $9927
@@ -6586,16 +6558,13 @@ L_9920:
 			CALL L_8C98				; $9932
 			POP BC				; $9935
 			JP L_98D5				; $9936
-
-L_9939:
-			POP BC				; $9939
+L_9939:		POP BC				; $9939
 			LD A,(IX+$0B)				; $993A
 			CP $14				; $993D
 			JR NC,L_9947				; $993F
 			INC (IX+$0B)				; $9941
 			JP L_996E				; $9944
-
-L_9947:
+L_9947:		
 			CALL GET_ANIM_ADDR_AS_HL				; $9947
 			LD A,(HL)				; $994A
 			INC L				; $994B
@@ -6607,7 +6576,7 @@ L_9947:
 			OR (HL)				; $9953
 			INC L				; $9954
 			OR (HL)				; $9955
-			CALL NZ,L_88EA				; $9956
+			CALL NZ,ADD_EXPLOSION_WITH_SFX				; $9956
 			JP NZ,L_99A3				; $9959
 			LD A,E				; $995C
 			ADD A,$08				; $995D
@@ -6618,8 +6587,7 @@ L_9947:
 			JP C,L_99A3				; $9967
 			CP $C0				; $996A
 			JR NC,L_99A3				; $996C
-L_996E:
-			LD (IX+$01),E				; $996E
+L_996E:		LD (IX+$01),E				; $996E
 			LD (IX+$02),D				; $9971
 			LD A,(IX+$00)				; $9974
 			LD L,(IX+$09)				; $9977
@@ -6633,12 +6601,13 @@ L_996E:
 			ADD A,$02				; $9986
 			LD E,A				; $9988
 			LD A,$02				; $9989
-			CALL ADD_SPRITE_TO_LIST				; $998B
+			CALL PLAYER_HAZARD_LIST				; $998B
 			POP DE				; $998E
 			LD (IX+$09),L				; $998F
 			LD (IX+$0A),H				; $9992
 			LD C,(IX+$08)				; $9995
 			CALL SET_SCRN_ATTR				; $9998
+
 L_999B:		LD DE,$000C				; $999B
 			ADD IX,DE				; $999E
 			JP L_98B8				; $99A0
@@ -6692,7 +6661,7 @@ L_9A44:
 			LD (IX+$06),H				; $9A56
 			LD (IX+$07),$00				; $9A59
 			LD A,$04				; $9A5D
-			CALL L_6679				; $9A5F
+			CALL GET_RAND_VALUE				; $9A5F
 			ADD A,$42				; $9A62
 			LD (IX+$08),A				; $9A64
 			LD DE,SPRITE24x16_DATA				; $9A67
@@ -6733,13 +6702,13 @@ FOUND_ITEM:
 			LD HL,SPRITE24x16_DATA					; $9A9D
 			CALL SPRITE_24x16				; $9AA0
 
-			CALL L_88EA						; $9AA3
+			CALL ADD_EXPLOSION_WITH_SFX						; $9AA3
 			LD A,$01						; $9AA6
-			CALL L_6679						; $9AA8
+			CALL GET_RAND_VALUE						; $9AA8
 			OR A							; $9AAB
 			JP Z,L_9AB8						; $9AAC
 			LD A,$0A						; $9AAF
-			CALL L_6679						; $9AB1
+			CALL GET_RAND_VALUE						; $9AB1
 			INC A							; $9AB4
 			CALL L_9FA2						; $9AB5
 L_9AB8:		LD DE,$7904						; $9AB8
@@ -6832,56 +6801,61 @@ L_9B61:
 			DJNZ L_9B51				; $9B65
 			RET				; $9B67
 
-GENERATE_FLYING_ENEMIES:
+SPAWN_ENEMY_SHIPS:
 			CP $EC				; $9B68
-			RET C				; $9B6A
+			RET C				; $9B6A  ; A<$EC, Return
 			CP $F0				; $9B6B
-			RET NC				; $9B6D
+			RET NC				; $9B6D  ; A>=$F0 Return
 			PUSH AF				; $9B6E
 			PUSH BC				; $9B6F
 			PUSH DE				; $9B70
 			PUSH HL				; $9B71
-			SUB $EC				; $9B72
-			LD ($9BD5),A				; $9B74
-			ADD A,A				; $9B77
-			ADD A,A				; $9B78
-			LD L,A				; $9B79
+			; Pick Enemy Type
+			SUB $EC					; $9B72 ; 0 TO 3
+			LD ($9BD5),A			; $9B74 ; index
+			ADD A,A					; $9B77 ; X2
+			ADD A,A					; $9B78 ; X4
+			LD L,A					; $9B79 ; Index (Low byte)
 			LD H,$00				; $9B7A
-			LD BC,$9BBF				; $9B7C
-			ADD HL,BC				; $9B7F
-			LD BC,$0004				; $9B80
+			LD BC,$9BBF				; $9B7C ; Enemy data base
+			ADD HL,BC				; $9B7F ; Final location 
+			;-----------------------------------------------------
+			; Copy Enemy Data
+			LD BC,$0004				; $9B80 ; copy 4 bytes
 			LD DE,$9BCF				; $9B83
-			LDIR				; $9B86
-			LD A,($9BD5)				; $9B88
-			ADD A,A				; $9B8B
-			LD L,A				; $9B8C
+			LDIR					; $9B86
+			;-----------------------------------------------------
+			; Get Enemy Behavior
+			LD A,($9BD5)			; $9B88 ; Enemy index
+			ADD A,A					; $9B8B ; X2
+			LD L,A					; $9B8C
 			LD H,$00				; $9B8D
-			LD BC,$9C56				; $9B8F
+			LD BC,$9C56				; $9B8F ; base
 			ADD HL,BC				; $9B92
-			LD C,(HL)				; $9B93
-			INC HL				; $9B94
-			LD H,(HL)				; $9B95
-			LD L,C				; $9B96
+			LD C,(HL)				; $9B93 ; first byte
+			INC HL					; $9B94
+			LD H,(HL)				; $9B95 ; second byte
+			LD L,C					; $9B96 ; HL ready
 			LD A,$03				; $9B97
-			CALL L_6679				; $9B99
+			CALL GET_RAND_VALUE		; $9B99
 			ADD A,$0D				; $9B9C
-			LD ($9C55),A				; $9B9E
+			LD ($9C55),A			; $9B9E
+			;-----------------------------------------------------
 			LD A,$03				; $9BA1
-			CALL L_6679				; $9BA3
-			ADD A,A				; $9BA6
-			LD C,A				; $9BA7
+			CALL GET_RAND_VALUE		; $9BA3
+			ADD A,A					; $9BA6
+			LD C,A					; $9BA7
 			LD B,$00				; $9BA8
-			ADD HL,BC				; $9BAA
+			ADD HL,BC				; $9BAA  ; offset
 			LD A,(HL)				; $9BAB
-			INC HL				; $9BAC
+			INC HL					; $9BAC
 			LD H,(HL)				; $9BAD
-			LD L,A				; $9BAE
-
+			LD L,A					; $9BAE
+			;-----------------------------------------------------
 			LD ($9BD6),HL			; $9BAF
 			LD A,($9BD4)			; $9BB2
 			SUB $0A					; $9BB5
 			LD ($9BD4),A			; $9BB7
-
 			POP HL					; $9BBA
 			POP DE					; $9BBB
 			POP BC					; $9BBC
@@ -6905,7 +6879,8 @@ L_9BD8:		LD A,($9BD5)				; $9BD8
 			RET Z				; $9BDD
 			LD HL,($9BCF)				; $9BDE
 			JP (HL)				; $9BE1
-L_9BE2:		LD A,($9BD5)				; $9BE2
+ENEMY_SHIPS:		
+			LD A,($9BD5)				; $9BE2
 			CP $FF				; $9BE5
 			RET Z				; $9BE7
 			LD A,($9BD3)				; $9BE8
@@ -6916,7 +6891,7 @@ L_9BE2:		LD A,($9BD5)				; $9BE2
 			LD A,($9BD4)				; $9BF1
 			LD ($9BD3),A				; $9BF4
 			LD A,($9B47)				; $9BF7
-			CALL L_6679				; $9BFA
+			CALL GET_RAND_VALUE				; $9BFA
 			LD L,A				; $9BFD
 			LD H,$00				; $9BFE
 			LD BC,$9B27				; $9C00
@@ -7144,7 +7119,7 @@ L_A03F:
 			POP AF				; $A04C
 			RET				; $A04D
 
-L_A04E:		LD HL,$A002				; $A04E
+DRAW_PICKUPS:		LD HL,$A002				; $A04E
 L_A051:		LD A,(HL)				; $A051
 			CP $FF				; $A052
 			RET Z				; $A054
@@ -7180,7 +7155,7 @@ L_A05F:		PUSH HL				; $A05F
 			LD (IX+$05),H				; $A07F
 L_A082:		POP HL				; $A082
 			JP L_A058				; $A083
-L_A086:		LD A,$01				; $A086
+DO_PICKUPS:		LD A,$01				; $A086
 			CALL L_67B9				; $A088
 			LD IX,$A002				; $A08B
 L_A08F:		LD A,(IX+$00)				; $A08F
@@ -7341,42 +7316,48 @@ L_A1F1:		POP HL				; $A1F1
 			defb $0B,$FF                                        ; $A1FB ..
 
 
-; Draw a 24x16 sprite, XOR rendering with pre-shifted graphics.
-; Some sprites are optimized by being pre-shifted in the graphics.  
-; For example, a 16x16 sprite that needs to move along the x-axis  
-; requires an additional 8 pixels to accommodate the shift.
+; Draws a 24x16 pixel sprite using XOR rendering with pre-shifted graphics
+; Inputs: A=index,C=Ypos,E=Xpos,D = ?
 SPRITE_24x16:
 			PUSH AF				; $A1FD
 			PUSH BC				; $A1FE
 			PUSH DE				; $A1FF
 			PUSH HL				; $A200
-			PUSH BC				; $A201
-			LD L,A				; $A202
-			LD A,E				; $A203
-			CP $AA				; $A204  ; screen bounds
-			JP NC,L_A367		; $A206
-			LD A,C				; $A209
-			CP $AA				; $A20A  ;screen bounds
-			JP NC,L_A367		; $A20C
-			LD A,E				; $A20F
-			CP $79				; $A210  ;screen bounds
-			JP NC,$A29C			; $A212
-			LD A,C				; $A215
-			CP $79				; $A216  ;screen bounds
-			JP NC,$A29C			; $A218
-			LD H,L				; $A21B
+			PUSH BC				; $A201  ; Extra BC
+			LD L,A				; $A202  ; Sprite Index
+			;-----------------------------------------------------------
+			LD A,E				; $A203  ; X
+			CP $AA				; $A204  ;
+			JP NC,L_A367		; $A206  ; right screen
+			;-----------------------------------------------------------
+			LD A,C				; $A209  ; Y
+			CP $AA				; $A20A  ; 
+			JP NC,L_A367		; $A20C  ; bottom screen
+			;-----------------------------------------------------------
+			LD A,E				; $A20F  ; X
+			CP $79				; $A210  ; 
+			JP NC,$A29C			; $A212  ; partial right draw needed
+			;-----------------------------------------------------------
+			LD A,C				; $A215  ; Y
+			CP $79				; $A216  ; 
+			JP NC,$A29C			; $A218  ; partial bottom draw needed
+			;-----------------------------------------------------------
+			; preshift offset
+			LD H,L				; $A21B  ; Sprite Index
 			LD L,$00			; $A21C
-			SRL H				; $A21E
+			SRL H				; $A21E 
 			RR L				; $A220
 			LD B,H				; $A222
 			LD C,L				; $A223
 			SRL H				; $A224
 			RR L				; $A226
-			ADD HL,BC			; $A228
-			LD BC,SPRITE24x16_DATA			; $A229
-			ADD HL,BC			; $A22C
-			LD B,H				; $A22D
-			LD C,L				; $A22E
+			ADD HL,BC				; $A228  ; HL=sprite offset
+			LD BC,SPRITE24x16_DATA	; $A229
+			ADD HL,BC				; $A22C  ; HL=sprite data
+			LD B,H					; $A22D
+			LD C,L					; $A22E  ; ???
+			;-----------------------------------------------------------
+			; horizontal preshift (0-3 pixels)
 			LD A,E				; $A22F
 			AND $03				; $A230
 			LD L,A				; $A232
@@ -7393,6 +7374,8 @@ SPRITE_24x16:
 			ADD HL,BC			; $A23E
 			LD (LABELSPR),HL		; $A23F
 			POP DE				; $A242
+			;--------------------------------------------------
+			; get screen address
 			LD A,E				; $A243
 			AND $7C				; $A244
 			RRCA				; $A246
@@ -7409,9 +7392,10 @@ SPRITE_24x16:
 			LD C,D				; $A256
 			POP DE				; $A257
 			EXX					; $A258
-			LD DE,(LABELSPR)		; $A259
+			;--------------------------------------------------
+			LD DE,(LABELSPR)	; $A259
 			LD B,$10			; $A25D
-L_A25F:
+DRAW_SPRITE_LOOP:		
 			LD H,$64			; $A25F
 			LD L,C				; $A261
 			LD A,(HL)			; $A262
@@ -7458,7 +7442,7 @@ L_A25F:
 			LD (HL),A			; $A28E
 			INC DE				; $A28F
 			EXX					; $A290
-			DJNZ L_A25F			; $A291
+			DJNZ DRAW_SPRITE_LOOP			; $A291
 			LD HL,(LABELSPR)	; $A293
 			POP DE				; $A296
 			POP BC				; $A297
