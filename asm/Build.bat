@@ -27,7 +27,9 @@ if %errorlevel% equ 0 (
     echo     --------------------------------
     color 0A
 ) else (
-    echo     [FAILURE] Binary mismatch detected!
+    echo [FAILURE] Binary mismatch detected!
+    fc /b "%OUTPUT_FILE%" "%REFERENCE_PATH%"
+    echo ^(ignore the "0000BAAA:" checksum line^)
     color 0C
 )
 

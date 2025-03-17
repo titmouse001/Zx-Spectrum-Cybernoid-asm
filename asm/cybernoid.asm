@@ -27,7 +27,7 @@ L_6501:		defb $00,$00,$00                                ; $6501
 			; ----------------------------------------------------------------------
 			; Entry point – Game execution starts here
 MAIN:		DI                  	   		; $6504  ; <- Called by BASIC
-			LD SP, $0000				    ; $6505  ; Initialize stack pointer	
+			LD SP, $0000				    ; $6505  ; Initialize (so 1st PUSH goes to $FFFE)
 			CALL SETUP_IM2_JUMP_TABLE		; $6508  ; Set up Interrupt Mode 2 (IM2)
 			; ----------------------------------------------------------------------		
 			; Clear memory from $5B00 to $6503 (area after screen) 
@@ -37,7 +37,8 @@ MAIN:		DI                  	   		; $6504  ; <- Called by BASIC
 			LD BC,$6503-$5B00			; $6513  ; Bytes to clear
 			LDIR						; $6516  ; Block fill with zero
 			; ------------------------------------------------
-			XOR A						; $6518 ; Zero reset
+			; Zero reset
+			XOR A						; $6518 
 			LD (MODE48K),A				; $6519
 			LD (SELECTED_WEAPON),A		; $651C	
 			OUT ($FE),A					; $651F ; border black
@@ -45,31 +46,32 @@ MAIN:		DI                  	   		; $6504  ; <- Called by BASIC
 			; Check Speccy model (48K or 128K) to enable AY music flag
 			LD A,(ROM48K_ADDRESS)		; $6521	; 48K ROM: holds $FF here
 			SUB $FF						; $6524	; 
-			JR Z, IS_48K				; $6526	; A=0, use 48K setup 
+			JR Z, SET_MODEL				; $6526	; A=0, use 48K setup 
 			LD A, $01					; $6528	; Assume 128K (with AY chip)
-IS_48K:		LD (SPECCY_MODEL), A			; $652A	; default 0 (48K) or 1 (128K)
+SET_MODEL:	LD (SPECCY_MODEL), A		; $652A	; 0=48K , 1=128K
 			OR A						; $652D	; 
 			JP NZ, SKIP_48K_SETUP		; $652E	; Skip 48K setup
 			;------------------------------------------------------------
-			; 48K Speccy setup - Disable AY Music (128k machine) 
+			; 48K Spectrum setup - Disable AY Music (for 128K models)
 			LD A, $C9					; $6531	; $C9=RET, for self-modifying code
-			LD (AY_MUSIC), A			; $6533	; Modify code to use "RET"
-			LD (AY_RESET_MUSIC), A		; $6536	; Modify code to use "RET"
-			LD (PLAY_SFX), A			; $6539	; Modify code to use "RET"
-			CALL BEEPER_SETUP			; $653C	; 48K setup
+			LD (AY_MUSIC), A			; $6533	; Overwrite AY_MUSIC routine with RET
+			LD (AY_RESET_MUSIC), A		; $6536	; also RET disabled
+			LD (PLAY_SFX), A			; $6539	; also RET disabled
+			CALL BEEPER_SETUP			; $653C	;
 			; -----------------------------------------------------------
 SKIP_48K_SETUP:	
-			CALL AY_RESET_MUSIC				; $653F
+			; 128k AY Music/Sound Setup
+			CALL AY_RESET_MUSIC				; $653F ; (note: modified to RET when 48k model)
 			LD E,$01						; $6542
-			CALL PLAY_SFX					; $6544
+			CALL PLAY_SFX					; $6544 ; (note: modified to RET when 48k model)
 			EI								; $6547
-
-			CALL L_7BFC						; $6548
+			; -----------------------------------------------------------
+			CALL RESTORE_ALL_WEAPONS		; $6548
 			CALL INIT_MENU_SCREEN_TABLES	; $654B  
 			CALL DO_MENU					; $654E  
 			CALL INIT_GAME_SCREEN_TABLES	; $6551
-			LD A,$04						; $6554	 	; starting lives)
-			LD (LIVES),A					; $6556		; store lives
+			LD A,$04						; $6554	; starting lives
+			LD (LIVES),A					; $6556	;
 			LD HL,$78F9						; $6559
 			LD DE,$78FA						; $655C
 			LD BC,$0005						; $655F
@@ -2321,8 +2323,10 @@ L_7502:		LD E,A				; $7502
 			LD DE,$7904					; $7521
 			CALL L_78D4					; $7524
 			CALL L_788E					; $7527
+			; --------------------------------------------
 			LD A,$04					; $752A
-			CALL SET_BEEPER_SFX					; $752C
+			CALL SET_BEEPER_SFX			; $752C
+			; --------------------------------------------
 L_752F:		POP HL						; $752F
 			JP L_74F8					; $7530
 
@@ -3135,50 +3139,55 @@ CHAR_LOOP:	LD A,(HL)					; $7B8D	 ; get Char index
 ; ------------------------------------------------------------------------
 ; Super Weapons Table
 ; Each super weapon structure takes 16 bytes 
-
+SUPER_WEAPONS_TABLE:
 BOMBS_LABEL:   		defb "BOMBS      "      ; $7BAA  "BOMBS" (space padded to 11 chars)
 WEAPONS_BASE:		defb $00           		; $7BB5 - current count
     				defw TABLE_JMP_BOMBS	; $7BB6 - Super Weapon routine address
 BOMBS_START:   		defb $14               	; $7BB8 - starting amount
-BOMBS_MAX    		defb $14               	; $7BB9 - max
+BOMBS_MAX    		defb $14               	; $7BB9 - max to pickup
 MINES_LABEL:   		defb "MINES      "      ; $7BBA  "MINES"
     				defb $00           		; $7BC5 - current count
     				defw TABLE_JMP_MINES	; $7BC6 - Super Weapon routine address
 MINES_START:   		defb $14               	; $7BC8 - starting amount
-MINES_MAX:    		defb $14               	; $7BC9 - max
+MINES_MAX:    		defb $14               	; $7BC9 - max to pickup
 SHIELD_LABEL:  		defb "SHIELD     "      ; $7BCA  "SHIELD"
     				defb $00           		; $7BD4 - current count
     				defw TABLE_JMP_SHIELD	; $7BD5 - Super Weapon routine address
 SHIELD_START:  		defb $01               	; $7BD8 - starting amount
-SHIELD_MAX:   		defb $01               	; $7BD9 - max
+SHIELD_MAX:   		defb $01               	; $7BD9 - max to pickup
 BOUNCE_LABEL:  		defb "BOUNCE     "    	; $7BDA  "BOUNCE"
     				defb $00           		; $7BE4 - current count
     				defw TABLE_JMP_BOUNCE 	; $7BE5 - Super Weapon routine address
 BOUNCE_START:  		defb $05               	; $7BE8 - starting amount
-BOUNCE_MAX:   		defb $05               	; $7BE9 - max
+BOUNCE_MAX:   		defb $05               	; $7BE9 - max to pickup
 SEEKER_LABEL:  		defb "SEEKER     "      ; $7BEA  "SEEKER"W
     				defb $00           		; $7BF4 - current count
     				defw TABLE_JMP_SEEKER	; $7BF5 - Super Weapon routine address
 SEEKER_START:  		defb $05               	; $7BF8 - starting amount
-SEEKER_MAX:   		defb $05               	; $7BF9 - max
+SEEKER_MAX:   		defb $05               	; $7BF9 - max to pickup
 					
-
-
+;-----------------------------------------------------------
 ; 'SELECTED_WEAPON' - 16bit Offset, low byte fixed at $00
 ; Example: bombs:$0000, mines:$0100, ... seeker:$0400
 SELECTED_WEAPON: defb $00, $00   		; $7BFA 
+;-----------------------------------------------------------
 				
-L_7BFC:		LD DE,$0010					; $7BFC
-			LD B,$05					; $7BFF
-			LD IX,$7BAA					; $7C01
-L_7C05:		LD A,(IX+$0E)				; $7C05
-			LD (IX+$0B),A				; $7C08
-			ADD IX,DE					; $7C0B
-			DJNZ L_7C05					; $7C0D
-			RET							; $7C0F
+;-----------------------------------------------------------
+; Restoring ammunition/shield for super weapons
+RESTORE_ALL_WEAPONS:		
+			LD DE,$0010								; $7BFC  ; struct size
+			LD B,$05								; $7BFF  ; Five super weapons
+			LD IX,SUPER_WEAPONS_TABLE				; $7C01  ; Table base
+SWAP_LOOP:		
+			LD A,(IX+(BOMBS_START-BOMBS_LABEL))		; $7C05  ; get starting value
+			LD (IX+WEAPONS_BASE-BOMBS_LABEL),A		; $7C08  ; refill weapon
+			ADD IX,DE								; $7C0B
+			DJNZ SWAP_LOOP							; $7C0D
+			RET										; $7C0F
+;-----------------------------------------------------------
 
 FIRE_SUPER_WEAPONS:		
-			LD A,(INPUT_ENABLED)				; $7C10
+			LD A,(INPUT_ENABLED)		; $7C10
 			OR A						; $7C13
 			RET NZ						; $7C14  ; Fire disabled - do nothing
 
@@ -3266,8 +3275,10 @@ L_7C79:		LD A,(IX+$00)						; $7C79
 			JR Z,L_7C8C							; $7C85
 			ADD IX,BC							; $7C87
 			JP L_7C79							; $7C89
-L_7C8C:		LD A,$02					; $7C8C
+			; --------------------------------------------
+L_7C8C:		LD A,$02							; $7C8C
 			CALL SET_BEEPER_SFX					; $7C8E
+			; --------------------------------------------
 			PUSH DE						; $7C91
 			PUSH HL						; $7C92
 			PUSH IX						; $7C93
@@ -3435,20 +3446,23 @@ L_7E0A:		LD (HL),$01				; $7E0A
 			DEC HL				; $7E0E
 			LD (HL),E				; $7E0F
 			LD A,$04				; $7E10
-			CALL DRAW_SPRITE16X8				; $7E12
-			LD (SUPER_WEAPON_AMOUNT),A				; $7E15
-			LD A,$03				; $7E18
+			CALL DRAW_SPRITE16X8			; $7E12
+			LD (SUPER_WEAPON_AMOUNT),A		; $7E15
+			; --------------------------------------------
+			LD A,$03						; $7E18
 			CALL SET_BEEPER_SFX				; $7E1A
-			PUSH DE				; $7E1D
-			LD E,SFX_MINE				; $7E1E
-			CALL PLAY_SFX				; $7E20
-			POP DE				; $7E23
-			JP UPDATE_SUPER_WEAPON_DIGITS				; $7E24
-DO_MINES:		LD A,$02				; $7E27
-			CALL L_67B9				; $7E29
-			LD C,$47				; $7E2C
+			; --------------------------------------------
+			PUSH DE							; $7E1D
+			LD E,SFX_MINE					; $7E1E
+			CALL PLAY_SFX					; $7E20
+			POP DE							; $7E23
+			JP UPDATE_SUPER_WEAPON_DIGITS	; $7E24
+DO_MINES:		
+			LD A,$02						; $7E27
+			CALL L_67B9						; $7E29
+			LD C,$47						; $7E2C
 			LD HL,MINES_DATA				; $7E2E
-L_7E31:		LD A,(HL)				; $7E31
+L_7E31:		LD A,(HL)						; $7E31
 			CP $FF				; $7E32
 			RET Z				; $7E34
 			LD E,A				; $7E35
@@ -3481,27 +3495,31 @@ TABLE_JMP_SHIELD:
 			LD A,(SHIELD_AMOUNT)					; $7E76
 			OR A									; $7E79
 			JP NZ,UPDATE_SUPER_WEAPON_DIGITS		; $7E7A
+			; --------------------------------------------
 			LD A,$04								; $7E7D
-			CALL SET_BEEPER_SFX								; $7E7F
+			CALL SET_BEEPER_SFX						; $7E7F
+			; --------------------------------------------
 			PUSH DE									; $7E82
 			LD E,SFX_SHIELD							; $7E83
 			CALL PLAY_SFX							; $7E85
 			POP DE									; $7E88
 			LD A,$5A								; $7E89
-			LD (SHIELD_AMOUNT),A							; $7E8B
+			LD (SHIELD_AMOUNT),A					; $7E8B
 			LD (SUPER_WEAPON_AMOUNT),A				; $7E8E
 			JP UPDATE_SUPER_WEAPON_DIGITS			; $7E91
 
 SHIELD_AMOUNT:  	 defb $00						; $7E94
 
 TABLE_JMP_BOUNCE:
-			LD A,(TIMEOUT_BALLS)							; $7E95
+			LD A,(TIMEOUT_BALLS)					; $7E95
 			OR A									; $7E98
 			JP NZ,UPDATE_SUPER_WEAPON_DIGITS		; $7E99
 			LD A,$96								; $7E9C
-			LD (TIMEOUT_BALLS),A							; $7E9E
+			LD (TIMEOUT_BALLS),A					; $7E9E
+			; --------------------------------------------
 			LD A,$01								; $7EA1
-			CALL SET_BEEPER_SFX								; $7EA3
+			CALL SET_BEEPER_SFX						; $7EA3
+			; --------------------------------------------
 			PUSH DE									; $7EA6
 			LD E,SFX_BOUNCE1						; $7EA7
 			CALL PLAY_SFX							; $7EA9
@@ -4229,14 +4247,16 @@ L_8391: 	LD A,(DE)					; $8391
 			XOR $35						; $839D
 			LD ($8F4F),A				; $839F
 			JP NZ,DO_MENU				; $83A2
+			; --------------------------------------------
 			LD A,$04					; $83A5
-			CALL SET_BEEPER_SFX					; $83A7
-			LD E,SFX_GAMEOVER					; $83AA
+			CALL SET_BEEPER_SFX			; $83A7
+			; --------------------------------------------
+			LD E,SFX_GAMEOVER			; $83AA
 			CALL PLAY_SFX				; $83AC
 			LD B,$64					; $83AF
 L_83B1:		CALL SCROLL_BORDER			; $83B1
 			DJNZ L_83B1					; $83B4
-			CALL AY_RESET_MUSIC					; $83B6
+			CALL AY_RESET_MUSIC			; $83B6
 			LD E,$01					; $83B9
 			CALL PLAY_SFX				; $83BB
 			JP DO_MENU					; $83BE
@@ -4964,24 +4984,26 @@ L_88F0:		LD A,(HL)			; $88F0
 			INC HL				; $8902
 			LD (HL),D			; $8903
 			INC HL				; $8904
-			LD BC,SPRITE24x16_DATA			; $8905
-			LD (HL),C			; $8908
-			INC HL				; $8909
-			LD (HL),B			; $890A
-			PUSH DE				; $890B
-			PUSH IY				; $890C
-			PUSH IX				; $890E
-			LD E,SFX_EXPLODEA			; $8910
+			LD BC,SPRITE24x16_DATA	; $8905
+			LD (HL),C				; $8908
+			INC HL					; $8909
+			LD (HL),B				; $890A
+			PUSH DE					; $890B
+			PUSH IY					; $890C
+			PUSH IX					; $890E
+			LD E,SFX_EXPLODEA		; $8910
 			CALL PLAY_SFX			; $8912
-			LD A,$04			; $8915
-			CALL SET_BEEPER_SFX			; $8917
-			POP IX				; $891A
-			POP IY				; $891C
-			POP DE				; $891E
-L_891F:		POP HL				; $891F
-			POP BC				; $8920
-			POP AF				; $8921
-			RET					; $8922
+			; --------------------------------------------
+			LD A,$04				; $8915
+			CALL SET_BEEPER_SFX		; $8917
+			; --------------------------------------------
+			POP IX					; $891A
+			POP IY					; $891C
+			POP DE					; $891E
+L_891F:		POP HL					; $891F
+			POP BC					; $8920
+			POP AF					; $8921
+			RET						; $8922
 
 ;   EXPLOSION_COORDS_LIST structure
 ;     Byte 0: Frame counter  ($FF=list terminator, 0=slot available)
@@ -5222,22 +5244,23 @@ TRACER_LOOP:
 			DEC (HL)				; $8AEB
 			LD L,A					; $8AEC
 			LD H,$00				; $8AED
-			LD BC,$8B0A				; $8AEF
+			LD BC,TRACER_DATA-1 	; $8AEF  ; note the -1 here
 			ADD HL,BC				; $8AF2
-			INC HL					; $8AF3
+			INC HL					; $8AF3  ; Due to the -1 we must start index at 1
 			LD A,(HL)				; $8AF4
 			CALL DRAW_SPRITE16X8	; $8AF5
 			DEC HL					; $8AF8
 			LD A,(HL)				; $8AF9
 			CALL DRAW_SPRITE16X8	; $8AFA
 			LD A,$05				; $8AFD
-			CALL GET_RAND_VALUE				; $8AFF
+			CALL GET_RAND_VALUE		; $8AFF
 			ADD A,$42				; $8B02
 			LD C,A					; $8B04
 			CALL L_A4AD				; $8B05
 			POP HL					; $8B08
 			JR TRACER_LOOP			; $8B09
 
+TRACER_DATA:
 			defb $09,$08,$08,$08,$03,$08,$06,$08				; $8B0B ........
 			defb $07,$06,$09,$00,$00,$45,$22,$00				; $8B13 .....E".
 			defb $00,$00,$00,$00,$00,$00,$00,$00				; $8B1B ........
@@ -5394,11 +5417,11 @@ L_8CBA:
 			EX AF,AF'				; $8CBA
 			LD (IX+$0B),L				; $8CBB
 			LD (IX+$0A),A				; $8CBE
-			LD (IX+vibrato_depth),H				; $8CC1
+			LD (IX+$0C),H				; $8CC1
 			CALL DRAW_SPRITE16X8				; $8CC4
 			CALL L_8B71				; $8CC7
 			LD A,(IX+$02)				; $8CCA
-			LD (IX+vibrato_speed),A				; $8CCD
+			LD (IX+$0D),A				; $8CCD
 L_8CD0:
 			POP IX				; $8CD0
 			POP HL				; $8CD2
@@ -5705,7 +5728,7 @@ INPUTS_DISABLED:
 			LD (IMMUNE_TIMER),HL					; $8F67
 			LD A,$32						; $8F6A
 			LD (SHIELD_AMOUNT),A			; $8F6C
-			CALL L_7BFC						; $8F6F
+			CALL RESTORE_ALL_WEAPONS						; $8F6F
 			CALL UPDATE_WEAPONS_DISPLAY		; $8F72
 			LD DE,(OLD_POS_XY)				; $8F75
 			LD (POS_XY),DE					; $8F79
