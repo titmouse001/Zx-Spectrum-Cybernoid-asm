@@ -39,7 +39,7 @@ MAIN:		DI                  	   		; $6504  ; <- Called by BASIC
 			; ------------------------------------------------
 			; Zero reset
 			XOR A						; $6518 
-			LD (MODE48K),A				; $6519
+			LD (BEEPER_MUSIC_USED),A				; $6519
 			LD (SELECTED_WEAPON),A		; $651C	
 			OUT ($FE),A					; $651F ; border black
 			; ----------------------------------------------------------------
@@ -136,9 +136,7 @@ GO_25FPS:	XOR A						; $6574  ; reset for next 25FPS test
 			CALL DO_SEEKER				; $65D2		; Draw
 			CALL DO_PICKUPS				; $65D5		; logic for all pickups (mace, gems...)
 			CALL PLAYER_COLLISION		; $65D8		; Player collision
-	;	NOP
-	;	NOP
-	;	NOP
+
 			CALL DO_MINES				; $65DB     ; check mines
 			CALL DO_EGG_TIMER			; $65DE		; Games countdown timer
 			CALL INGAME_RESET			; $65E1
@@ -149,7 +147,7 @@ GAME_COUNTER_8BIT:	defb 0					; $65EA  ; timing (hold delay when firing bombs (r
 
 ; This pause section confused me, then I read the 1988 game manual :)
 ; (btw: original disasembly used hex for the AND test, changed to binary)
-; Games Manual Says:
+; Games Manual Says: (correct)
 ;"Pause - Press CAPS SHIFT & SYMBOL SHIFT" 
 PAUSE_GAME: LD A,$FE				; $65EB
 			IN A,($FE)				; $65ED
@@ -164,127 +162,135 @@ PAUSE_GAME: LD A,$FE				; $65EB
 			LD BC,$01F4				; $65F9  
 			CALL WAIT_21xBC			; $65FC
 
-L_65FF:		CALL ANY_KEY_DOWN		; $65FF  ; all keys released
-			JR NZ,L_65FF			; $6602
+LOOP_KD:	CALL ANY_KEY_DOWN		; $65FF  ; all keys released
+			JR NZ,LOOP_KD			; $6602
 	
-L_6604:		CALL GET_KEY			; $6604  ; pause - wait for key press
+LOOP_GK:	CALL GET_KEY			; $6604  ; pause - wait for key press
 			OR A					; $6607
-			JR Z,L_6604				; $6608
+			JR Z,LOOP_GK			; $6608
 			RET						; $660A
 
 ;----------------------------------------------------
-INGAME_RESET:	; press "1,2,3,4,5" to reset ingame
-			LD A,$F7				; $660B
-			IN A,($FE)				; $660D
-			AND $1F					; $660F
-			RET NZ					; $6611
-			JP MAIN					; $6612
+			; !!! Manual says: "To abort press 5, 6, 7, 8, 9 and 1 simultaneously." (this is incorrect) !!!
+			; You infact need to press 1,2,3,4,5 to abort game.
+INGAME_RESET:
+				LD A, $F7          ; %11110111 (select key row 1-5)
+				IN A, ($FE)        ; note: bits set to zero = pressed
+				AND $1F            ; 
+				RET NZ             ; exit, not all keys pressed
+				JP MAIN            ; 0-4 are zero (all pressed)
 ;----------------------------------------------------
 
+;----------------------------------------------------
 ; Developer feature - yet to find the other code half
 LEVEL_SELECTOR_DRAW_LIST:
 			defb $E6,$F1,$C2,$DF,$0A,$0A                        ; $6615 ......
 			defb $E0,$45,$57,$48,$49,$43,$48,$20				; $661B .EWHICH 
 			defb $4C,$45,$56,$45,$4C,$20,$3F,$FF				; $6623 LEVEL ?.
-
+;----------------------------------------------------
 
 ; NOTE: Reading Keyboard Ports, for example "A=$FE then IN A,($FE)"
 ; 		A zero in one of the five lowest bits means that the corresponding key is pressed.
 GET_KEY:    PUSH    BC            
             PUSH    HL              
-            LD      HL, KeyTable    
+            LD      HL, KEY_TABLE    
             LD      D, $FE          ; 1st Port to read
-LoopSetup:  LD      A, D            
-Loop:       IN      A, ($FE)        ; Read key state
+KEY_LOOP: 	
+			LD      A, D            
+	        IN      A, ($FE)        ; Read key state
             LD      E, $01          ; Bitmask for key check
             LD      B, $05          ; 5 bits (keys) in each row
-
 CheckKey:   RRCA                    ; 
-            JR      NC, KeyPressed  ; key down (bit checked is zero)
+            JR      NC, KEY_PRESSED 	; key down (bit checked is zero)
             INC     HL              ; next lookup
 			SLA     E         		; move test mask
             DJNZ    CheckKey        
-
             RLC     D               ; next port row to read ($FD,$FB...)
-            JR      C, LoopSetup
-KeyPressed: LD      A, (HL)         ; get char value from table
+            JR      C, KEY_LOOP
+KEY_PRESSED: 
+			LD      A, (HL)         ; get char value from table
             POP     HL            
             POP     BC              
             RET                  
-
-KeyTable:	; Key row mapping  ; $6649
-			; $01=shift, ; $0D=enter, $20=space, $02=sym shft
-			defb $01,"ZXCV"			
+; ----------------------------------------------
+KEY_TABLE:	; Key row mapping  		; $6649
+			defb $01,"ZXCV"		 	; $01=shift	
 			defb "ASDFG"
 			defb "QWERT"
 			defb "12345"
 			defb "09876"
-			defb "POIUY"
-			defb $0D,"LKJH"   		
-			defb $20,$02,"MNB" 
-			defb $0	; tables end marker
+			defb "POIUY"  
+			defb $0D,"LKJH"     	; $0D=enter
+			defb $20,$02,"MNB"  	; $20=space, $02=sym shft
+			defb $0					; tables end marker
+; ----------------------------------------------
 
 ; -------------------------------------------------------------
-; $00FE (undocumented) - Unlike $7FFE (which detects keys 1,2,3,4 & 5 when A=$7F),
-; this port appears to show if *any* key is pressed.
-; 
-; Returns key status in A: 
-;   0 = at least one key is pressed
-;   1 = no keys are pressed
-;
-ANY_KEY_DOWN:   XOR A    ; $6672  ; A==0, Not a valid port, but works!
+; Get Any Key Press 
+;   Returns key status in A: 0=at least one key is pressed,1=no keys are pressed
+ANY_KEY_DOWN:   
+		  XOR A    		 ; $6672  ; A==0, Not a valid port, but works!
           IN A,($FE)     ; $6673  ; Read keyboard
           CPL            ; $6675  ; Invert bits (active low input)
           AND $1F        ; $6676  ; Mask to check any of the 5 lowest bits
           RET            ; $6678  ;
 
+; NOTE: $00FE (undocumented speccy port)
+; Unlike $7FFE (which detects keys 1,2,3,4 & 5 when A=$7F), this port appears to show if *any* key is pressed.
+; 
 ; The hardware seems to detect if *any* key is down, 
-; but does not distinguish between the 8 half-rows (5 keys per row).
+; but does not distinguish between the 8 half-rows each 5 keys per row.
 ; -------------------------------------------------------------
 
-; DATA_12 = (DATA_12 + 7) * 13 (mod 65536).
-
+; -------------------------------------------------------------
+; Generate a random'ish value
+; 	Input:  A=Maximum limit
+;  	Output: A=Random number in range 0 to (A-1)
+; 	Formula: RAND = (RAND + 7) * 13 (mod 65536)
 GET_RAND_VALUE:		
-			PUSH HL				; $6679
-			PUSH DE				; $667A
-			PUSH BC				; $667B
-			INC A				; $667C
-			PUSH AF				; $667D
-			LD HL,(RAND_STATE)				; $667E
-			LD DE,$0007				; $6681
-			ADD HL,DE				; $6684
-			LD E,L				; $6685
-			LD D,H				; $6686
-			ADD HL,HL				; $6687
-			ADD HL,HL				; $6688
-			LD C,L				; $6689
-			LD B,H				; $668A
-			ADD HL,HL				; $668B
-			ADD HL,BC				; $668C
-			ADD HL,DE				; $668D
-			LD (RAND_STATE),HL				; $668E
-			LD A,L				; $6691
-			XOR H				; $6692
-			LD E,A				; $6693
-			LD D,$00				; $6694
-			POP AF				; $6696
-			LD HL,$0000				; $6697
-			LD B,$08				; $669A
-L_669C:		ADD HL,HL				; $669C
-			RLA				; $669D
-			JR NC,L_66A1				; $669E
-			ADD HL,DE				; $66A0
-L_66A1:		DJNZ L_669C				; $66A1
-			LD A,H				; $66A3
-			POP BC				; $66A4
-			POP DE				; $66A5
-			POP HL				; $66A6
-			RET				; $66A7
+			PUSH HL						; $6679
+			PUSH DE						; $667A
+			PUSH BC						; $667B
+			INC A						; $667C
+			PUSH AF						; $667D
+			LD HL,(RAND_STATE)			; $667E  ; Get seed
+			LD DE,$0007					; $6681
+			ADD HL,DE					; $6684  ; (RAND + 7)
+			LD E,L						; $6685
+			LD D,H						; $6686
+			ADD HL,HL					; $6687  ; x2 
+			ADD HL,HL					; $6688	 ; x4
+			LD C,L						; $6689
+			LD B,H						; $668A
+			ADD HL,HL					; $668B  ; x8
+			ADD HL,BC					; $668C  ; x12
+			ADD HL,DE					; $668D  ; x13
+			LD (RAND_STATE),HL			; $668E  ; Keep seed
+			LD A,L						; $6691
+			XOR H						; $6692  ; Mix high/low bytes 
+			LD E,A						; $6693
+			LD D,$00					; $6694  ; Need to use DE as 8-bit value later
+			POP AF						; $6696
+			LD HL,$0000					; $6697  ; Zero - About to hold ongoing sum
+			LD B,$08					; $669A  ; Counter for 8-bit division
+RND_LOOP:	
+			ADD HL,HL					; $669C  ; x2
+			RLA							; $669D  ; Get carry
+			JR NC,SKIP_CARRY			; $669E
+			ADD HL,DE					; $66A0
+SKIP_CARRY:		
+			DJNZ RND_LOOP				; $66A1
+			LD A,H						; $66A3  ; Final scaled number
+			POP BC						; $66A4
+			POP DE						; $66A5
+			POP HL						; $66A6
+			RET							; $66A7
 
-RAND_STATE:			defw 	$0000 	; $66A8
+; Random state storage (2-byte variable)
+RAND_STATE:			defw 	$0000 	; $66A8 
 
 ;---------------------------------------------------------------------
-; Clear Screen (works backwards)
+; Clear Screen and Attribute Memory (works backwards)
 CLR_SCREEN:	
 			LD C,$00				; $66AA
 			LD HL,$5AFF				; $66AC
@@ -297,7 +303,6 @@ CLR_SCREEN:
 			LDDR					; $66BD
 			RET						; $66BF
 ;---------------------------------------------------------------------
-
 ; future thing - this CLR_GAME_SCREEN could be more like above with 32 skipped, 
 ;				 maybe the game had borders at some point ?
 CLR_GAME_SCREEN:		
@@ -319,11 +324,11 @@ CLR_SCR_LOOP:
 			LD BC,$001F				; $66DA
 			LDIR					; $66DD
 			POP HL					; $66DF
-			CALL NEXT_SCR_LINE		; $66E0
+			CALL NEXT_SCREEN_LINE		; $66E0
 			POP BC					; $66E3
 			DJNZ CLR_SCR_LOOP		; $66E4
 			RET						; $66E6
-
+;---------------------------------------------------------------------
 INIT_GAME_SCREEN_TABLES:
 			LD HL,$6300				; $66E7 ; CODE NEEDED ? LDIR section - why bother clearing
 			LD (HL),$00				; $66EA
@@ -342,12 +347,12 @@ INIT_GAME_SCREEN_TABLES:
 FILLOUT_INGAME_TABLE:
 			LD (IX+$00),H			; $670E ; $6320 (IX)
 			LD (IY+$00),L			; $6711 ; $6420 (IY) 
-			CALL NEXT_SCR_LINE		; $6714	; Screen Address Calculation
+			CALL NEXT_SCREEN_LINE		; $6714	; Screen Address Calculation
 			INC IX					; $6717
-			INC IY					; $6719
-			DJNZ FILLOUT_INGAME_TABLE		; $671B
-			RET						; $671D
-
+			INC IY						; $6719
+			DJNZ FILLOUT_INGAME_TABLE	; $671B
+			RET							; $671D
+;---------------------------------------------------------------------
 INIT_MENU_SCREEN_TABLES:		
 			LD IX,$6300				; $671E  ; future thing - reacon just this table is needed for the whole game
 			LD IY,$6400				; $6722  
@@ -356,12 +361,12 @@ INIT_MENU_SCREEN_TABLES:
 FILLOUT_MENU_TABLE:		
 			LD (IX+$00),H			; $672B
 			LD (IY+$00),L			; $672E
-			CALL NEXT_SCR_LINE		; $6731
+			CALL NEXT_SCREEN_LINE		; $6731
 			INC IX					; $6734
 			INC IY					; $6736
 			DJNZ FILLOUT_MENU_TABLE	; $6738
 			RET						; $673A
-
+;---------------------------------------------------------------------
 ; This lookup sits in the 0x6300 range of contended memory.
 ; Speccy: 0x4000 to 0x7FFF is shared by display refresh and so will slow!
 LOOKUP_6300_ADDR_OFFSET:		
@@ -380,36 +385,39 @@ LOOKUP_6300_ADDR_OFFSET:
 			LD L,A					; $6749
 			POP AF					; $674A
 			RET						; $674B
-
-NEXT_SCR_LINE:
-			INC H				; $674C
+;---------------------------------------------------------------------
+; Get the HL register pair to the next screen line
+NEXT_SCREEN_LINE:
+			INC H				; $674C  ; Next row 
 			LD A,H				; $674D
-			AND $07				; $674E
-			RET NZ				; $6750
+			AND $07				; $674E  ; Check if crossed third boundary
+			RET NZ				; $6750  ; Exit if still in same third
 			LD A,L				; $6751
-			ADD A,$20			; $6752
+			ADD A,$20			; $6752  ; Move to next screen third
 			LD L,A				; $6754
-			RET C				; $6755
+			RET C				; $6755  ; Exit if carried to new third
 			LD A,H				; $6756
-			SUB $08				; $6757
+			SUB $08				; $6757  ; Third transition
 			LD H,A				; $6759
-			RET				; $675A
-
-L_675B:
+			RET					; $675A
+;---------------------------------------------------------------------
+; Get the HL register pair to the previous screen line.
+PREVIOUS_SCREEN_LINE:
 			LD A,H				; $675B
-			DEC H				; $675C
-			AND $07				; $675D
-			RET NZ				; $675F
+			DEC H				; $675C  ; Previous row
+			AND $07				; $675D  ; Check if crossing third boundary
+			RET NZ				; $675F  ; Exit if still in same third
 			LD A,L				; $6760
-			SUB $20				; $6761
+			SUB $20				; $6761  ; Move to previous screen third
 			LD L,A				; $6763
-			RET C				; $6764
-			LD A,H				; $6765
-			ADD A,$08				; $6766
+			RET C				; $6764  ; Exit if carried to new third
+			LD A,H				; $6765 
+			ADD A,$08			; $6766  ; Third transition
 			LD H,A				; $6768
-			RET				; $6769
-
-WAIT_21xBC:   ; 21cycles x BC  (ignoring setup cost)
+			RET					; $6769
+;---------------------------------------------------------------------
+; Gives 21cycles x BC  (ignoring setup cost)
+WAIT_21xBC:  
 			PUSH BC				; $676A
 			PUSH DE				; $676B
 			PUSH HL				; $676C
@@ -420,21 +428,18 @@ WAIT_21xBC:   ; 21cycles x BC  (ignoring setup cost)
 			POP DE				; $6776
 			POP BC				; $6777
 			RET					; $6778
-
-
+;---------------------------------------------------------------------
 ; Input: D = Y-coord, E = X-coord (repurposed from animation params)
 ; Output: HL = offset for color attribute address
 GET_ANIM_ADDR:
 			PUSH AF				; $6779
 			PUSH DE				; $677A
-
 			LD A,D				; $677B  ; 
 			AND $F8				; $677C  ; Mask Y to 8-pixel row boundaries
 			LD L,A				; $677E  ; L = coarse Y position
 			LD H,$00			; $677F
 			ADD HL,HL			; $6781  ; X2
-			ADD HL,HL			; $6782  ; X4  (Y * 32 bytes per attribute row)
-		
+			ADD HL,HL			; $6782  ; X4  (Y * 32 bytes per attribute row)	
 			LD A,E				; $6783  ; attriute X pos or Sprite index 
 			AND $7C				; $6784  ; Mask X to 4-pixel column boundaries
 			RRCA				; $6786  ; /2
@@ -445,7 +450,7 @@ GET_ANIM_ADDR:
 			POP DE				; $678C
 			POP AF				; $678D
 			RET					; $678E
-
+;---------------------------------------------------------------------
 GET_ANIM_ADDR_AS_HL:
 			PUSH DE					; $678F
 			CALL GET_ANIM_ADDR		; $6790   
@@ -453,7 +458,7 @@ GET_ANIM_ADDR_AS_HL:
 			ADD HL,DE				; $6796  ; Final address 
 			POP DE					; $6797
 			RET						; $6798
-
+;---------------------------------------------------------------------
 GET_ATTRIBUTE_AS_HL:
 			PUSH DE					; $6799
 			CALL GET_ANIM_ADDR		; $679A  ; HL=offset based on Y/X (seeing DE=$2000 before call)
@@ -461,22 +466,22 @@ GET_ATTRIBUTE_AS_HL:
 			ADD HL,DE				; $67A0  ; HL=exact attribute address we are after from original x,y
 			POP DE					; $67A1
 			RET						; $67A2
-
+;---------------------------------------------------------------------
 L_67A3:
-			PUSH DE				; $67A3
-			CALL GET_ANIM_ADDR				; $67A4
+			PUSH DE					; $67A3
+			CALL GET_ANIM_ADDR		; $67A4
 			LD DE,$5B00				; $67A7
 			ADD HL,DE				; $67AA
-			POP DE				; $67AB
-			RET				; $67AC
-
+			POP DE					; $67AB
+			RET						; $67AC
+;---------------------------------------------------------------------
 CLR_SCRN_ATTRIBUTES:
 			LD HL,$5800				; $67AD
 			LD DE,$5B00				; $67B0
 			LD BC,$0300				; $67B3
-			LDIR				; $67B6
-			RET				; $67B8
-
+			LDIR					; $67B6
+			RET						; $67B8
+;---------------------------------------------------------------------
 L_67B9:
 			PUSH AF				; $67B9
 			PUSH BC				; $67BA
@@ -1650,38 +1655,38 @@ DATA_02:
 ; Debris, explosions and volcanic eruptions
 DEBRIS_SPRITES:
 			LD HL,$6EC4			; $7069   ; Explosive data
-L_706C:
+LOOP_DEBRIS:
 			LD A,(HL)			; $706C
 			LD B,A				; $706D
 			CP $FF				; $706E   
 			RET Z				; $7070	  ; exit sprites loop on $ff marker
 			OR A				; $7071
-			JR NZ,L_707A			; $7072
+			JR NZ,SLOT_READY	; $7072
 			LD BC,$0006			; $7074
 			ADD HL,BC			; $7077
-			JR L_706C			; $7078
-L_707A:
+			JR LOOP_DEBRIS		; $7078
+SLOT_READY:
 			PUSH HL				; $707A
 			INC HL				; $707B
 			PUSH HL				; $707C
 			LD E,(HL)			; $707D
 			INC HL				; $707E
-			LD D,(HL)			; $707F
-			LD A,B				; $7080
-			CALL DRAW_SPRITE16X8			; $7081
-			INC HL				; $7084
-			LD A,E				; $7085
+			LD D,(HL)				; $707F
+			LD A,B					; $7080
+			CALL DRAW_SPRITE16X8	; $7081
+			INC HL					; $7084
+			LD A,E					; $7085
 			ADD A,(HL)			; $7086
 			LD E,A				; $7087
 			CP $78				; $7088
-			JR NC,L_70AA			; $708A
+			JR NC,OFF_SCREEN 	; $708A
 			INC HL				; $708C
 			INC (HL)			; $708D
 			LD A,(HL)			; $708E
 			ADD A,D				; $708F
 			LD D,A				; $7090
 			CP $B8				; $7091
-			JR NC,L_70AA			; $7093
+			JR NC,OFF_SCREEN	; $7093
 			INC HL				; $7095
 			LD C,(HL)			; $7096
 			POP HL				; $7097
@@ -1689,19 +1694,19 @@ L_707A:
 			INC HL				; $7099
 			LD (HL),D			; $709A
 			LD A,B				; $709B
-			CALL DRAW_SPRITE16X8			; $709C
-			CALL L_A4AD			; $709F  ;  Draw explosion
-			POP HL				; $70A2
-			LD BC,$0006			; $70A3
-			ADD HL,BC			; $70A6
-			JP L_706C			; $70A7
-L_70AA:
-			POP HL				; $70AA
-			POP HL				; $70AB
-			LD (HL),$00			; $70AC
-			LD BC,$0006			; $70AE
-			ADD HL,BC			; $70B1
-			JR L_706C			; $70B2
+			CALL DRAW_SPRITE16X8	; $709C
+			CALL COLOUR_SPRITE		; $709F  
+			POP HL					; $70A2
+			LD BC,$0006				; $70A3
+			ADD HL,BC				; $70A6
+			JP LOOP_DEBRIS			; $70A7
+OFF_SCREEN:
+			POP HL					; $70AA
+			POP HL					; $70AB
+			LD (HL),$00				; $70AC  ; slot free
+			LD BC,$0006				; $70AE  ; next item
+			ADD HL,BC				; $70B1
+			JR LOOP_DEBRIS			; $70B2
 
 ;--------------------------------------------------------
 ; *** ROUTINE TO SETUP IM2 ***
@@ -1709,7 +1714,7 @@ SETUP_IM2_JUMP_TABLE:
 			; Patch location ($FDFD-$FDFF) with "JP L_70D3"
 			LD A,$C3				; $70B4
 			LD ($FDFD),A			; $70B6
-			LD HL,$70D3				; $70B9
+			LD HL,ISR				; $70B9
 			LD ($FDFE),HL			; $70BC	 
 			; Fills jump table with $FD	
 			; (Can't used the rom trick due to 128k)
@@ -1725,7 +1730,7 @@ SETUP_IM2_JUMP_TABLE:
 
 ;--------------------------------------------------------
 ; *** INTERRUPT ROUTINE, called 50pfs ***
-L_70D3:					 
+ISR:					 
 			PUSH AF				; $70D3
 			PUSH BC				; $70D4
 			PUSH DE				; $70D5
@@ -1917,7 +1922,7 @@ RESET_FOR_NEXT_SCREEN:
 			; ------------------------------------------
 			LD HL,$9142						; $724A
 			LD (HL),$FF						; $724D
-			LD ($9140),HL					; $724F
+			LD (GUARDIAN_DATA),HL					; $724F
 			; ------------------------------------------
 			LD HL,$921E						; $7252
 			LD (HL),$FF						; $7255
@@ -2012,7 +2017,7 @@ L_72DF:		OR A							; $72DF
 			CALL L_8748						; $72E3
 			CALL L_6E07						; $72E6
 			CALL L_73AA						; $72E9
-L_72EC:		CALL L_8FD6						; $72EC
+L_72EC:		CALL SPAWN_LANE_GUARDIANS						; $72EC
 			CALL L_91B1						; $72EF
 
 			CALL SPAWN_ENEMY_SHIPS			; $72F2  ; Generate flying enemies
@@ -2793,7 +2798,7 @@ L_79D4:
 BLANK_LP:	LD A,C					; $79EE  ; get mask
 			AND (HL)				; $79EF  ; mask out pixels using screen
 			LD (HL),A				; $79F0  ; Update screen
-			CALL NEXT_SCR_LINE		; $79F1
+			CALL NEXT_SCREEN_LINE		; $79F1
 			DJNZ BLANK_LP			; $79F4  ; do remaining
 			POP HL					; $79F6
 			POP BC					; $79F7
@@ -3359,29 +3364,30 @@ L_7D15:		LD A,(IX+$06)				; $7D15
 			LD (IX+$00),A				; $7D2F
 			LD A,(IX+$01)				; $7D32
 			LD D,A						; $7D35
-			CALL L_815D					; $7D36
+			CALL SCENE_COLLISION_BOTTOM					; $7D36
 			JR NZ,L_7D58				; $7D39
 			LD A,(HL)					; $7D3B
 			ADD A,D						; $7D3C
 			LD D,A						; $7D3D
 			CP $B8						; $7D3E
 			JR NC,L_7D58				; $7D40
-			CALL ENEMY_COLLISIONS					; $7D42
+			CALL ENEMY_COLLISIONS		; $7D42
 			JR NZ,L_7D58				; $7D45
 			LD (IX+$01),D				; $7D47
 			LD A,(IX+$06)				; $7D4A
 			LD C,$47					; $7D4D
-			CALL L_A4AD					; $7D4F
-			CALL DRAW_SPRITE16X8					; $7D52
+			CALL COLOUR_SPRITE					; $7D4F
+			CALL DRAW_SPRITE16X8		; $7D52
    			JP L_7CE7					; $7D55
 L_7D58:		XOR A						; $7D58
 			LD (IX+$02),A				; $7D59
-			CALL DO_SCENE_COLLISION					; $7D5C
+			CALL DO_SCENE_COLLISION		; $7D5C
 			LD A,$01					; $7D5F
 			CALL L_67B9					; $7D61
 			CALL L_74E2					; $7D64
 			CALL L_74E2					; $7D67
 			CALL L_74E2					; $7D6A
+
 			LD A,$02					; $7D6D
 			CALL L_67B9					; $7D6F
 			JP L_7CE7					; $7D72
@@ -3473,7 +3479,7 @@ L_7E31:		LD A,(HL)						; $7E31
 			INC HL				; $7E3A
 			OR A				; $7E3B
 			JP Z,L_7E31				; $7E3C
-			CALL L_A4AD				; $7E3F
+			CALL COLOUR_SPRITE				; $7E3F
 			CALL ENEMY_COLLISIONS				; $7E42
 			JP Z,L_7E31				; $7E45
 			DEC HL				; $7E48
@@ -3614,11 +3620,11 @@ L_7F25:		LD A,(HL)				; $7F25
 			LD A,C					; $7F36
 			CP $FE					; $7F37
 			JR Z,L_7F45				; $7F39
-			CALL L_8115				; $7F3B
+			CALL SCENE_COLLISION_RIGHT				; $7F3B
 			OR A					; $7F3E
 			CALL NZ,L_7F97			; $7F3F
 			JP L_7F4C				; $7F42
-L_7F45:		CALL L_8139				; $7F45
+L_7F45:		CALL SCENE_COLLISION_LEFT				; $7F45
 			OR A					; $7F48
 			CALL NZ,L_7F97			; $7F49
 			; --------------------------------------
@@ -3626,11 +3632,11 @@ L_7F45:		CALL L_8139				; $7F45
 L_7F4C:		LD A,B					; $7F4C
 			CP $FC					; $7F4D
 			JR Z,L_7F5B				; $7F4F
-			CALL L_815D				; $7F51
+			CALL SCENE_COLLISION_BOTTOM				; $7F51
 			OR A					; $7F54
 			CALL NZ,L_7FBF			; $7F55
 			JP L_7F62				; $7F58
-L_7F5B:		CALL L_8181				; $7F5B
+L_7F5B:		CALL SCENE_COLLISION_TOP				; $7F5B
 			OR A					; $7F5E
 			CALL NZ,L_7FBF			; $7F5F
 			; --------------------------------------
@@ -3657,7 +3663,7 @@ L_7F62:		LD A,$05				; $7F62
 			LD A,$05				; $7F78
 			CALL DRAW_SPRITE16X8				; $7F7A
 			LD C,$47				; $7F7D
-			CALL L_A4AD				; $7F7F
+			CALL COLOUR_SPRITE				; $7F7F
 			CALL ENEMY_COLLISIONS	; $7F82
 			LD A,(TIMEOUT_BALLS)			; $7F85
 			OR A					; $7F88
@@ -3735,7 +3741,7 @@ RESET_BALL_LOOP:
 			OR A					; $8002
 			JR Z,RESET_BALL_LOOP	; $8003
 			LD A,$05				; $8005  ; sprite index
-			CALL DRAW_SPRITE16X8				; $8007  ; Remove last ball
+			CALL DRAW_SPRITE16X8	; $8007  ; Remove last ball
 			JP RESET_BALL_LOOP		; $800A
 
 TIMEOUT_BALLS:		defb  $00		; $800D
@@ -3923,123 +3929,121 @@ RIGHT_OFFSET: OR $00				; $8101
 			RET						; $8114
 			;---------------------------------------------------------
 
-L_8115:
-			PUSH BC				; $8115
-			PUSH DE				; $8116
-			PUSH HL				; $8117
-			LD A,E				; $8118
-			CP $7A				; $8119
-			JR NC,L_8134				; $811B
-			AND $03				; $811D
-			LD A,$00				; $811F
-			JR NZ,L_8134				; $8121
-			CALL GET_ANIM_ADDR_AS_HL				; $8123
-			INC L				; $8126
-			LD BC,$0020				; $8127
-			LD A,(HL)				; $812A
-			LD E,A				; $812B
-			LD A,D				; $812C
-			AND $07				; $812D
-			LD A,E				; $812F
-			JR Z,L_8134				; $8130
-			ADD HL,BC				; $8132
-			OR (HL)				; $8133
-L_8134:
-			OR A				; $8134
-			POP HL				; $8135
-			POP DE				; $8136
-			POP BC				; $8137
-			RET				; $8138
+; --------------------------------------------------------
+SCENE_COLLISION_RIGHT:
+			PUSH BC						; $8115
+			PUSH DE						; $8116
+			PUSH HL						; $8117
+			LD A,E						; $8118
+			CP $7A						; $8119
+			JR NC,NO_HIT_R				; $811B
+			AND $03						; $811D
+			LD A,$00					; $811F
+			JR NZ,NO_HIT_R				; $8121
+			CALL GET_ANIM_ADDR_AS_HL	; $8123
+			INC L						; $8126
+			LD BC,$0020					; $8127
+			LD A,(HL)					; $812A
+			LD E,A						; $812B
+			LD A,D						; $812C
+			AND $07						; $812D
+			LD A,E						; $812F
+			JR Z,NO_HIT_R				; $8130
+			ADD HL,BC					; $8132
+			OR (HL)						; $8133
+NO_HIT_R:	OR A						; $8134
+			POP HL						; $8135
+			POP DE						; $8136
+			POP BC						; $8137
+			RET							; $8138
+; --------------------------------------------------------
+SCENE_COLLISION_LEFT:
+			PUSH BC						; $8139
+			PUSH DE						; $813A
+			PUSH HL						; $813B
+			LD A,E						; $813C
+			CP $04						; $813D
+			JR C,NOT_HIT_L				; $813F
+			AND $03						; $8141
+			LD A,$00					; $8143
+			JR NZ,NOT_HIT_L				; $8145
+			CALL GET_ANIM_ADDR_AS_HL	; $8147
+			DEC L						; $814A
+			LD BC,$0020					; $814B
+			LD A,(HL)					; $814E
+			LD E,A						; $814F
+			LD A,D						; $8150
+			AND $07						; $8151
+			LD A,E						; $8153
+			JR Z,NOT_HIT_L				; $8154
+			ADD HL,BC					; $8156
+			OR (HL)						; $8157
+NOT_HIT_L:	OR A						; $8158
+			POP HL						; $8159
+			POP DE						; $815A
+			POP BC						; $815B
+			RET							; $815C
+; --------------------------------------------------------
+SCENE_COLLISION_BOTTOM:
+			PUSH BC						; $815D
+			PUSH DE						; $815E
+			PUSH HL						; $815F
+			LD A,D						; $8160
+			CP $B8						; $8161
+			JR NC,NO_HIT_B				; $8163
+			AND $07						; $8165
+			LD A,$00					; $8167
+			JR NZ,NO_HIT_B				; $8169
+			CALL GET_ANIM_ADDR_AS_HL	; $816B
+			LD BC,$0020					; $816E
+			ADD HL,BC					; $8171
+			LD A,(HL)					; $8172
+			LD D,A						; $8173
+			LD A,E						; $8174
+			AND $03						; $8175
+			LD A,D						; $8177
+			JR Z,NO_HIT_B				; $8178
+			INC L						; $817A
+			OR (HL)						; $817B
+NO_HIT_B:	OR A						; $817C
+			POP HL						; $817D
+			POP DE						; $817E
+			POP BC						; $817F
+			RET							; $8180
+; --------------------------------------------------------
+SCENE_COLLISION_TOP:
+			PUSH BC						; $8181
+			PUSH DE						; $8182
+			PUSH HL						; $8183
+			LD A,D						; $8184
+			CP $20						; $8185
+			JR C,NO_HIT_T				; $8187
+			AND $07						; $8189
+			LD A,$00					; $818B
+			JR NZ,NO_HIT_T				; $818D
+			CALL GET_ANIM_ADDR_AS_HL	; $818F
+			LD BC,$FFE0					; $8192
+			ADD HL,BC					; $8195
+			LD A,(HL)					; $8196
+			LD D,A						; $8197
+			LD A,E						; $8198
+			AND $03						; $8199
+			LD A,D						; $819B
+			JR Z,NO_HIT_T				; $819C
+			INC L						; $819E
+			OR (HL)						; $819F
+NO_HIT_T:	OR A						; $81A0
+			POP HL						; $81A1
+			POP DE						; $81A2
+			POP BC						; $81A3
+			RET							; $81A4
 
-L_8139:
-			PUSH BC				; $8139
-			PUSH DE				; $813A
-			PUSH HL				; $813B
-			LD A,E				; $813C
-			CP $04				; $813D
-			JR C,L_8158				; $813F
-			AND $03				; $8141
-			LD A,$00				; $8143
-			JR NZ,L_8158				; $8145
-			CALL GET_ANIM_ADDR_AS_HL				; $8147
-			DEC L				; $814A
-			LD BC,$0020				; $814B
-			LD A,(HL)				; $814E
-			LD E,A				; $814F
-			LD A,D				; $8150
-			AND $07				; $8151
-			LD A,E				; $8153
-			JR Z,L_8158				; $8154
-			ADD HL,BC				; $8156
-			OR (HL)				; $8157
-L_8158:
-			OR A				; $8158
-			POP HL				; $8159
-			POP DE				; $815A
-			POP BC				; $815B
-			RET				; $815C
-
-L_815D:
-			PUSH BC				; $815D
-			PUSH DE				; $815E
-			PUSH HL				; $815F
-			LD A,D				; $8160
-			CP $B8				; $8161
-			JR NC,L_817C				; $8163
-			AND $07				; $8165
-			LD A,$00				; $8167
-			JR NZ,L_817C				; $8169
-			CALL GET_ANIM_ADDR_AS_HL				; $816B
-			LD BC,$0020				; $816E
-			ADD HL,BC				; $8171
-			LD A,(HL)				; $8172
-			LD D,A				; $8173
-			LD A,E				; $8174
-			AND $03				; $8175
-			LD A,D				; $8177
-			JR Z,L_817C				; $8178
-			INC L				; $817A
-			OR (HL)				; $817B
-L_817C:
-			OR A				; $817C
-			POP HL				; $817D
-			POP DE				; $817E
-			POP BC				; $817F
-			RET				; $8180
-
-L_8181:
-			PUSH BC				; $8181
-			PUSH DE				; $8182
-			PUSH HL				; $8183
-			LD A,D				; $8184
-			CP $20				; $8185
-			JR C,L_81A0				; $8187
-			AND $07					; $8189
-			LD A,$00				; $818B
-			JR NZ,L_81A0			; $818D
-			CALL GET_ANIM_ADDR_AS_HL				; $818F
-			LD BC,$FFE0				; $8192
-			ADD HL,BC				; $8195
-			LD A,(HL)				; $8196
-			LD D,A				; $8197
-			LD A,E				; $8198
-			AND $03				; $8199
-			LD A,D				; $819B
-			JR Z,L_81A0			; $819C
-			INC L				; $819E
-			OR (HL)				; $819F
-L_81A0:		OR A				; $81A0
-			POP HL				; $81A1
-			POP DE				; $81A2
-			POP BC				; $81A3
-			RET					; $81A4
-
-
-MODE48K:	defb $0		; $81A5  ; looks like a dev skip 48k music thing
+; --------------------------------------------------------
+BEEPER_MUSIC_USED:	defb $0				; $81A5 
+; --------------------------------------------------------
 
 DO_MENU:	CALL CLR_SCREEN				; $81A6  ; clear screen
 			CALL DRAW_MENU_BORDERS		; $81A9  ; Draw menu borders
-
 			LD HL,MENU_TEXT 			; $81AC
 			CALL DRAW_LIST				; $81AF  ; menu text
 
@@ -4049,25 +4053,26 @@ DO_MENU:	CALL CLR_SCREEN				; $81A6  ; clear screen
 ; LD HL,LEVEL_SELECTOR_DRAW_LIST
 ; CALL DRAW_LIST		
 
-	
 			LD A,(SPECCY_MODEL)			; $81B2  ; 0=48k, 1=128k
 			OR A						; $81B5
-			JR NZ,L_81CB				; $81B6
-			LD A,(MODE48K)				; $81B8
+			JR NZ,SKIP_1BIT_MUSIC		; $81B6
+			LD A,(BEEPER_MUSIC_USED)	; $81B8  ; play beeper music just once when back at menu screens
 			OR A						; $81BB
-			JR NZ,L_81CB				; $81BC
+			JR NZ,SKIP_1BIT_MUSIC		; $81BC
 			DI							; $81BE
 			CALL START_BEEP_MUSIC		; $81BF
 			CALL BEEP_MUSIC_LOOP		; $81C2
 			EI							; $81C5
 			LD A,$01					; $81C6
-			LD (MODE48K),A				; $81C8 ; 48k
-
-L_81CB:		CALL ANY_KEY_DOWN			; $81CB
-			JP NZ,L_81CB				; $81CE
+			LD (BEEPER_MUSIC_USED),A	; $81C8 ; 48k
+ 
+SKIP_1BIT_MUSIC:		
+			CALL ANY_KEY_DOWN			; $81CB
+			JP NZ,SKIP_1BIT_MUSIC		; $81CE
 
 			LD BC,$01F4					; $81D1
-L_81D4:		PUSH BC						; $81D4
+MENU_LOOP:		
+			PUSH BC						; $81D4
 			CALL SCROLL_BORDER			; $81D5  ; scrolling border effect
 			CALL L_82E5					; $81D8  ; menu text
 			CALL GET_KEY				; $81DB
@@ -4111,8 +4116,8 @@ INVALID_KEY_PRESS:
 			DEC BC						; $8229
 			LD A,B						; $822A
 			OR C						; $822B
-			JP NZ,L_81D4				; $822C
-			CALL L_9433					; $822F   ; Hi-Scores
+			JP NZ,MENU_LOOP				; $822C
+			CALL DO_HI_SCORES					; $822F   ; Hi-Scores
 			JP DO_MENU					; $8232
 
 
@@ -4405,7 +4410,7 @@ L_8503:		RR (HL)				; $8503
 			JR NC,L_851F				; $851B
 			SET 7,(HL)				; $851D
 L_851F:
-			CALL NEXT_SCR_LINE				; $851F
+			CALL NEXT_SCREEN_LINE				; $851F
 			DEC D				; $8522
 			JP NZ,L_8500				; $8523
 			LD HL,$4040				; $8526
@@ -4425,7 +4430,7 @@ L_8535:
 			DEC L				; $853B
 			LD E,L				; $853C
 			LD D,H				; $853D
-			CALL NEXT_SCR_LINE				; $853E
+			CALL NEXT_SCREEN_LINE				; $853E
 			EX AF,AF'				; $8541
 			JP PE,L_8535				; $8542
 			POP BC				; $8545
@@ -4437,57 +4442,57 @@ L_8535:
 			LD BC,$0140				; $854D
 			LD HL,$4040				; $8550
 L_8553:
-			LDI				; $8553
-			LDI				; $8555
+			LDI						; $8553
+			LDI						; $8555
 			EX AF,AF'				; $8557
-			DEC DE				; $8558
-			DEC DE				; $8559
-			DEC HL				; $855A
-			DEC HL				; $855B
-			CALL NEXT_SCR_LINE				; $855C
+			DEC DE					; $8558
+			DEC DE					; $8559
+			DEC HL					; $855A
+			DEC HL					; $855B
+			CALL NEXT_SCREEN_LINE		; $855C
 			EX DE,HL				; $855F
-			CALL L_675B				; $8560
+			CALL PREVIOUS_SCREEN_LINE				; $8560
+
 			EX DE,HL				; $8563
 			EX AF,AF'				; $8564
-			JP PE,L_8553				; $8565
-			AND A				; $8568
+			JP PE,L_8553			; $8565
+			AND A					; $8568
 			LD HL,$51DD				; $8569
 			LD D,$0E				; $856C
 L_856E:
-			PUSH HL				; $856E
+			PUSH HL					; $856E
 			LD B,$04				; $856F
 L_8571:
-			RL (HL)				; $8571
-			DEC L				; $8573
-			RL (HL)				; $8574
-			DEC L				; $8576
-			RL (HL)				; $8577
-			DEC L				; $8579
-			RL (HL)				; $857A
-			DEC L				; $857C
-			RL (HL)				; $857D
-			DEC L				; $857F
-			RL (HL)				; $8580
-			DEC L				; $8582
-			RL (HL)				; $8583
-			DEC L				; $8585
+			RL (HL)					; $8571
+			DEC L					; $8573
+			RL (HL)					; $8574
+			DEC L					; $8576
+			RL (HL)					; $8577
+			DEC L					; $8579
+			RL (HL)					; $857A
+			DEC L					; $857C
+			RL (HL)					; $857D
+			DEC L					; $857F
+			RL (HL)					; $8580
+			DEC L					; $8582
+			RL (HL)					; $8583
+			DEC L					; $8585
 			DJNZ L_8571				; $8586
-			POP HL				; $8588
-			JR NC,L_858D				; $8589
+			POP HL					; $8588
+			JR NC,L_858D			; $8589
 			SET 0,(HL)				; $858B
 L_858D:
-			CALL NEXT_SCR_LINE				; $858D
-			DEC D				; $8590
-			JP NZ,L_856E				; $8591
-			POP HL				; $8594
-			POP DE				; $8595
-			POP BC				; $8596
-			POP AF				; $8597
-			RET				; $8598
+			CALL NEXT_SCREEN_LINE		; $858D
+			DEC D					; $8590
+			JP NZ,L_856E			; $8591
+			POP HL					; $8594
+			POP DE					; $8595
+			POP BC					; $8596
+			POP AF					; $8597
+			RET						; $8598
+
 ; -----------------------------------------------------------------
-
 SPECCY_MODEL: 			defb $01		; $8599 ; 0=48k, 1=128k
-
 ; -----------------------------------------------------------------
 
 ; Beeper sound effect vars:
@@ -5192,7 +5197,7 @@ L_8A6C:		LD A,(HL)			; $8A6C ; get first item
 			AND $07				; $8A8B
 			OR $40				; $8A8D
 			LD C,A				; $8A8F	 ; restore
-			CALL L_A4AD			; $8A90  ; flash colours
+			CALL COLOUR_SPRITE			; $8A90  ; flash colours
 			JP L_8A6C			; $8A93
 
 BONUS_TEXT_DATA:	
@@ -5256,7 +5261,7 @@ TRACER_LOOP:
 			CALL GET_RAND_VALUE		; $8AFF
 			ADD A,$42				; $8B02
 			LD C,A					; $8B04
-			CALL L_A4AD				; $8B05
+			CALL COLOUR_SPRITE				; $8B05
 			POP HL					; $8B08
 			JR TRACER_LOOP			; $8B09
 
@@ -5473,7 +5478,7 @@ L_8D16:		LD A,(IX+$0A)				; $8D16
 			CALL PLAYER_HAZARD_LIST		; $8D25
 			POP DE						; $8D28
 			LD C,(IX+$0C)				; $8D29
-			CALL L_A4AD					; $8D2C
+			CALL COLOUR_SPRITE					; $8D2C
 			JP LOOP_ENEMY_SHOTS			; $8D2F
 SHOT_HIT_SCENE:
 			LD (IX+$02),$00				; $8D32 ; reset shot
@@ -5767,184 +5772,233 @@ L_8FC1:		CALL WAIT_21xBC				; $8FC1
 			DEC A				; $8FC4
 			JR NZ,L_8FC1				; $8FC5
 			CALL L_954F				; $8FC7
-			JP L_9433				; $8FCA
+			JP DO_HI_SCORES				; $8FCA
 
 GAME_OVER_TXT:
 			defb "GAME OVER"		; $8FCD 
 
-L_8FD6:
-			CP $F0				; $8FD6
-			RET C				; $8FD8
-			CP $F8				; $8FD9
-			RET NC				; $8FDB
-			PUSH AF				; $8FDC
-			PUSH BC				; $8FDD
-			PUSH DE				; $8FDE
-			PUSH HL				; $8FDF
-			PUSH IX				; $8FE0
-			LD IX,($9140)				; $8FE2
-			LD HL,SPRITE24x16_DATA				; $8FE6
+
+SPAWN_LANE_GUARDIANS:  
+			; Guardians: these come in pairs and move synchronously
+ 			;  A = spawn trigger code ($F0-$F7)
+			CP $F0						; $8FD6
+			RET C						; $8FD8  ; exit <$F0
+			CP $F8						; $8FD9
+			RET NC						; $8FDB  ; exit >= $F8 
+			PUSH AF						; $8FDC
+			PUSH BC						; $8FDD
+			PUSH DE						; $8FDE
+			PUSH HL						; $8FDF
+			PUSH IX						; $8FE0
+			
+			; Get next free guardian pair slot
+			LD IX,(GUARDIAN_DATA)				; $8FE2  ; next free guardian
+			LD HL,SPRITE24x16_DATA		; $8FE6
 			LD (IX+$03),L				; $8FE9
 			LD (IX+$04),H				; $8FEC
 			LD (IX+$08),L				; $8FEF
 			LD (IX+$09),H				; $8FF2
-			LD (IX+$00),E				; $8FF5
-			LD (IX+$01),D				; $8FF8
-			LD (IX+$02),$3E				; $8FFB
-			SUB $F0				; $8FFF
-			ADD A,A				; $9001
-			LD L,A				; $9002
-			LD H,$00				; $9003
-			LD BC,$9030				; $9005
-			ADD HL,BC				; $9008
-			LD A,(HL)				; $9009
-			ADD A,D				; $900A
-			LD D,A				; $900B
-			INC HL				; $900C
-			LD A,(HL)				; $900D
-			LD (IX+$0A),A				; $900E
-			LD (IX+$05),E				; $9011
-			LD (IX+$06),D				; $9014
-			LD A,$42				; $9017
-			LD (IX+$07),A				; $9019
-			LD DE,$000B				; $901C
-			ADD IX,DE				; $901F
-			LD (IX+$00),$FF				; $9021
-			LD ($9140),IX				; $9025
-			POP IX				; $9029
-			POP HL				; $902B
-			POP DE				; $902C
-			POP BC				; $902D
-			POP AF				; $902E
-			RET				; $902F
+			LD (IX+$00),E				; $8FF5  ; Xpos
+			LD (IX+$01),D				; $8FF8  ; Ypos
+			LD (IX+$02),$3E				; $8FFB  ; starting frame (top guard)
+			SUB $F0						; $8FFF  ; get here must be 0 to 7
+			ADD A,A						; $9001  ; x2
+			LD L,A						; $9002  ; Base
+			LD H,$00					; $9003	
+			LD BC,GUARDIAN_INIT			; $9005
+			ADD HL,BC					; $9008  ; guardian data
+			LD A,(HL)					; $9009  ; Ypos
+			ADD A,D						; $900A  
+			LD D,A						; $900B
+			INC HL						; $900C
+			LD A,(HL)					; $900D  ; 
+			LD (IX+$0A),A				; $900E	 ; Direction ($FF=up, $01=down)
+			LD (IX+$05),E				; $9011  ; Xpos
+			LD (IX+$06),D				; $9014  ; Ypos
 
-			defb $3C,$FF,$37                                    ; $9030 <.7
-			defb $FF,$32,$FF,$2D,$FF,$3C,$01,$37				; $9033 .2.-.<.7
-			defb $01,$32,$01,$2D,$01                            ; $903B .2.-.
+			LD A,$42					; $9017  ; starting frame (bottom guard)
+			LD (IX+$07),A				; $9019
+			; Move to next guardian slot
+			LD DE,$000B					; $901C
+			ADD IX,DE					; $901F
+			LD (IX+$00),$FF				; $9021
+			LD (GUARDIAN_DATA),IX				; $9025  ;  Update next free guardian slot
+			POP IX						; $9029
+			POP HL						; $902B
+			POP DE						; $902C
+			POP BC						; $902D
+			POP AF						; $902E
+			RET							; $902F
+
+GUARDIAN_INIT:							; $9030
+			
+			defb $3C,$FF	;   Y offset, Direction ($FF=up, $01=down)			
+			defb $37,$FF		
+			defb $32,$FF
+			defb $2D,$FF
+			defb $3C,$01
+			defb $37,$01
+			defb $32,$01
+			defb $2D,$01                ; $903B
 
 LANE_GUARDIANS:		
-			LD IX,$9142				; $9040
+			LD IX,GUARDIAN_DATA+2		; $9040
 L_9044:		LD A,(IX+$00)				; $9044
-			CP $FF				; $9047
-			RET Z				; $9049
-			LD A,(IX+$0A)				; $904A
-			CP $FF				; $904D
-			JP Z,L_905D				; $904F
-			JP L_90CA				; $9052
-
-L_9055:		LD DE,$000B				; $9055
-			ADD IX,DE				; $9058
-			JP L_9044				; $905A
-
-L_905D:		LD E,(IX+$00)				; $905D
+			CP $FF						; $9047	  ; End marker
+			RET Z						; $9049   ; Exit of list
+			LD A,(IX+$0A)				; $904A   ; Direction
+			CP $FF						; $904D
+			JP Z,GUARDIAN_UPWARD	    ; $904F
+			JP GUARDIAN_DOWNWARD	    ; $9052
+NEXT_GUARD_LOOP:		
+			LD DE,$000B					; $9055
+			ADD IX,DE					; $9058
+			JP L_9044					; $905A
+GUARDIAN_UPWARD:		
+			LD E,(IX+$00)				; $905D
 			LD D,(IX+$01)				; $9060
-			LD B,D				; $9063
-			LD C,E				; $9064
-			CALL CHECK_SCENE_UP				; $9065
-			CALL NZ,L_9137				; $9068
+			LD B,D						; $9063
+			LD C,E						; $9064
+			CALL CHECK_SCENE_UP			; $9065
+			CALL NZ,BOUNCE_GUARD		; $9068
 			LD A,(IX+$0A)				; $906B
-			ADD A,D				; $906E
-			LD D,A				; $906F
+			ADD A,D						; $906E
+			LD D,A						; $906F
 			LD (IX+$01),D				; $9070
-			LD A,(GAME_COUNTER_8BIT)				; $9073
-			AND $03				; $9076
+
+			; Animate frames
+			LD A,(GAME_COUNTER_8BIT)	; $9073
+			AND $03						; $9076
 			ADD A,(IX+$02)				; $9078
+
 			LD L,(IX+$03)				; $907B
 			LD H,(IX+$04)				; $907E
-			CALL DRAW4X4SPRITE				; $9081
+			CALL DRAW4X4SPRITE			; $9081
 			LD (IX+$03),L				; $9084
 			LD (IX+$04),H				; $9087
-			LD A,$01				; $908A
-			CALL PLAYER_HAZARD_LIST				; $908C
-			LD BC,$0747				; $908F
-			CALL L_A47B				; $9092
+
+			LD A,$01					; $908A
+			CALL PLAYER_HAZARD_LIST		; $908C
+
+			LD BC,$0747					; $908F ; ColR=$07, ColL=$47	 
+			CALL COLOUR_16X16_SPRITE	; $9092
+
 			LD E,(IX+$05)				; $9095
 			LD D,(IX+$06)				; $9098
-			LD B,D				; $909B
-			LD C,E				; $909C
+			LD B,D						; $909B
+			LD C,E						; $909C
 			LD A,(IX+$0A)				; $909D
-			ADD A,D				; $90A0
-			LD D,A				; $90A1
+			ADD A,D						; $90A0
+			LD D,A						; $90A1
 			LD (IX+$06),D				; $90A2
-			LD A,(GAME_COUNTER_8BIT)				; $90A5
-			AND $03				; $90A8
+
+			; Animate frames
+			LD A,(GAME_COUNTER_8BIT)	; $90A5
+			AND $03						; $90A8
 			ADD A,(IX+$07)				; $90AA
+
 			LD L,(IX+$08)				; $90AD
 			LD H,(IX+$09)				; $90B0
-			CALL DRAW4X4SPRITE				; $90B3
+			CALL DRAW4X4SPRITE			; $90B3
 			LD (IX+$08),L				; $90B6
 			LD (IX+$09),H				; $90B9
-			LD A,$01				; $90BC
-			CALL PLAYER_HAZARD_LIST				; $90BE
-			LD BC,$0747				; $90C1
-			CALL L_A47B				; $90C4
-			JP L_9055				; $90C7
 
-L_90CA:		LD E,(IX+$05)				; $90CA
+			LD A,$01					; $90BC
+			CALL PLAYER_HAZARD_LIST		; $90BE
+
+			LD BC,$0747					; $90C1
+			CALL COLOUR_16X16_SPRITE					; $90C4
+			JP NEXT_GUARD_LOOP			; $90C7
+GUARDIAN_DOWNWARD:		
+			LD E,(IX+$05)				; $90CA
 			LD D,(IX+$06)				; $90CD
-			LD B,D				; $90D0
-			LD C,E				; $90D1
-			CALL CHECK_SCENE_DOWN				; $90D2
-			CALL NZ,L_9137				; $90D5
+			LD B,D						; $90D0
+			LD C,E						; $90D1
+			CALL CHECK_SCENE_DOWN		; $90D2
+			CALL NZ,BOUNCE_GUARD				; $90D5
 			LD A,(IX+$0A)				; $90D8
-			ADD A,D				; $90DB
-			LD D,A				; $90DC
+			ADD A,D						; $90DB
+			LD D,A						; $90DC
 			LD (IX+$06),D				; $90DD
-			LD A,(GAME_COUNTER_8BIT)				; $90E0
-			AND $03				; $90E3
+
+			; Animate frames
+			LD A,(GAME_COUNTER_8BIT)	; $90E0
+			AND $03						; $90E3
 			ADD A,(IX+$07)				; $90E5
+
 			LD L,(IX+$08)				; $90E8
 			LD H,(IX+$09)				; $90EB
-			CALL DRAW4X4SPRITE				; $90EE
+			CALL DRAW4X4SPRITE			; $90EE
 			LD (IX+$08),L				; $90F1
 			LD (IX+$09),H				; $90F4
-			LD A,$01				; $90F7
-			CALL PLAYER_HAZARD_LIST				; $90F9
-			LD BC,$0747				; $90FC
-			CALL L_A47B				; $90FF
+
+			LD A,$01					; $90F7
+			CALL PLAYER_HAZARD_LIST		; $90F9
+
+			LD BC,$0747					; $90FC
+			CALL COLOUR_16X16_SPRITE					; $90FF
 			LD E,(IX+$00)				; $9102
 			LD D,(IX+$01)				; $9105
-			LD B,D				; $9108
-			LD C,E				; $9109
+			LD B,D						; $9108
+			LD C,E						; $9109
 			LD A,(IX+$0A)				; $910A
-			ADD A,D				; $910D
-			LD D,A				; $910E
+			ADD A,D						; $910D
+			LD D,A						; $910E
 			LD (IX+$01),D				; $910F
-			LD A,(GAME_COUNTER_8BIT)				; $9112
-			AND $03				; $9115
+
+			; Animate frames
+			LD A,(GAME_COUNTER_8BIT)	; $9112
+			AND $03						; $9115
 			ADD A,(IX+$02)				; $9117
+
 			LD L,(IX+$03)				; $911A
 			LD H,(IX+$04)				; $911D
-			CALL DRAW4X4SPRITE				; $9120
+			CALL DRAW4X4SPRITE			; $9120
 			LD (IX+$03),L				; $9123
 			LD (IX+$04),H				; $9126
-			LD A,$01				; $9129
-			CALL PLAYER_HAZARD_LIST				; $912B
-			LD BC,$0747				; $912E
-			CALL L_A47B				; $9131
-			JP L_9055				; $9134
 
-L_9137:
-			LD A,(IX+$0A)				; $9137
-			NEG				; $913A
+			LD A,$01					; $9129
+			CALL PLAYER_HAZARD_LIST		; $912B
+
+			LD BC,$0747					; $912E
+			CALL COLOUR_16X16_SPRITE					; $9131
+			JP NEXT_GUARD_LOOP			; $9134
+BOUNCE_GUARD:		
+			; Reverse direction
+			LD A,(IX+$0A)				; $9137  
+			NEG							; $913A
 			LD (IX+$0A),A				; $913C
-			RET				; $913F
+			RET							; $913F
 
-			defb $42,$91,$00                                    ; $9140 B..
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $9143 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $914B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $9153 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $915B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $9163 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $916B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $9173 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $917B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $9183 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $918B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $9193 ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $919B ........
-			defb $00,$00,$00,$00,$00,$00,$00,$00				; $91A3 ........
-			defb $00,$00,$00,$00,$00,$FF                        ; $91AB ......
+GUARDIAN_DATA:
+			defb $42,$91                           		 ; $9140 
+			; Guardian pair structure (11 bytes each)
+			; +00: Xpos
+			; +01: Ypos
+			; +02: frame
+			; +03: Sprite data 
+			; +04: Sprite data 
+			; +05: Xpos
+			; +06: Ypos
+			; +07: frame
+			; +08: Sprite data
+			; +09: Sprite data
+			; +0A: Direction ($FF = up, $01 = down)
+			defb $00
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $9143 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $914B 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $9153 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $915B 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $9163 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $916B 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $9173 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $917B 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $9183 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $918B 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $9193 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $919B 
+			defb $00,$00,$00,$00,$00,$00,$00,$00		; $91A3 
+			defb $00,$00,$00,$00,$00,$FF                ; $91AB  ; $FF terminator
 
 L_91B1:
 			CP $F8				; $91B1
@@ -5990,20 +6044,21 @@ L_91B1:
 			POP AF				; $91FC
 			RET				; $91FD
 
-			defb $00,$04,$01,$01,$02                            ; $91FE .....
-			defb $00,$02,$01,$00,$FC,$03,$01,$FE				; $9203 ........
-			defb $00,$04,$01,$00,$04,$01,$02,$02				; $920B ........
-			defb $00,$02,$02,$00,$FC,$03,$02,$FE				; $9213 ........
-			defb $00,$04,$02,$20,$45,$78,$B0,$20				; $921B ... Ex. 
-			defb $8A,$00,$00,$10,$CF,$3C,$F0,$30				; $9223 .....<.0
-			defb $CF,$3C,$F0,$30,$00,$00,$00,$00				; $922B .<.0....
-			defb $45,$78,$B0,$20,$45,$78,$B0,$20				; $9233 Ex. Ex. 
-			defb $45,$78,$B0,$20,$45,$78,$B0,$20				; $923B Ex. Ex. 
-			defb $45,$78,$B0,$20,$45,$78,$B0,$20				; $9243 Ex. Ex. 
-			defb $45,$78,$B0,$20,$45,$78,$B0,$20				; $924B Ex. Ex. 
-			defb $45,$78,$B0,$20,$45,$78,$B0,$20				; $9253 Ex. Ex. 
-			defb $45,$78,$B0,$20,$45,$78,$B0,$20				; $925B Ex. Ex. 
-			defb $45,$FF,$00,$00                                ; $9263 E...
+			defb $00,$04,$01,$01,$02                        ; $91FE
+			defb $00										; $9203
+			defb $02,$01,$00,$FC,$03,$01,$FE				; $9204
+			defb $00,$04,$01,$00,$04,$01,$02,$02			; $920B
+			defb $00,$02,$02,$00,$FC,$03,$02,$FE			; $9213
+			defb $00,$04,$02,$20,$45,$78,$B0,$20			; $921B
+			defb $8A,$00,$00,$10,$CF,$3C,$F0,$30			; $9223
+			defb $CF,$3C,$F0,$30,$00,$00,$00,$00			; $922B
+			defb $45,$78,$B0,$20,$45,$78,$B0,$20			; $9233
+			defb $45,$78,$B0,$20,$45,$78,$B0,$20			; $923B
+			defb $45,$78,$B0,$20,$45,$78,$B0,$20			; $9243
+			defb $45,$78,$B0,$20,$45,$78,$B0,$20			; $924B
+			defb $45,$78,$B0,$20,$45,$78,$B0,$20			; $9253
+			defb $45,$78,$B0,$20,$45,$78,$B0,$20			; $925B
+			defb $45,$FF,$00,$00                            ; $9263
 
 SNAKES:		LD IX,$921E				; $9267
 L_926B:		LD A,(IX+$00)				; $926B
@@ -6187,7 +6242,7 @@ L_93EA:		PUSH DE				; $93EA
 			INC D				; $93F3
 			INC D				; $93F4
 			INC D				; $93F5
-			CALL L_8115				; $93F6
+			CALL SCENE_COLLISION_RIGHT				; $93F6
 L_93F9:		OR A				; $93F9
 			POP DE				; $93FA
 			RET				; $93FB
@@ -6202,7 +6257,7 @@ L_93FC:		PUSH DE				; $93FC
 			INC D				; $9406
 			INC D				; $9407
 			INC D				; $9408
-			CALL L_8139				; $9409
+			CALL SCENE_COLLISION_LEFT				; $9409
 L_940C:		OR A				; $940C
 			POP DE				; $940D
 			RET				; $940E
@@ -6216,7 +6271,7 @@ L_940F:		PUSH DE				; $940F
 			INC D				; $9418
 			INC D				; $9419
 			INC D				; $941A
-			CALL L_815D				; $941B
+			CALL SCENE_COLLISION_BOTTOM				; $941B
 L_941E:		OR A				; $941E
 			POP DE				; $941F
 			RET				; $9420
@@ -6230,14 +6285,15 @@ L_9421:		PUSH DE				; $9421
 			INC D				; $942A
 			INC D				; $942B
 			INC D				; $942C
-			CALL L_8181				; $942D
+			CALL SCENE_COLLISION_TOP				; $942D
 L_9430:		OR A				; $9430
 			POP DE				; $9431
 			RET				; $9432
 
-L_9433:		CALL CLR_SCREEN				; $9433
+DO_HI_SCORES:		
+			CALL CLR_SCREEN				; $9433
 			CALL DRAW_MENU_BORDERS				; $9436
-			LD HL,$947C				; $9439
+			LD HL,HI_SCORE_TXT				; $9439
 			CALL DRAW_LIST				; $943C
 			LD HL,FONT_DATA			; $943F
 			LD (ICON_LD_ADDR+1),HL				; $9442
@@ -6410,7 +6466,7 @@ L_961F:		POP DE				; $961F
 L_9628:		CALL ANY_KEY_DOWN				; $9628
 			CALL NZ,SCROLL_BORDER				; $962B
 			JP NZ,L_9628				; $962E
-			CALL L_9433				; $9631
+			CALL DO_HI_SCORES				; $9631
 			JP MAIN				; $9634
 L_9637:		INC HL				; $9637
 			INC IX				; $9638
@@ -6525,7 +6581,7 @@ L_9758:		LD A,(IX+$05)				; $9758
 			LD (IX+$04),H				; $9778
 			LD C,(IX+$06)				; $977B
 			LD B,(IX+$07)				; $977E
-			CALL L_A47B					; $9781
+			CALL COLOUR_16X16_SPRITE					; $9781
 			JP ROCKET_LOOP				; $9784
 ROCKET_NO_HIT:		
 			XOR A						; $9787
@@ -7342,7 +7398,7 @@ L_A0A0:		LD E,(IX+$02)				; $A0A0
 			LD C,(HL)				; $A0B6
 			INC HL				; $A0B7
 			LD B,(HL)				; $A0B8
-			CALL L_A47B				; $A0B9
+			CALL COLOUR_16X16_SPRITE				; $A0B9
 			LD A,(INPUT_ENABLED)				; $A0BC
 			OR A				; $A0BF
 			JR NZ,L_A0CC				; $A0C0
@@ -7943,78 +7999,88 @@ L_A470:		LD DE,$001E				; $A470
 			POP DE				; $A477
 			POP BC				; $A478
 			POP AF				; $A479
-			RET				; $A47A
-
-L_A47B:		PUSH AF				; $A47B
-			PUSH BC				; $A47C
-			PUSH DE				; $A47D
-			PUSH HL				; $A47E
-			LD A,E				; $A47F
-			CP $80				; $A480
-			JR C,L_A486				; $A482
-			LD E,$00				; $A484
-L_A486:		LD A,$03				; $A486
-			CALL GET_ATTRIBUTE_AS_HL				; $A488
-L_A48B:		EX AF,AF'				; $A48B
-			PUSH HL				; $A48C
-			LD DE,$0300				; $A48D
-			ADD HL,DE				; $A490
-			EX DE,HL				; $A491
-			POP HL				; $A492
-			LD A,(DE)				; $A493
-			OR A				; $A494
-			JR NZ,L_A498				; $A495
-			LD (HL),C				; $A497
-L_A498:		INC HL				; $A498
-			INC DE				; $A499
-			LD A,(DE)				; $A49A
-			OR A				; $A49B
-			JR NZ,L_A49F				; $A49C
-			LD (HL),B				; $A49E
-L_A49F:		LD DE,$001F				; $A49F
-			ADD HL,DE				; $A4A2
-			EX AF,AF'				; $A4A3
-			DEC A				; $A4A4
-			JP NZ,L_A48B				; $A4A5
-			POP HL				; $A4A8
-			POP DE				; $A4A9
-			POP BC				; $A4AA
-			POP AF				; $A4AB
-			RET				; $A4AC
-
-L_A4AD:		PUSH AF				; $A4AD
-			PUSH BC				; $A4AE
-			PUSH DE				; $A4AF
-			PUSH HL				; $A4B0
-			LD B,$02				; $A4B1
-			LD A,E				; $A4B3
-			CP $80				; $A4B4
-			JR C,L_A4BA				; $A4B6
-			LD E,$00				; $A4B8
-L_A4BA:		CALL GET_ATTRIBUTE_AS_HL				; $A4BA
-L_A4BD:		PUSH HL				; $A4BD
-			LD DE,$0300				; $A4BE
-			ADD HL,DE				; $A4C1
-			EX DE,HL				; $A4C2
-			POP HL				; $A4C3
-			LD A,(DE)				; $A4C4
-			OR A				; $A4C5
+			RET					; $A47A
+; -------------------------------------------------------
+COLOUR_16X16_SPRITE:		
+			PUSH AF						; $A47B
+			PUSH BC						; $A47C
+			PUSH DE						; $A47D
+			PUSH HL						; $A47E
+			LD A,E						; $A47F
+			CP $80						; $A480
+			JR C,CLAMP_XPOS				; $A482	 ; (logical xpos is half)
+			LD E,$00					; $A484  
+CLAMP_XPOS:	
+			; These sprites (16x16) move only on the X-Axis
+			; We still need 2+1 (8x3 pixels) for the 8 pixel boundry overlap
+			LD A,$03					; $A486  ; Loop counter (rows)
+			CALL GET_ATTRIBUTE_AS_HL	; $A488
+COLOUR_LOOP:		
+			EX AF,AF'					; $A48B
+			PUSH HL						; $A48C
+			LD DE,$0300					; $A48D
+			ADD HL,DE					; $A490
+			EX DE,HL					; $A491
+			POP HL						; $A492
+			; Write left attribute 
+			LD A,(DE)					; $A493
+			OR A						; $A494
+			JR NZ,TOP_COL_OCCUPIED		; $A495  ; Don't colour anything used
+			LD (HL),C					; $A497
+TOP_COL_OCCUPIED:		
+			INC HL						; $A498  ; next column
+			INC DE						; $A499  ; next column
+			; Write right attribute
+			LD A,(DE)					; $A49A
+			OR A						; $A49B
+			JR NZ,BOTTOM_COL_OCCUPIED	; $A49C ; Don't colour anything used
+			LD (HL),B					; $A49E
+BOTTOM_COL_OCCUPIED:		
+			LD DE,$001F					; $A49F  ; next row (32 bytes)
+			ADD HL,DE					; $A4A2
+			EX AF,AF'					; $A4A3
+			DEC A						; $A4A4
+			JP NZ,COLOUR_LOOP			; $A4A5
+			POP HL						; $A4A8
+			POP DE						; $A4A9
+			POP BC						; $A4AA
+			POP AF						; $A4AB
+			RET							; $A4AC
+; -------------------------------------------------------
+COLOUR_SPRITE:		
+			PUSH AF						; $A4AD
+			PUSH BC						; $A4AE
+			PUSH DE						; $A4AF
+			PUSH HL						; $A4B0
+			LD B,$02					; $A4B1
+			LD A,E						; $A4B3
+			CP $80						; $A4B4
+			JR C,L_A4BA					; $A4B6
+			LD E,$00					; $A4B8
+L_A4BA:		CALL GET_ATTRIBUTE_AS_HL	; $A4BA
+L_A4BD:		PUSH HL						; $A4BD
+			LD DE,$0300					; $A4BE
+			ADD HL,DE					; $A4C1
+			EX DE,HL					; $A4C2
+			POP HL						; $A4C3
+			LD A,(DE)					; $A4C4
+			OR A						; $A4C5
 			JR NZ,L_A4C9				; $A4C6
-			LD (HL),C				; $A4C8
-L_A4C9:		INC L				; $A4C9
-			INC E				; $A4CA
-			LD A,(DE)				; $A4CB
-			OR A				; $A4CC
+			LD (HL),C					; $A4C8
+L_A4C9:		INC L						; $A4C9
+			INC E						; $A4CA
+			LD A,(DE)					; $A4CB
+			OR A						; $A4CC
 			JR NZ,L_A4D0				; $A4CD
-			LD (HL),C				; $A4CF
-L_A4D0:		LD DE,$001F				; $A4D0
-			ADD HL,DE				; $A4D3
-			DJNZ L_A4BD				; $A4D4
-			POP HL				; $A4D6
-			POP DE				; $A4D7
-			POP BC				; $A4D8
-			POP AF				; $A4D9
-			RET					; $A4DA
+			LD (HL),C					; $A4CF
+L_A4D0:		LD DE,$001F					; $A4D0
+			ADD HL,DE					; $A4D3
+			DJNZ L_A4BD					; $A4D4
+			POP HL						; $A4D6
+			POP DE						; $A4D7
+			POP BC						; $A4D8
+			POP AF						; $A4D9
+			RET							; $A4DA
 
 ; Draws a 16x16 sprite, uses four 8x8 sprites into a 2x2 grid.
 ; Used for drawing larger masked sprites (i.e pickups, animated icons).
