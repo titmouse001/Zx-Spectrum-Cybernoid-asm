@@ -53,18 +53,16 @@ INK_WHITE			EQU $CF+7+8
 ;-----------------------------------------
 
 ; Animated Sprite Structure (10 bytes per sprite)
-SpriteIndex         EQU $00     ; [byte] Bits 0-6=Sprite ID, 7=end-of-list
-AnimationControl    EQU $01     ; [byte] Animation params
-; Bit 7-3: Animation set selector (used for ComputeAnimAddress)
-; Bit 2-0: unused
-AnimationStartLow   EQU $02     ; [word] first animation frame
-AnimationStartHigh  EQU $03     ; 
+Xpos                EQU $00     ; [byte] Bits 0-6=Sprite ID, 7=end-of-list
+Ypos                EQU $01     ; [byte] Animation Frame
+StartingFrameLow    EQU $02     ; [word] For frame reset
+StartingFrameHigh   EQU $03     ; 
 FrameLow            EQU $04     ; [word] Current frame
 FrameHigh           EQU $05     ; 
-X_POS               EQU $06     ; [byte] X position
-Y_POS               EQU $07     ; [byte] Y position
-ResetCounter        EQU $08     ; [byte] Initial delay between frames
-CountDown           EQU $09     ; [byte] Current countdown to next frame
+TileGfxLow          EQU $06     ; [byte] Graphics data
+TileGfxHigh         EQU $07     ; [byte] 
+InitCounter         EQU $08      ; [byte] Initial delay between frames
+Counter             EQU $09     ; [byte] Current countdown to next frame
 
 ;-----------------------------------------
 
