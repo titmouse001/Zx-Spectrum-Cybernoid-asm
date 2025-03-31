@@ -143,8 +143,10 @@ GO_25FPS:	XOR A						; $6574  ; reset for next 25FPS test
 			CALL DRAW_PICKUPS			; $65CF		; Draw PickUps (mace, rear gun)
 			CALL DO_SEEKER				; $65D2		; Draw
 			CALL DO_PICKUPS				; $65D5		; logic for all pickups (mace, gems...)
-			CALL PLAYER_COLLISION		; $65D8		; Player collision
-
+		CALL PLAYER_COLLISION		; $65D8		; Player collision
+	;NOP
+	;NOP
+	;NOP
 			CALL DO_MINES				; $65DB     ; check mines
 			CALL DO_EGG_TIMER			; $65DE		; Games countdown timer
 			CALL INGAME_RESET			; $65E1
@@ -1307,21 +1309,21 @@ L_6C6B:		LD A,(DE)			; $6C6B ; char data
 			POP HL				; $6C83
 			POP DE				; $6C84
 			POP AF				; $6C85
-			RET				; $6C86
+			RET					; $6C86
 
-			RET				; $6C87
+			RET					; $6C87
 
-L_6C88:
-			LD A,$06				; $6C88
-			CALL GET_RAND_VALUE				; $6C8A
-			SUB $03				; $6C8D
-			LD C,A				; $6C8F
-			LD A,$0C				; $6C90
-			CALL GET_RAND_VALUE				; $6C92
-			INC A				; $6C95
-			NEG				; $6C96
-			LD B,A				; $6C98
-			RET				; $6C99
+CREATE_EJECT_VELOCITY:
+			LD A,$06					; $6C88
+			CALL GET_RAND_VALUE			; $6C8A
+			SUB $03						; $6C8D
+			LD C,A						; $6C8F
+			LD A,$0C					; $6C90
+			CALL GET_RAND_VALUE			; $6C92
+			INC A						; $6C95
+			NEG							; $6C96
+			LD B,A						; $6C98
+			RET							; $6C99
 
 DO_SCENE_COLLISION:
 			PUSH AF				; $6C9A
@@ -1581,43 +1583,44 @@ DATA_10:
 			defb $FF ; end-marker
 
 L_6E8B:
-			PUSH AF				; $6E8B
-			PUSH DE				; $6E8C
-			PUSH HL				; $6E8D
-			PUSH BC				; $6E8E
-			LD BC,$0006				; $6E8F
-			LD HL,$6EC4				; $6E92
+			PUSH AF						; $6E8B
+			PUSH DE						; $6E8C
+			PUSH HL						; $6E8D
+			PUSH BC						; $6E8E
+			LD BC,$0006					; $6E8F
+			LD HL,VOLCANO_SPRITE_DATA					; $6E92
 L_6E95:
-			LD A,(HL)				; $6E95
-			OR A				; $6E96
-			JR Z,L_6EA0				; $6E97
-			CP $FF				; $6E99
-			JR Z,L_6EBF				; $6E9B
-			ADD HL,BC				; $6E9D
-			JR L_6E95				; $6E9E
+			LD A,(HL)					; $6E95
+			OR A						; $6E96
+			JR Z,L_6EA0					; $6E97
+			CP $FF						; $6E99
+			JR Z,L_6EBF					; $6E9B
+			ADD HL,BC					; $6E9D
+			JR L_6E95					; $6E9E
 L_6EA0:
-			LD A,$01				; $6EA0
-			CALL GET_RAND_VALUE				; $6EA2
-			ADD A,$02				; $6EA5
-			LD (HL),A				; $6EA7
-			EX AF,AF'				; $6EA8
-			INC HL				; $6EA9
-			LD (HL),E				; $6EAA
-			INC HL				; $6EAB
-			LD (HL),D				; $6EAC
-			INC HL				; $6EAD
-			CALL L_6C88				; $6EAE
-			LD (HL),C				; $6EB1
-			INC HL				; $6EB2
-			LD (HL),B				; $6EB3
-			EX AF,AF'				; $6EB4
-			CALL DRAW_SPRITE16X8				; $6EB5
-			POP BC				; $6EB8
-			PUSH BC				; $6EB9
-			INC HL				; $6EBA
-			LD A,C				; $6EBB
-			AND $47				; $6EBC
-			LD (HL),A				; $6EBE
+			LD A,$01					; $6EA0
+			CALL GET_RAND_VALUE			; $6EA2
+			ADD A,$02					; $6EA5
+			LD (HL),A					; $6EA7
+			EX AF,AF'					; $6EA8
+			INC HL						; $6EA9
+			LD (HL),E					; $6EAA
+			INC HL						; $6EAB
+			LD (HL),D					; $6EAC
+			INC HL						; $6EAD
+			CALL CREATE_EJECT_VELOCITY	; $6EAE ; BC = mY/mY
+			LD (HL),C					; $6EB1
+			INC HL						; $6EB2
+			LD (HL),B					; $6EB3
+			EX AF,AF'					; $6EB4
+			CALL DRAW_SPRITE16X8		; $6EB5
+			POP BC						; $6EB8
+			PUSH BC						; $6EB9
+			INC HL						; $6EBA
+			LD A,C						; $6EBB
+			AND $47						; $6EBC
+			LD (HL),A					; $6EBE  ; Colour
+		
 L_6EBF:
 			POP BC				; $6EBF
 			POP HL				; $6EC0
@@ -1684,7 +1687,7 @@ VOLCANO_SPRITE_DATA:
 ;------------------------------------------------------
 ; Debris, explosions and volcanic eruptions
 DEBRIS_SPRITES:
-			LD HL,$6EC4			; $7069   ; Explosive data
+			LD HL,VOLCANO_SPRITE_DATA			; $7069   ; Explosive data
 LOOP_DEBRIS:
 			LD A,(HL)			; $706C
 			LD B,A				; $706D
@@ -1881,7 +1884,7 @@ NO_SCENE_UPDATE:
 
 DO_SCENE_UPDATE_CHECKS:		
 			POP HL							; $71D6
-			LD A,(PLR_DIRECTION)				; $71D7
+			LD A,(PLR_DIRECTION)			; $71D7
 			CP $FF							; $71DA  ; $FF = LEFT
 			LD A,E							; $71DC	 ; Xpos
 			JR Z,LEFT_EDGE					; $71DD  ; X==0, do left edge transition
@@ -1954,12 +1957,12 @@ RESET_FOR_NEXT_SCREEN:
 			LD (HL),$FF						; $724D
 			LD (GUARDIAN_DATA),HL					; $724F
 			; ------------------------------------------
-			LD HL,L921E						; $7252
+			LD HL,SNAKES_TABLE						; $7252
 			LD (HL),$FF						; $7255
-			LD (L9265),HL					; $7257
+			LD (NEXT_SNAKE_SLOT),HL					; $7257
 			; ------------------------------------------
 
-			CALL CLR_TABLE						; $725A	; clear blocking tile map ?
+			CALL CLR_TABLE_5F00						; $725A	; clear blocking tile map ?
 			CALL CLR_TABLE_ITEMS			; $725D ; 
 			CALL CLR_GAME_SCREEN			; $7260 ; 
 			;----------------------------------------
@@ -2039,7 +2042,7 @@ L_72C2:		LD A,C							; $72C2
 			JP UPDATE_INGAME_TILES			; $72C5
 
 BACKGROUND_DONE:		
-			CALL L_742E						; $72C8
+			CALL RESET_TABLE_LIST						; $72C8
 			; --------------------------------------------------
 			LD IX,DATA_08					; $72CB
 			LD DE,$2000						; $72CF  ; y/x coords
@@ -2049,26 +2052,32 @@ TILE_SETUP_LOOP:
 			CP $E9							; $72D6  
 			JR C,L_72DF						; $72D8
 			LD (HL),$00						; $72DA
+
+
 			JP L_72EC						; $72DC
 L_72DF:		OR A							; $72DF
 			CALL NZ,L_732A					; $72E0
 
 			CALL SETUP_ANIMATED_TILES		; $72E3  ; Animated Tiles
 			CALL SETUP_NEST					; $72E6  ; nest
-			CALL SETUP_VOLCANO				; $72E9  ; Volcano
-L_72EC:		CALL SPAWN_LANE_GUARDIANS		; $72EC
-			CALL SPAWN_SNAKES				; $72EF
 
+			CALL SETUP_TILES_BY_GROUP				; $72E9  ; Volcano
+			
+L_72EC:	
 
+			CALL SPAWN_LANE_GUARDIANS		; $72EC
+ 			CALL SPAWN_SNAKES				; $72EF
 			CALL SPAWN_ENEMY_SHIPS			; $72F2  ; Generate flying enemies
 			CALL PLACE_PICKUPS				; $72F5  ; first time pick up (mace,+1 items)
 
+			; move to next Xpos
 			LD A,E							; $72F8
 			ADD A,$08						; $72F9  ; 8 = 16 pixels
 			LD E,A							; $72FB	 ; Xpos
 			CP $80							; $72FC  ; 128 logical pixels (256 physical pixel)
 			JP NZ,TILE_SETUP_LOOP			; $72FE
 			; --------------------------------------------------
+			; move to next pos
 			LD A,D							; $7301  ; Ypos
 			CP $B0							; $7302  ; 176
 			JR Z,L_730E						; $7304
@@ -2150,81 +2159,109 @@ L_735B:		POP HL					; $735B
 			defb $00,$00,$00,$00,$95,$01,$00,$01				; $739B ........
 			defb $00,$97,$00,$01,$00,$01,$FF                    ; $73A3 .......
 
-SETUP_VOLCANO:		PUSH AF				; $73AA
-			PUSH DE				; $73AB
-			PUSH HL				; $73AC
-			LD HL,$73F4			; $73AD
-			LD B,A				; $73B0
-L_73B1:		LD A,(HL)			; $73B1
-			INC HL				; $73B2
-			CP $FF				; $73B3
-			JP Z,L_73F0			; $73B5
-			CP B				; $73B8
-			JR Z,L_73BF			; $73B9
-			INC HL				; $73BB
-			JP L_73B1			; $73BC
-L_73BF:		PUSH HL				; $73BF
-			PUSH BC				; $73C0
-			LD L,(HL)			; $73C1
-			LD H,$00			; $73C2
-			LD C,L				; $73C4
-			LD B,H				; $73C5
-			ADD HL,HL			; $73C6
-			ADD HL,HL			; $73C7
-			ADD HL,BC			; $73C8
-			LD BC,$7413			; $73C9
-			ADD HL,BC			; $73CC
-			PUSH HL				; $73CD
-			POP IY				; $73CE
-			LD L,(IY+$02)		; $73D0
-			LD H,(IY+$03)		; $73D3
-			LD (HL),E			; $73D6
-			INC HL				; $73D7
-			LD (HL),D			; $73D8
-			INC HL				; $73D9
-			LD C,(IY+$04)		; $73DA
-			DEC C				; $73DD
-			DEC C				; $73DE
-			LD B,$00			; $73DF
-			ADD HL,BC			; $73E1
-			LD (HL),$FF			; $73E2
-			LD (IY+$02),L		; $73E4
-			LD (IY+$03),H		; $73E7
-			POP BC				; $73EA
-			POP HL				; $73EB
-			INC HL				; $73EC
-			JP L_73B1			; $73ED
-L_73F0:		POP HL				; $73F0
-			POP DE				; $73F1
-			POP AF				; $73F2
-			RET					; $73F3
+			;-----------------------------------------------------------------
+SETUP_TILES_BY_GROUP:		
+			PUSH AF							; $73AA
+			PUSH DE							; $73AB
+			PUSH HL							; $73AC
+			LD HL,MAP_TILE_TO_GROUP			; $73AD 
+			LD B,A							; $73B0  ; Search Key
+			
+LOOP_SEARCH:
+			LD A,(HL)						; $73B1  ; Current key
+			INC HL							; $73B2
+			CP $FF							; $73B3  ; End marker
+			JP Z,EXIT_GROUP_SETUP			; $73B5
+			CP B							; $73B8
+			JR Z,FOUND_ENTRY				; $73B9
+			INC HL							; $73BB  ; skip index byte
+			JP LOOP_SEARCH					; $73BC
+FOUND_ENTRY:			
+			PUSH HL							; $73BF
+			PUSH BC							; $73C0
+			LD L,(HL)						; $73C1  ; get index 
+			LD H,$00						; $73C2
+			LD C,L							; $73C4
+			LD B,H							; $73C5  ; BC = index
+			ADD HL,HL						; $73C6  ; 
+			ADD HL,HL						; $73C7  ;
+			ADD HL,BC						; $73C8  ; HL=index*5 
+			LD BC,LIST_OF_TABS_FOR_RESET	; $73C9
+			ADD HL,BC						; $73CC  ; add offset
+			PUSH HL							; $73CD
+			POP IY							; $73CE  ; IY has struct pointer
+			; Update struct posX,PosY 
+			LD L,(IY+$02)					; $73D0
+			LD H,(IY+$03)					; $73D3
+			LD (HL),E						; $73D6  ; Stating Xpos
+			INC HL							; $73D7
+			LD (HL),D						; $73D8  ; Stating Ypos
+			INC HL							; $73D9
 
-			defb $2E,$00,$2F,$00,$8D,$00,$8E                    ; $73F4 ../....
-			defb $00,$8F,$00,$90,$00,$27,$01,$32				; $73FB .....'.2
-			defb $01,$52,$01,$94,$01,$98,$01,$46				; $7403 .R.....F
-			defb $02,$47,$02,$81,$03,$83,$04,$FF				; $740B .G......
-			defb $33,$75,$00,$00,$02,$1C,$8E,$00				; $7413 3u......
-			defb $00,$02,$79,$98,$00,$00,$02,$A3				; $741B ..y.....
-			defb $75,$00,$00,$02,$44,$76,$00,$00				; $7423 u...Dv..
-			defb $02,$00,$00                                    ; $742B ...
+			; stride ??? but data is $02, does nothing in this case
+			LD C,(IY+$04)					; $73DA
+			DEC C							; $73DD
+			DEC C							; $73DE
+			LD B,$00						; $73DF
+			ADD HL,BC						; $73E1
 
-L_742E:		LD BC,$0005				; $742E
-			LD IX,$7413				; $7431
-L_7435:		LD A,(IX+$00)			; $7435
-			LD L,A					; $7438
-			LD H,(IX+$01)			; $7439
-			OR H					; $743C
-			RET Z					; $743D
-			LD (HL),$FF				; $743E
-			LD (IX+$02),L			; $7440
-			LD (IX+$03),H			; $7443
-			ADD IX,BC				; $7446
-			JP L_7435				; $7448
+			LD (HL),$FF						; $73E2  ; End marker
+			LD (IY+$02),L					; $73E4
+			LD (IY+$03),H					; $73E7
+			POP BC							; $73EA
+			POP HL							; $73EB
+			INC HL							; $73EC  ; next key 
+			JP LOOP_SEARCH					; $73ED
+EXIT_GROUP_SETUP:					
+			POP HL							; $73F0
+			POP DE							; $73F1
+			POP AF							; $73F2
+			RET								; $73F3
+			;--------------------------------------------------------------------
+MAP_TILE_TO_GROUP:
+			; List of byte pairs [Tile Number as key, Index], Terminated by $FF
+			; This list indes into 5 slots of LIST_OF_TABS_FOR_RESET
+			defb $2E,$00,$2F,$00,$8D,$00,$8E,$00,$8F,$00,$90,$00    ; 0: Indexs for Destroyable Titles
+			defb $27,$01,$32,$01,$52,$01,$94,$01,$98,$01			; 1: Indexs for Emplacements
+			defb $46,$02,$47,$02									; 2: Enemy Rockets
+			defb $81,$03											; 3: Volcano
+			defb $83,$04											; 4: Level Complete Landing Platform
+			defb $FF	
+			;--------------------------------------------------------------------
 
-LEVEL_INDEX:	defb $00			; $744B
-LEVEL_OFFSET: 	defb $00			; $744C
+LIST_OF_TABS_FOR_RESET:
+			defw DESTROYABLE_TILE_DATA		; $7413
+			defb $00,$00,$02				; $7415  ; x,y,stride
+			defw EMPLACEMENT_LIST 
+			defb $00,$00,$02				; $741A  ; x,y,stride
+			defw PROXIMITY_ROCKET_DATA
+			defb $00,$00,$02						 ; x,y,stride
+			defw VOLCANO_LIST
+			defb $00,$00,$02				; $7424	 ; x,y,stride
+			defw LEVEL_COMPLETE_DATA
+			defb $00,$00,$02                      	 ; x,y,stride		
+			defb $00,$00					; zero pair to terminate
 
-;--------------------------------------------------
+			; ------------------------------------------------
+RESET_TABLE_LIST:		
+			LD BC,$0005						; $742E  ; struct size
+			LD IX,LIST_OF_TABS_FOR_RESET	; $7431
+RESET_TABLE_LOOP:
+			; Get table location
+			LD A,(IX+$00)				; $7435
+			LD L,A						; $7438
+			LD H,(IX+$01)				; $7439
+			OR H						; $743C ; (IX+0,1) == 0)
+			RET Z						; $743D ; nothing left
+			LD (HL),$FF					; $743E ; Set tables end marker
+			LD (IX+$02),L				; $7440
+			LD (IX+$03),H				; $7443
+			ADD IX,BC					; $7446
+			JP RESET_TABLE_LOOP			; $7448
+			;--------------------------------------------------
+LEVEL_INDEX:	defb $00				; $744B
+LEVEL_OFFSET: 	defb $00				; $744C
+			;--------------------------------------------------
 GET_ADR_FROM_TABLE:		
 			;Inputs: A=Table Index (each entry is 2 bytes), BC=Lookup table base
 			LD L,A					; $744D
@@ -2236,18 +2273,18 @@ GET_ADR_FROM_TABLE:
 			LD H,(HL)				; $7454
 			LD L,A					; $7455
 			RET						; $7456
-;--------------------------------------------------
+			;--------------------------------------------------
 
-CLR_TABLE:		
+CLR_TABLE_5F00:		
 			LD HL,$5F00				; $7457 
 			LD DE,$5F01				; $745A
 			LD BC,$03FF				; $745D
 			LD (HL),$00				; $7460
 			LDIR					; $7462
 			RET						; $7464
-
+			;--------------------------------------------------
+			
 SETUP_LEVEL:
-			; ---------------------------------------------------
 			LD (CURRENT_LEVEL),A				; $7465
 			ADD A,A								; $7468  ; x2
 			ADD A,A								; $7469	 ; x4
@@ -2285,7 +2322,7 @@ SETUP_LEVEL:
 			;------------------------------------------------
 			XOR A								; $7498
 			LD (EGG_TIMER),A					; $7499
-			LD (DATA_11),A						; $749C
+			LD (LEVEL_COMPLETE_LIFT_DISTANCE),A						; $749C
 			LD (BACKSHOT_ENABLE),A				; $749F
 			LD (MACE_ENABLE),A					; $74A2
 			LD (INPUT_ENABLED),A				; $74A5
@@ -2327,25 +2364,28 @@ START_POS:	defb $20,$90  ; X=32 (64pixels), Y=144
 CURRENT_LEVEL:	
 			defb $00			; $74E1 
 
-L_74E2:		
-			PUSH AF				; $74E2
+		; -------------------------------------------------------------
+DESTORY_TILE_FROM_SUPER_WEAPON:		
+			PUSH AF				; $74E2  ; 	Call point for Bombs and Bounce
 			PUSH BC				; $74E3
 			PUSH DE				; $74E4
 			PUSH HL				; $74E5
-			DEC D				; $74E6
+			DEC D				; $74E6  ; Centre x/y pos
 			DEC D				; $74E7
 			DEC D				; $74E8
 			DEC D				; $74E9
 			DEC E				; $74EA
 			DEC E				; $74EB
 			JP L_74F3			; $74EC
-L_74EF:		PUSH AF				; $74EF
+			; ---------------------------------------------
+DESTORY_TILE_FROM_BULLET:		
+			PUSH AF				; $74EF  ; This point called for Bullets
 			PUSH BC				; $74F0
 			PUSH DE				; $74F1
 			PUSH HL				; $74F2
 L_74F3:		LD C,E				; $74F3
 			LD B,D				; $74F4
-			LD HL,DATA_14		; $74F5
+			LD HL,DESTROYABLE_TILE_DATA		; $74F5
 L_74F8:		LD A,(HL)			; $74F8
 			CP $FF				; $74F9
 			JR NZ,L_7502		; $74FB
@@ -2355,9 +2395,9 @@ L_74F8:		LD A,(HL)			; $74F8
 			POP AF				; $7500
 			RET					; $7501
 
-L_7502:		LD E,A				; $7502
-			INC HL				; $7503
-			LD D,(HL)					; $7504
+L_7502:		LD E,A						; $7502	; Dx
+			INC HL						; $7503
+			LD D,(HL)					; $7504 ; Dy
 			INC HL						; $7505
 			PUSH HL						; $7506
 			CALL CHECK_POINT_IN_HITBOX	; $7507
@@ -2373,7 +2413,7 @@ L_7502:		LD E,A				; $7502
 			CALL DRAW4X4SPRITE			; $751B
 			CALL L_6DE0					; $751E
 
-			LD DE,$7904					; $7521
+			LD DE,L7904					; $7521
 			CALL L_78D4					; $7524
 			CALL UPDATE_SCORE_TXT					; $7527
 			; --------------------------------------------
@@ -2382,18 +2422,21 @@ L_7502:		LD E,A				; $7502
 			; --------------------------------------------
 L_752F:		POP HL						; $752F
 			JP L_74F8					; $7530
+			; ----------------------------------------------------------------------
 
-DATA_14:	defb $45,$54,$52,$49,$45,$56,$45,$20		; $7533 ETRIEVE
-			defb $4F,$4C,$44,$20,$43,$4F,$4F,$52		; $753B OLD COOR
-			defb $44,$53,$0D,$0A,$09,$4C,$44,$09		; $7543 DS...LD.
-			defb $41,$2C,$45,$0D,$0A,$09,$41,$4E		; $754B A,E...AN
-			defb $44,$09,$30,$31,$31,$31,$31,$31		; $7553 D.011111
-			defb $30,$30,$42,$0D,$0A,$09,$52,$52		; $755B 00B...RR
-			defb $43,$41,$0D,$0A,$09,$52,$52,$43		; $7563 CA...RRC
-			defb $41,$0D,$0A,$09,$4C,$44,$09,$28		; $756B A...LD.(
-			defb $24,$33,$2B,$31,$29,$2C,$41,$0D		; $7573 $3+1),A.
-			defb $0A,$09,$4C,$44,$09,$43,$2C,$44		; $757B ..LD.C,D
-			defb $FF                                    ; $7583 .
+DESTROYABLE_TILE_DATA:	
+			defb $45,$54,$52,$49,$45,$56,$45,$20		; $7533 
+			defb $4F,$4C,$44,$20,$43,$4F,$4F,$52		; $753B 
+			defb $44,$53,$0D,$0A,$09,$4C,$44,$09		; $7543 
+			defb $41,$2C,$45,$0D,$0A,$09,$41,$4E		; $754B 
+			defb $44,$09,$30,$31,$31,$31,$31,$31		; $7553 
+			defb $30,$30,$42,$0D,$0A,$09,$52,$52		; $755B 
+			defb $43,$41,$0D,$0A,$09,$52,$52,$43		; $7563 
+			defb $41,$0D,$0A,$09,$4C,$44,$09,$28		; $756B 
+			defb $24,$33,$2B,$31,$29,$2C,$41,$0D		; $7573 
+			defb $0A,$09,$4C,$44,$09,$43,$2C,$44		; $757B 
+			defb $FF                                    ; $7583 
+			; ----------------------------------------------------------------------
 
 VOLCANO_EJECTA:		
 			LD HL,VOLCANO_LIST		; $7584
@@ -2410,7 +2453,7 @@ L_7587:		LD A,(HL)				; $7587
 			LD D,A					; $7593
 			INC HL					; $7594
 			LD A,$01				; $7595
-			CALL GET_RAND_VALUE				; $7597
+			CALL GET_RAND_VALUE		; $7597
 			ADD A,$42				; $759A
 			LD C,A					; $759C
 			CALL L_6E8B				; $759D
@@ -2422,30 +2465,35 @@ VOLCANO_LIST:
 			defb $58,$0D,$0A,$0D,$FF                            ; $75B3 X....
 
 			; ---------------------------------------------------------
-END_LEVEL:	LD DE,(DATA_11+1)			; $75B8
-			LD A,E						; $75BC
-			CP $FF						; $75BD  ;
-			RET Z						; $75BF	 ; flag $FF, get out
+END_LEVEL:	LD DE,(LEVEL_COMPLETE_DATA)				; $75B8
+			LD A,E									; $75BC
+			CP $FF									; $75BD  ;
+			RET Z									; $75BF	 ; flag $FF, get out
 			; ---------------------------------------------------------
-			LD A,(DATA_11)				; $75C0
-			OR A						; $75C3
-			JP Z,L_75DC					; $75C4  ; A==0, jmp
+			; Stage completed: set distance to move down when on lift 
+			LD A,(LEVEL_COMPLETE_LIFT_DISTANCE)		; $75C0
+			OR A									; $75C3
+			JP Z,SETUP_END_LIFT_SCENE								; $75C4  ; A==0, jmp
 			; ---------------------------------------------------------
-			DEC A						; $75C7
-			LD (DATA_11),A				; $75C8  ; store a-=1
-			RET NZ						; $75CB  ; A!=0, return
+			; Player on lift, move lift down
+			DEC A									; $75C7
+			LD (LEVEL_COMPLETE_LIFT_DISTANCE),A		; $75C8  ; store a-=1
+			RET NZ									; $75CB  ; A!=0, return
 			; ---------------------------------------------------------
-			CALL L_7647					; $75CC
-			LD A,(CURRENT_LEVEL)		; $75CF
-			INC A						; $75D2  ; Next Level
-			CP $03						; $75D3  ; Completed game
-			JP NZ,SETUP_LEVEL			; $75D5  
+			; lift has reached bottom, next stage
+			CALL L_7647								; $75CC
+			LD A,(CURRENT_LEVEL)					; $75CF
+			INC A									; $75D2  ; Next Level
+			CP $03									; $75D3  ; Completed game
+			JP NZ,SETUP_LEVEL						; $75D5  
 			; ---------------------------------------------------------
-			; reset back to first level 
-			XOR A						; $75D8	 
-			JP SETUP_LEVEL				; $75D9
+			; All Level Completed - Reset back to first level 
+			XOR A									; $75D8	 
+			JP SETUP_LEVEL							; $75D9
 			; ---------------------------------------------------------
-L_75DC:		LD HL,(POS_XY)				; $75DC
+			; Setup end
+SETUP_END_LIFT_SCENE:		
+			LD HL,(POS_XY)				; $75DC
 			LD A,D						; $75DF
 			SUB $10						; $75E0
 			CP H						; $75E2
@@ -2462,7 +2510,7 @@ L_75DC:		LD HL,(POS_XY)				; $75DC
 			DEC L						; $75EE
 			CP L						; $75EF
 			RET C						; $75F0  ; A < L, return
-			LD HL,SPRITE24x16_DATA				; $75F1
+			LD HL,SPRITE24x16_DATA		; $75F1
 			LD A,$83					; $75F4
 			CALL DRAW4X4SPRITE			; $75F6
 			LD A,$0C					; $75F9
@@ -2470,7 +2518,7 @@ L_75DC:		LD HL,(POS_XY)				; $75DC
 			LD A,E						; $75FE
 			ADD A,$08					; $75FF
 			LD E,A						; $7601
-			LD HL,SPRITE24x16_DATA				; $7602
+			LD HL,SPRITE24x16_DATA		; $7602
 			LD A,$84					; $7605
 			CALL DRAW4X4SPRITE			; $7607
 			LD A,$0D					; $760A
@@ -2484,24 +2532,26 @@ L_75DC:		LD HL,(POS_XY)				; $75DC
 			LD A,$0E					; $7617
 			CALL L_9FA2					; $7619
 			LD A,$FF					; $761C
-			LD (INPUT_ENABLED),A				; $761E
-			LD A,$40					; $7621
-			LD (DATA_11),A				; $7623
+			LD (INPUT_ENABLED),A		; $761E
+			LD A,$40								; $7621  ; Lifts travel distance
+			LD (LEVEL_COMPLETE_LIFT_DISTANCE),A		; $7623
 			LD DE,(POS_XY)				; $7626
 			LD B,D						; $762A
 			LD C,E						; $762B
-			LD HL,SPRITE24x16_DATA					; $762C
-			LD (SPRITE_GFX_BASE),HL				; $762F
-			LD (BACKSHOT_GFX_BASE),HL				; $7632
-			LD (MACE_GFX_BASE),HL				; $7635
+			LD HL,SPRITE24x16_DATA		; $762C
+			LD (SPRITE_GFX_BASE),HL		; $762F
+			LD (BACKSHOT_GFX_BASE),HL	; $7632
+			LD (MACE_GFX_BASE),HL		; $7635
 			CALL L_6953					; $7638
 			XOR A						; $763B
-			LD (BACKSHOT_ENABLE),A				; $763C
-			LD (MACE_ENABLE),A				; $763F
+			LD (BACKSHOT_ENABLE),A		; $763C
+			LD (MACE_ENABLE),A			; $763F
 			RET							; $7642
 
-DATA_11:
-			defb $00,$00,$00,$FF    	; $7643 
+LEVEL_COMPLETE_LIFT_DISTANCE:
+			defb $00
+LEVEL_COMPLETE_DATA
+			defb $00,$00,$FF    	
 
 L_7647:		CALL CLR_GAME_SCREEN		; $7647
 			XOR A						; $764A
@@ -2702,7 +2752,7 @@ L_78D4:
 			PUSH DE				; $78D6
 			PUSH HL				; $78D7
 			LD C,$00				; $78D8
-			LD HL,$78FE				; $78DA
+			LD HL,L78FE				; $78DA
 			LD B,$06				; $78DD
 L_78DF:
 			LD A,(DE)				; $78DF
@@ -2714,7 +2764,6 @@ L_78DF:
 			JR C,L_78EE				; $78E8
 			SUB $0A				; $78EA
 			JR L_78EF				; $78EC
-
 L_78EE:
 			DEC C				; $78EE
 L_78EF:
@@ -2728,15 +2777,19 @@ L_78EF:
 			POP AF				; $78F7
 			RET				; $78F8
 
-			defb $30,$30                                        ; $78F9 00
-			defb $30,$30,$30,$30,$30,$30,$30,$30				; $78FB 00000000
-			defb $32,$35,$30,$30,$30,$31,$30,$30				; $7903 25000100
-			defb $30,$30,$30,$32,$35,$30,$30,$30				; $790B 00025000
-			defb $30,$35,$30,$30,$30,$30,$31,$30				; $7913 05000010
-			defb $30,$30,$30,$30,$32,$30,$30,$30				; $791B 00002000
-			defb $30,$30,$35,$30,$30,$30,$30,$31				; $7923 00500001
-			defb $30,$30,$30,$30,$30,$32,$30,$30				; $792B 00000200
-			defb $30,$30                                        ; $7933 00
+			defb $30,$30                         	 	; $78F9 00
+			defb $30,$30,$30							; $78FB
+L78FE:
+			defb $30,$30,$30,$30,$30					; $78FE
+			defb $32									; $7903
+L7904:
+			defb $35,$30,$30,$30,$31,$30,$30
+			defb $30,$30,$30,$32,$35,$30,$30,$30		; $790B 00025000
+			defb $30,$35,$30,$30,$30,$30,$31,$30		; $7913 05000010
+			defb $30,$30,$30,$30,$32,$30,$30,$30		; $791B 00002000
+			defb $30,$30,$35,$30,$30,$30,$30,$31		; $7923 00500001
+			defb $30,$30,$30,$30,$30,$32,$30,$30		; $792B 00000200
+			defb $30,$30                             	; $7933 00
 
 L_7935:
 			LD HL,($7973)				; $7935
@@ -3108,7 +3161,7 @@ SHOT_HIT:	CALL DRAW_PLR_BULLETS		; $7B27  ; Erase bullet
 			LD (HL),$00					; $7B2B  ; Deactivate bullet (delta=0)
 			INC HL						; $7B2D	
 			CALL SPARKLE_EFFECT			; $7B2E  ; Bullet splash effect (hit scene)
-			CALL L_74EF					; $7B31
+			CALL DESTORY_TILE_FROM_BULLET					; $7B31
 			JR CHECK_BULLETS_LOOP		; $7B34
 
 ; Bullet list: X,Y,Delta (x3 Bytes)
@@ -3461,9 +3514,9 @@ BOMB_COLLISION:
 			CALL SET_COLLISION_BOX			; $7D61
 
 
-			CALL L_74E2						; $7D64
-			CALL L_74E2						; $7D67
-			CALL L_74E2						; $7D6A
+			CALL DESTORY_TILE_FROM_SUPER_WEAPON						; $7D64
+			CALL DESTORY_TILE_FROM_SUPER_WEAPON						; $7D67
+			CALL DESTORY_TILE_FROM_SUPER_WEAPON						; $7D6A
 
 			LD A,$02						; $7D6D
 			CALL SET_COLLISION_BOX			; $7D6F
@@ -3765,9 +3818,9 @@ L_7F97:		LD A,C					; $7F97
 			CALL SPARKLE_EFFECT		; $7F9B
 			LD A,$01				; $7F9E
 			CALL SET_COLLISION_BOX				; $7FA0
-			CALL L_74E2				; $7FA3
-			CALL L_74E2				; $7FA6
-			CALL L_74E2				; $7FA9
+			CALL DESTORY_TILE_FROM_SUPER_WEAPON				; $7FA3
+			CALL DESTORY_TILE_FROM_SUPER_WEAPON				; $7FA6
+			CALL DESTORY_TILE_FROM_SUPER_WEAPON				; $7FA9
 			LD A,$02				; $7FAC
 			CALL SET_COLLISION_BOX				; $7FAE
 			PUSH BC					; $7FB1
@@ -3787,9 +3840,9 @@ L_7FBF:		LD A,B					; $7FBF
 			CALL SPARKLE_EFFECT		; $7FC3
 			LD A,$01				; $7FC6
 			CALL SET_COLLISION_BOX				; $7FC8
-			CALL L_74E2				; $7FCB
-			CALL L_74E2				; $7FCE
-			CALL L_74E2				; $7FD1
+			CALL DESTORY_TILE_FROM_SUPER_WEAPON				; $7FCB
+			CALL DESTORY_TILE_FROM_SUPER_WEAPON				; $7FCE
+			CALL DESTORY_TILE_FROM_SUPER_WEAPON				; $7FD1
 			LD A,$02				; $7FD4
 			CALL SET_COLLISION_BOX				; $7FD6
 			PUSH BC					; $7FD9
@@ -6179,18 +6232,18 @@ SPAWN_SNAKES:
 			PUSH HL					; $91B7
 			PUSH IX					; $91B8
 			; -----------------------------------------------
-			LD IX,(L9265)			; $91BA  ; next free slot 
+			LD IX,(NEXT_SNAKE_SLOT)			; $91BA  ; next free slot 
 			LD HL,SPRITE24x16_DATA	; $91BE  ;
 			LD (IX+$05),L			; $91C1  ; gfx data, low
 			LD (IX+$06),H			; $91C4  ; gfx data, high
 			; ----------------------------------------------- 
-			LD HL,L91FE				; $91C7	
+			LD HL,SNAKES_INFO		; $91C7	
 			SUB $F8					; $91CA  ; Index (0, 1, 2...)
 			ADD A,A					; $91CC  ; x2
 			ADD A,A					; $91CD	 ; x4
 			LD L,A					; $91CE  ; Index Offset
 			LD H,$00				; $91CF  
-			LD BC,L91FE				; $91D1
+			LD BC,SNAKES_INFO		; $91D1
 			ADD HL,BC				; $91D4	 ; Base offset
 			; -----------------------------------------------
 			LD A,(HL)				; $91D5
@@ -6209,18 +6262,18 @@ SPAWN_SNAKES:
 			LD DE,$0007				; $91EA  ; Struct size = 7
 			ADD IX,DE				; $91ED
 			LD (IX+$00),$FF			; $91EF ;  Mark end
-			LD (L9265),IX			; $91F3 ;  Set next free slot
+			LD (NEXT_SNAKE_SLOT),IX			; $91F3 ;  Set next free slot
 			POP IX					; $91F7
 			POP HL					; $91F9
 			POP DE					; $91FA
 			POP BC					; $91FB
 			POP AF					; $91FC
 			RET						; $91FD
-L91FE:
+SNAKES_INFO:
 			defb $00,$04,$01,$01,$02,$00,$02,$01,$00,$FC,$03,$01,$FE			
 			defb $00,$04,$01,$00,$04,$01,$02,$02,$00,$02,$02,$00,$FC,$03,$02,$FE			
 			defb $00,$04,$02							
-L921E:
+SNAKES_TABLE:
 			defb $20,$45,$78,$B0,$20						; $921E
 			defb $8A,$00,$00,$10,$CF,$3C,$F0,$30			; $9223
 			defb $CF,$3C,$F0,$30,$00,$00,$00,$00			; $922B
@@ -6231,10 +6284,10 @@ L921E:
 			defb $45,$78,$B0,$20,$45,$78,$B0,$20			; $9253
 			defb $45,$78,$B0,$20,$45,$78,$B0,$20			; $925B
 			defb $45,$FF									; $9263
-L9265:
+NEXT_SNAKE_SLOT:
 			defb $00,$00                            		; $9265
 
-SNAKES:		LD IX,L921E				; $9267
+SNAKES:		LD IX,SNAKES_TABLE				; $9267
 L_926B:		LD A,(IX+$00)				; $926B
 			CP $FF				; $926E
 			RET Z				; $9270
@@ -6799,7 +6852,7 @@ DATA_05:
 			defb $33,$22,$9B,$33,$FF                            ; $97EB 3".3.
 
 PROXIMITY_ROCKET
-			LD HL,$9879				; $97F0
+			LD HL,PROXIMITY_ROCKET_DATA			; $97F0
 L_97F3:
 			LD A,(HL)				; $97F3
 			CP $FF				; $97F4
@@ -6837,8 +6890,8 @@ L_9817:		INC HL				; $9817
 			LD L,A				; $9823
 			JP (HL)				; $9824
 
-			defb $00,$46,$00,$00,$31,$98                        ; $9825 .F..1.
-			defb $47,$00,$00,$55,$98,$FF                        ; $982B G..U..
+			defb $00,$46,$00,$00,$31,$98        ; $9825 .F..1.
+			defb $47,$00,$00,$55,$98,$FF        ; $982B G..U..
 
 			LD A,(POS_XY)				; $9831
 			CP E				; $9834
@@ -6868,7 +6921,7 @@ L_9817:		INC HL				; $9817
 			CALL L_96D8				; $9873
 			JP L_9803				; $9876
 
-
+PROXIMITY_ROCKET_DATA:
 			defb $9B,$33                                        ; $9879 .3
 			defb $33,$22,$9B,$33,$67,$00,$9B,$22				; $987B 3".3g.."
 			defb $22,$00,$9B,$22,$33,$22,$9B,$22				; $9883 ".."3"."
@@ -7113,7 +7166,7 @@ FOUND_ITEM:
 			CALL GET_RAND_VALUE						; $9AB1
 			INC A							; $9AB4
 			CALL L_9FA2						; $9AB5
-L_9AB8:		LD DE,$7904						; $9AB8
+L_9AB8:		LD DE,L7904						; $9AB8
 			CALL L_78D4						; $9ABB
 			CALL UPDATE_SCORE_TXT						; $9ABE
 			XOR A							; $9AC1
