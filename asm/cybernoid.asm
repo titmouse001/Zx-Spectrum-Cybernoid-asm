@@ -1443,47 +1443,47 @@ L_6D7F:		LD A,(HL)				; $6D7F
 L_6D96:		PUSH BC				; $6D96
 			PUSH DE				; $6D97
 			PUSH HL				; $6D98
-			LD HL,SPRITE24x16_DATA				; $6D99
+			LD HL,SPRITE24x16_DATA			; $6D99
 			CALL DRAW4X4SPRITE				; $6D9C
 
-			CALL ADD_EXPLOSION_WITH_SFX				; $6D9F
-			LD L,A				; $6DA2
-			LD H,$00				; $6DA3
-			ADD HL,HL				; $6DA5
-			ADD HL,HL				; $6DA6
-			LD BC,$E9B9				; $6DA7
-			ADD HL,BC				; $6DAA
-			CALL L_6DE0				; $6DAB
-			LD C,(HL)				; $6DAE
-			CALL ADD_DEBRIS				; $6DAF
-			CALL ADD_DEBRIS				; $6DB2
-			INC HL				; $6DB5
-			LD A,E				; $6DB6
-			ADD A,$04				; $6DB7
-			LD E,A				; $6DB9
-			LD C,(HL)				; $6DBA
-			CALL ADD_DEBRIS				; $6DBB
-			CALL ADD_DEBRIS				; $6DBE
-			INC HL				; $6DC1
-			SUB $04				; $6DC2
-			LD E,A				; $6DC4
-			LD A,D				; $6DC5
-			ADD A,$08				; $6DC6
-			LD D,A				; $6DC8
-			LD C,(HL)				; $6DC9
-			CALL ADD_DEBRIS				; $6DCA
-			CALL ADD_DEBRIS				; $6DCD
-			INC HL				; $6DD0
-			LD A,E				; $6DD1
-			ADD A,$04				; $6DD2
-			LD E,A				; $6DD4
-			LD C,(HL)				; $6DD5
-			CALL ADD_DEBRIS				; $6DD6
-			CALL ADD_DEBRIS				; $6DD9
-			POP HL				; $6DDC
-			POP DE				; $6DDD
-			POP BC				; $6DDE
-			RET				; $6DDF
+			CALL ADD_EXPLOSION_WITH_SFX		; $6D9F
+			LD L,A							; $6DA2
+			LD H,$00						; $6DA3
+			ADD HL,HL						; $6DA5
+			ADD HL,HL						; $6DA6
+			LD BC,COLOUR_LOOKUP				; $6DA7
+			ADD HL,BC						; $6DAA
+			CALL L_6DE0						; $6DAB
+			LD C,(HL)						; $6DAE
+			CALL ADD_DEBRIS					; $6DAF
+			CALL ADD_DEBRIS					; $6DB2
+			INC HL							; $6DB5
+			LD A,E							; $6DB6
+			ADD A,$04						; $6DB7
+			LD E,A							; $6DB9
+			LD C,(HL)						; $6DBA
+			CALL ADD_DEBRIS					; $6DBB
+			CALL ADD_DEBRIS					; $6DBE
+			INC HL							; $6DC1
+			SUB $04							; $6DC2
+			LD E,A							; $6DC4
+			LD A,D							; $6DC5
+			ADD A,$08						; $6DC6
+			LD D,A							; $6DC8
+			LD C,(HL)						; $6DC9
+			CALL ADD_DEBRIS					; $6DCA
+			CALL ADD_DEBRIS					; $6DCD
+			INC HL							; $6DD0
+			LD A,E							; $6DD1
+			ADD A,$04						; $6DD2
+			LD E,A							; $6DD4
+			LD C,(HL)						; $6DD5
+			CALL ADD_DEBRIS					; $6DD6
+			CALL ADD_DEBRIS					; $6DD9
+			POP HL							; $6DDC
+			POP DE							; $6DDD
+			POP BC							; $6DDE
+			RET								; $6DDF
 
 L_6DE0:
 	
@@ -2036,28 +2036,21 @@ BACKGROUND_DONE:
 TILE_SETUP_LOOP:		
 			CALL GET_CACHED_TILE_AS_HL		; $72D2
 			LD A,(HL)						; $72D5
-			CP $E9							; $72D6  
+			CP $E9							; $72D6  ; special
 			JR C,L_72DF						; $72D8
-			LD (HL),$00						; $72DA
-
+			LD (HL),$00						; $72DA  
 
 			JP L_72EC						; $72DC
 L_72DF:		OR A							; $72DF
 			CALL NZ,L_732A					; $72E0
-
 			CALL SETUP_ANIMATED_TILES		; $72E3  ; Animated Tiles
 			CALL SETUP_NEST					; $72E6  ; nest
-
-			CALL SETUP_TILES_BY_GROUP				; $72E9  ; Volcano
-			
-			
-			
+			CALL SETUP_TILES_BY_GROUP		; $72E9  ; Volcano
 L_72EC:	
-
 			CALL SPAWN_LANE_GUARDIANS		; $72EC
  			CALL SPAWN_SNAKES				; $72EF
 			CALL SPAWN_ENEMY_SHIPS			; $72F2  ; Generate flying enemies
-			CALL PLACE_PICKUPS				; $72F5  ; first time pick up (mace,+1 items)
+			CALL FIND_PLACE_PICKUP				; $72F5  ; first time pick up (mace,+1 items)
 
 			; move to next Xpos
 			LD A,E							; $72F8
@@ -2510,24 +2503,24 @@ SETUP_END_LIFT_SCENE:
 			LD HL,SPRITE24x16_DATA		; $75F1
 			LD A,$83					; $75F4
 			CALL DRAW4X4SPRITE			; $75F6
-			LD A,$0C					; $75F9
-			CALL L_9FA2					; $75FB
+			LD A,$0C					; $75F9  ; Left lift gfx
+			CALL PLACE_PICKUP					; $75FB
 			LD A,E						; $75FE
 			ADD A,$08					; $75FF
 			LD E,A						; $7601
 			LD HL,SPRITE24x16_DATA		; $7602
 			LD A,$84					; $7605
 			CALL DRAW4X4SPRITE			; $7607
-			LD A,$0D					; $760A
-			CALL L_9FA2					; $760C
+			LD A,$0D					; $760A  ; Right lift gfx
+			CALL PLACE_PICKUP					; $760C
 			LD A,D						; $760F
 			SUB $10						; $7610
 			LD D,A						; $7612
 			LD A,E						; $7613
 			SUB $04						; $7614
 			LD E,A						; $7616
-			LD A,$0E					; $7617
-			CALL L_9FA2					; $7619
+			LD A,$0E					; $7617  ; Ship Icon (spare)
+			CALL PLACE_PICKUP					; $7619
 			LD A,$FF					; $761C
 			LD (INPUT_ENABLED),A		; $761E
 			LD A,$40								; $7621  ; Lifts travel distance
@@ -2559,13 +2552,13 @@ L_7647:		CALL CLR_GAME_SCREEN		; $7647
 			LD DE,$1038					; $7656  ; D=Y,E=X
 			; ----------------------------------------------------------------
 			LD A,$0C					; $7659  ; 
-			CALL L_9FA2					; $765B  ; Add platform lift (left part)
+			CALL PLACE_PICKUP					; $765B  ; Add platform lift (left part)
 			; ----------------------------------------------------------------
 			LD A,E						; $765E
 			ADD A,$08					; $765F  ; Xpos
 			LD E,A						; $7661
 			LD A,$0D					; $7662	 ; 
-			CALL L_9FA2					; $7664  ; Add platforms lift (right part)
+			CALL PLACE_PICKUP					; $7664  ; Add platforms lift (right part)
 			; ----------------------------------------------------------------
 			LD A,D						; $7667
 			SUB $10						; $7668  ; Y-=16
@@ -2574,7 +2567,7 @@ L_7647:		CALL CLR_GAME_SCREEN		; $7647
 			SUB $04						; $766C  ; X+=4, center on lift
 			LD E,A						; $766E
 			LD A,$0E					; $766F
-			CALL L_9FA2					; $7671  ; add player's ship
+			CALL PLACE_PICKUP					; $7671  ; add player's ship
 
 			LD B,$60					; $7674
 			;---------------------------------------------
@@ -7165,7 +7158,7 @@ FOUND_ITEM:
 			LD A,$0A						; $9AAF
 			CALL GET_RAND_VALUE						; $9AB1
 			INC A							; $9AB4
-			CALL L_9FA2						; $9AB5
+			CALL PLACE_PICKUP						; $9AB5
 L_9AB8:		LD DE,L7904						; $9AB8
 			CALL L_78D4						; $9ABB
 			CALL UPDATE_SCORE_TXT						; $9ABE
@@ -7495,7 +7488,8 @@ L_9C49:		CP $90				; $9C49
 			defb $01,$03,$01,$03,$01,$03,$01,$02				; $9F93 ........
 			defb $01,$02,$01,$01,$01,$01,$E1                    ; $9F9B .......
 
-L_9FA2:		PUSH AF				; $9FA2
+PLACE_PICKUP:		
+			PUSH AF				; $9FA2
 			PUSH BC				; $9FA3
 			PUSH DE				; $9FA4
 			PUSH HL				; $9FA5
@@ -7738,38 +7732,41 @@ L_A0F6:		LD (IX+$00),$00				; $A0F6
 			defb $A0,$00,$8C,$47,$47,$00,$00,$F6				; $A1CB ...GG...
 			defb $A0,$00,$FF                                    ; $A1D3 ...
 
-PLACE_PICKUPS:		
-			CP $E9				; $A1D6
-			RET C				; $A1D8
-
-			PUSH AF				; $A1D9
-			PUSH BC				; $A1DA
-			PUSH DE				; $A1DB
-			PUSH HL				; $A1DC
-			LD HL,$A1F6			; $A1DD
-			LD C,A				; $A1E0
-L_A1E1:		LD A,(HL)			; $A1E1
-			CP $FF				; $A1E2
-			JR Z,L_A1F1			; $A1E4
-			INC HL				; $A1E6
-			INC HL				; $A1E7
-			CP C				; $A1E8
-			JR NZ,L_A1E1		; $A1E9
-			DEC HL				; $A1EB
-			LD A,(HL)			; $A1EC
-			DEC D				; $A1ED
-			CALL L_9FA2			; $A1EE
-L_A1F1:		POP HL				; $A1F1
-			POP DE				; $A1F2
-			POP BC				; $A1F3
-			POP AF				; $A1F4
-			RET					; $A1F5
-
-			JP (HL)				; $A1F6
-
-			defb $0A,$EA,$01,$EB                                ; $A1F7 ....
-			defb $0B,$FF                                        ; $A1FB ..
-
+FIND_PLACE_PICKUP:	
+			; A = Current Tile (if a trigger tile, replace it with a pickup from tables 2nd pair value)
+			CP $E9						; $A1D6
+			RET C						; $A1D8  ; check values inside search range
+			PUSH AF						; $A1D9
+			PUSH BC						; $A1DA
+			PUSH DE						; $A1DB
+			PUSH HL						; $A1DC
+			LD HL,PICKUP_TABLE			; $A1DD  ; pair values, Tile trigger & replacement tile
+			LD C,A						; $A1E0 
+LOOP_PICKUP_COMPARE:
+			LD A,(HL)					; $A1E1  ; get first compare trigger value
+			CP $FF						; $A1E2
+			JR Z,END_PICKUP_PLACEMENT	; $A1E4  
+			INC HL						; $A1E6  
+			INC HL						; $A1E7
+			CP C						; $A1E8
+			JR NZ,LOOP_PICKUP_COMPARE	; $A1E9
+			; Pickup found
+			DEC HL						; $A1EB  ; Walk back to get pickup value
+			LD A,(HL)					; $A1EC  ; Get pickup value
+			DEC D						; $A1ED			
+			CALL PLACE_PICKUP					; $A1EE  ; place pickup
+END_PICKUP_PLACEMENT:
+			POP HL						; $A1F1
+			POP DE						; $A1F2
+			POP BC						; $A1F3
+			POP AF						; $A1F4
+			RET							; $A1F5
+	
+PICKUP_TABLE:
+			defb $E9,$0A		; $A1F6 ;  $E9:Trigger Tile, $0A: Container pickup
+			defb $EA,$01			 	;  $EA:Trigger Tile, $01: BackShot Pickup
+			defb $EB,$0B				;  $EB:Trigger Tile, $0B: Mace pickup
+			defb $FF 
 
 ; Draws a 24x16 pixel sprite using XOR rendering with pre-shifted graphics
 ; Inputs: A=index,C=Ypos,E=Xpos,D = ?
@@ -8490,7 +8487,7 @@ SET_TILE16X16_COL:
 			ADD HL,HL			; $A589  ; X2
 			ADD HL,HL			; $A58A  ; X4
 			
-			LD BC,$E9B9			; $A58B  ; Tile colour data
+			LD BC,COLOUR_LOOKUP		; $A58B  ; Tile colour data
 
 			ADD HL,BC			; $A58E  ; HL now colour with index
 			LD B,H				; $A58F
@@ -10843,9 +10840,8 @@ GFX_DATA16X16:
 			defb $71,$8A,$61,$0C,$71,$8A						; $E9B3
 			; END OF TILE GRAPHICS
 			;--------------------------------------------------------------------------
-
-			defb $00											; $E9B9
-			defb $00											; $E9BA
+COLOUR_LOOKUP:
+			defb $00,$00										; $E9B9
 			defb $00,$00,$43,$43,$42,$43,$43,$42				; $E9BB
 			defb $42,$43,$43,$42,$42,$43,$43,$42				; $E9C3 BCCBBCCB
 			defb $43,$43,$43,$42,$42,$43,$00,$44				; $E9CB CCCBBC.D
@@ -10856,6 +10852,7 @@ GFX_DATA16X16:
 			defb $43,$42,$00,$00,$43,$42,$47,$45				; $E9F3 CB..CBGE
 			defb $47,$45,$47,$45,$47,$45,$47,$45				; $E9FB GEGEGEGE
 			defb $47,$45,$47,$45,$47,$45,$46,$46				; $EA03 GEGEGEFF
+
 			defb $06,$06,$46,$06,$46,$06,$47,$45				; $EA0B ..F.F.GE
 			defb $47,$05,$45,$07,$05,$07,$47,$46				; $EA13 G.E...GF
 			defb $06,$06,$43,$43,$42,$42,$43,$43				; $EA1B ..CCBBCC
@@ -10866,6 +10863,7 @@ GFX_DATA16X16:
 			defb $47,$07,$44,$44,$44,$44,$04,$04				; $EA43 G.DDDD..
 			defb $04,$04,$44,$44,$44,$44,$04,$04				; $EA4B ..DDDD..
 			defb $04,$04,$47,$46,$46,$46,$06,$00				; $EA53 ..GFFF..
+
 			defb $06,$00,$06,$06,$47,$46,$06,$00				; $EA5B ....GF..
 			defb $06,$06,$47,$46,$45,$05,$46,$06				; $EA63 ..GFE.F.
 			defb $46,$06,$46,$47,$00,$00,$05,$44				; $EA6B F.FG...D
@@ -10876,8 +10874,10 @@ GFX_DATA16X16:
 			defb $42,$43,$43,$42,$00,$00,$47,$47				; $EA93 BCCB..GG
 			defb $47,$47,$47,$47,$47,$47,$47,$47				; $EA9B GGGGGGGG
 			defb $47,$47,$45,$04,$45,$04,$45,$04				; $EAA3 GGE.E.E.
+
 			defb $45,$04,$45,$04,$45,$04,$47,$47				; $EAAB E.E.E.GG
 			defb $47,$47,$47,$47,$47,$47,$47,$47				; $EAB3 GGGGGGGG
+
 			defb $47,$47,$47,$47,$47,$47,$47,$47				; $EABB GGGGGGGG
 			defb $47,$47,$47,$47,$47,$47,$47,$47				; $EAC3 GGGGGGGG
 			defb $47,$47,$47,$47,$47,$47,$47,$45				; $EACB GGGGGGGE
@@ -10918,6 +10918,7 @@ GFX_DATA16X16:
 			defb $47,$07,$47,$45,$47,$45,$47,$47				; $EBE3 G.GEGEGG
 			defb $47,$47,$47,$07,$07,$07,$47,$07				; $EBEB GGG...G.
 			defb $07,$07,$47,$07,$07,$07,$47,$07				; $EBF3 ..G...G.
+
 			defb $47,$07,$44,$04,$44,$04,$44,$04				; $EBFB G.D.D.D.
 			defb $44,$04,$44,$04,$44,$04,$47,$07				; $EC03 D.D.D.G.
 			defb $47,$07,$07,$00,$07,$00,$47,$46				; $EC0B G.....GF
@@ -10930,7 +10931,7 @@ GFX_DATA16X16:
 			defb $00,$44,$44,$00,$44,$00,$45,$44				; $EC43 .DD.D.ED
 			defb $45,$44,$04,$04,$04,$04,$45,$44				; $EC4B ED....ED
 			defb $47,$45,$04,$04,$44,$04,$45,$45				; $EC53 GE..D.EE
-			defb $44,$44,$45,$44,$45,$44				; $EC5B DDEDED..
+			defb $44,$44,$45,$44,$45,$44						; $EC5B DDEDED..
 
 
 ;---------------------------------------------------------------
@@ -11911,21 +11912,21 @@ BACK_ZERO_COUNTER:	DEC HL					; $FC3B ; DURATION_1ST next
 EXIT1bitMUSIC:		JP BEEP_MUSIC_LOOP		; $FC40
 
 ; ----------------------------------------------------------------------------------
+				; Music playback variables for 1bit beeper music
+Pattern1st:		defb $07				; $FC43
+Pattern2nd		defb $17				; $FC44
+				; NOTE: Cache of read music data - playback alternates between DURATION_1ST and DURATION_2ND  
+				; It's hard to follow, but looking at INC HL at "NEXT_DATA" ($FC38), this shifts between them.
+Duration1st: 	defb $49				; $FC45
+Duration2nd:	defb $4A				; $FC46
+ReadLocation:	defb $08,$FD			; $FC47
+BeeperCounter:	defb $09				; $FC49
+				defb $00				; $FC4A
+				defb $00,$00,$1A		; $FC4B
 
-; Music playback variables for 1bit beeper music
-Pattern1st:			defb $07				; $FC43
-Pattern2nd			defb $17				; $FC44
-; NOTE: Cache of read music data - playback alternates between DURATION_1ST and DURATION_2ND  
-; It's hard to follow, but looking at INC HL at "NEXT_DATA" ($FC38), this shifts between them.
-Duration1st: 		defb $49				; $FC45
-Duration2nd:		defb $4A				; $FC46
-ReadLocation:		defb $08,$FD			; $FC47
-BeeperCounter:		defb $09				; $FC49
-					defb $00				; $FC4A
-					defb $00,$00,$1A		; $FC4B
-
-; ===============================================================================			
-; Beeper Music Data - 1 bit music when running as 48k spectrum (without AY chp)
+			; ============================================================			
+			; Beeper Music Data 
+			; 1 bit music when running as 48k spectrum (without AY chp)
 BEEPER_DATA:
 			defb $DD,$DD									; $FC4E
 			defb $2A,$AF,$AF	
@@ -11980,7 +11981,7 @@ BEEPER_DATA:
 			defb $A8,$00,$FF,$A8,$00,$FF,$A8				; $FDD3
 			; need to $FF, 2nd $FF is the true end mark
 			defb $FF,$FF	; x2 $FF, END-OF-MUSIC-MARKERS		; $FDDA
-; ===============================================================================			
+			; ====================================================================			
 			
 			defb $00,$00,$00,$00,$00,$00,$00				; $FDEC ........
 			defb $00,$00,$00,$00,$00,$00,$00,$00			; $FDE3 ........
