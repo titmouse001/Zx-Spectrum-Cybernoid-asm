@@ -40,7 +40,7 @@ SET_SOURCE_DATA		EQU $E6		; Patch icon source address (L,H)
 SETUP				EQU $EB		; Configure rendering routine via lookup table
 END_MARKER			EQU $FF		; End of draw list
 
-; Ink Colors  (for bright variants add 8)
+; Ink Colors  (these are bright variants using +8)
 INK_BLACK			EQU $CF+0+8	
 INK_BLUE			EQU $CF+1+8	
 INK_RED				EQU $CF+2+8	
