@@ -11,7 +11,7 @@ A deep dive into how Cybernoid works, by studying its original Z80 machine code.
 This project is a full disassembly of the ZX Spectrum version of Cybernoid.
 I'm working to reverse-engineer the game, adding labels, comments, and notes to make the code easier to understand. It’s a big job, starting from address only assembly instructions.
 
-![Cybernoid](/asm/images/cybernoid-1st-screen.png)  
+![Cybernoid](/asm/docs/images/cybernoid-1st-screen.png)  
 
 I'm referencing the original disassembly by Derek Bolli [^1footnote]
 , who did a fantastic job extracting the raw code. However, it's a plain instruction dump without labels, so all jumps are hardcoded to memory locations. My aim is to build on this and make it easier to follow.
