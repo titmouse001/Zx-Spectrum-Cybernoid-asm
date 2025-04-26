@@ -1,8 +1,15 @@
-# Zx-Spectrum-Cybernoid-asm
-### Cybernoid-Disasm - ZX Spectrum Game Code Analysis
+# Zx-Spectrum-Cybernoid-Assembly
 
-This project is a disassembly of Cybernoid for the ZX Spectrum.\
-My goal is to reverse-engineer the game, add meaningful labels and comments, and document the code to make it more understandable. I'm starting from address-only assembly instructions, so it’s a lot of work.
+### Cybernoid: Z80 Assembly Archaeology
+_Reverse engineering the 1988 ZX Spectrum shooter_
+
+[![Platform](https://img.shields.io/badge/ZX_Spectrum-48K-red?logo=retroarch)](https://en.wikipedia.org/wiki/ZX_Spectrum)  
+
+### Project Overview
+A deep dive into how Cybernoid works, by studying its original Z80 machine code.
+
+This project is a full disassembly of the ZX Spectrum version of Cybernoid.
+I'm working to reverse-engineer the game, adding labels, comments, and notes to make the code easier to understand. It’s a big job, starting from address only assembly instructions.
 
 ![Cybernoid](/asm/images/cybernoid-1st-screen.png)  
 
