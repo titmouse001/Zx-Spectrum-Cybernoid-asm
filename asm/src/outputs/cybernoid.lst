@@ -1,6 +1,6 @@
                         ; --------------------------------------
                         ; zasm: assemble "cybernoid.asm"
-                        ; date: 2025-04-26 21:43:22
+                        ; date: 2025-06-14 22:25:58
                         ; --------------------------------------
 
 
@@ -1929,18 +1929,31 @@
 00DF:                   SET_POS				EQU $DF		; Set absolute position (Y,X)
 00E0:                   GLOBAL_COL			EQU $E0		; Set global color attribute (paper + default ink)
 00E6:                   SET_SOURCE_DATA		EQU $E6		; Patch icon source address (L,H)
-00EB:                   SETUP				EQU $EB		; Configure rendering routine via lookup table
+00EB:                   SETUP				EQU $EB		; Modify code to pick new routine via lookup (2nd param)
 00FF:                   END_MARKER			EQU $FF		; End of draw list
+0078:                   RELATIVE_X         EQU $78
+00AF:                   RELATIVE_Y         EQU $AF
+                        
+                        
+0040:                   BRIGHT          EQU %01000000
+0000:                   BLACK			EQU %000	
+0001:                   BLUE			EQU %001	
+0002:                   RED				EQU %010
+0003:                   PURPLE			EQU %011
+0004:                   GREEN			EQU %100
+0005:                   CYAN			EQU %101
+0006:                   YELLOW			EQU %110
+0007:                   WHITE			EQU %111
                         
                         ; Ink Colors  (these are bright variants using +8)
-00D7:                   INK_BLACK			EQU $CF+0+8	
-00D8:                   INK_BLUE			EQU $CF+1+8	
-00D9:                   INK_RED				EQU $CF+2+8	
-00DA:                   INK_PURPLE			EQU $CF+3+8
-00DB:                   INK_GREEN			EQU $CF+4+8
-00DC:                   INK_CYAN			EQU $CF+5+8
-00DD:                   INK_YELLOW			EQU $CF+6+8
-00DE:                   INK_WHITE			EQU $CF+7+8
+00D7:                   INK_BLACK			EQU $CF+BLACK+8	
+00D8:                   INK_BLUE			EQU $CF+BLUE+8	
+00D9:                   INK_RED				EQU $CF+RED+8	
+00DA:                   INK_PURPLE			EQU $CF+PURPLE+8
+00DB:                   INK_GREEN			EQU $CF+GREEN+8
+00DC:                   INK_CYAN			EQU $CF+CYAN+8
+00DD:                   INK_YELLOW			EQU $CF+YELLOW+8
+00DE:                   INK_WHITE			EQU $CF+WHITE+8
                         
                         ;-----------------------------------------
                         
@@ -1992,9 +2005,7 @@
                         ;-----------------------------------------
                         
                         ;------------------------------------------------------------------
-                        
-                        			;--------------------------------------------------------------------------
-                        			; Note: $6103-$6503 is cleared early at startup
+                        			
                         			;--------------------------------------------------------------------------
                         			; $6300-6400 is the game's screen Ypos lookup table (initialied at statup)
                         			; High byte table $6400
@@ -2007,7 +2018,7 @@
                         			; - All X values in the game are stored at half-scale (i.e. 64=128 pixels)
                         			; - All Y values are at kept at pixel scale
                         			;--------------------------------------------------------------------------
-                        			    
+                        			; Note: $6103-$6503 is cleared early at startup    
 6103: 3E                			defb $3E										; $6103
 6104: 00000000          			defs $619A-$6104,0								; $6104-$6199
 6108: 00...             
@@ -2061,22 +2072,29 @@
 6542: 1E01     [24]     			LD E,$01						; $6542
 6544: CD42EF   [41]     			CALL PLAY_SFX					; $6544 ; (note: modified to RET when 48k model)
 6547: FB       [45]     			EI								; $6547
+                        
                         			; -----------------------------------------------------------
 6548: CDFC7B   [62]     			CALL RESTORE_ALL_WEAPONS		; $6548
 654B: CD1E67   [79]     			CALL INIT_MENU_SCREEN_TABLES	; $654B  
+                        			
 654E: CDA681   [96]     			CALL DO_MENU					; $654E  
 6551: CDE766   [113]    			CALL INIT_GAME_SCREEN_TABLES	; $6551
 6554: 3E04     [120]    			LD A,$04						; $6554	; starting lives
 6556: 32D378   [133]    			LD (LIVES),A					; $6556	;
-6559: 21F978   [143]    			LD HL,$78F9						; $6559
-655C: 11FA78   [153]    			LD DE,$78FA						; $655C
-655F: 010500   [163]    			LD BC,$0005						; $655F
-6562: 3630     [173]    			LD (HL),$30						; $6562
-6564: EDB0     [189|21] 			LDIR							; $6564
+                        
+                        			; Reset Score to "000000"
+6559: 21F978   [143]    			LD HL,GAME_SCORE						; $6559	
+655C: 11FA78   [153]    			LD DE,GAME_SCORE+1						; $655C
+655F: 010500   [163]    			LD BC,GAME_SCORE_LAST_DIGIT-GAME_SCORE	; $655F
+6562: 3630     [173]    			LD (HL),"0"								; $6562 ; reset char
+6564: EDB0     [189|21] 			LDIR									; $6564
+                        	;	nop
+                        ;		nop
+                        
 6566: AF       [193]    			XOR A							; $6566 ; First level
 6567: CD6574   [210]    			CALL SETUP_LEVEL				; $6567
                         	
-                        	
+                        
                         
 656A:                   INGAME_LOOP: 
                         	
@@ -2142,7 +2160,16 @@
 65DE: CDFE79   [601]    			CALL DO_EGG_TIMER			; $65DE		; Games countdown timer
 65E1: CD0B66   [618]    			CALL INGAME_RESET			; $65E1
 65E4: CDEB65   [635]    			CALL PAUSE_GAME				; $65E4
-                        		
+                        
+                        	
+                        ;***************************************************
+                        ; EXPERIMENTING WITH HI-SCORE MUSIC CODE
+                        
+                        	;	CALL FILLOUT_HI_SCORE
+                        
+                        ;***************************************************
+                        
+                        
                         	
 65E7: C36A65   [645]    		JP INGAME_LOOP					; $65E7
                         
@@ -3060,11 +3087,12 @@
 6B29:                   DRAW_LIST:	
 6B29: 7E       [ 7]     			ld a,(HL)				; $6B29
 6B2A: 23       [13]     			inc hl					; $6B2A
-6B2B: FE61     [20]     			CP $61					; $6B2B  
+6B2B: FE61     [20]     			CP 'a'					; $6B2B  
 6B2D: D2376B   [30|30]  			JP NC,SKIP_MENU_DRAW	; $6B2D  ; Bytes >= $61
-6B30: CD4A6C   [47]     			CALL ICON8x8			; $6B30  ; IN: DE=y/x, C=colour (A < $61)
-6B33: 1C       [51]     			INC E					; $6B33	 ; Next position (screenX is 0-255)  
-6B34: C3296B   [61]     			JP DRAW_LIST			; $6B34  ; keep drawing until marker
+6B30:                   L2_ICON8x8: ; value from table is a drawable icon
+6B30: CD4A6C   [17]     			CALL ICON8x8			; $6B30  ; IN: DE=y/x, C=colour (A < $61)
+6B33: 1C       [21]     			INC E					; $6B33	 ; Next position (screenX is 0-255)  
+6B34: C3296B   [31]     			JP DRAW_LIST			; $6B34  ; keep drawing until marker
 6B37:                   SKIP_MENU_DRAW:		
                         			;-----------------------------------------------------
                         			; Relative move
@@ -3171,9 +3199,10 @@
 6BBA: 46       [24]     			LD B,(HL)				; $6BBA  ; repeat count
 6BBB: 23       [30]     			INC HL					; $6BBB 
 6BBC: 7E       [37]     			LD A,(HL)				; $6BBC  ; tile ID
-6BBD: CD4A6C   [17]     L_6BBD:		CALL ICON8x8			; $6BBD
+6BBD:                   L3_ICON8x8:		
+6BBD: CD4A6C   [17]     			CALL ICON8x8			; $6BBD
 6BC0: 1C       [21]     			INC E					; $6BC0  ; Move right
-6BC1: 10FA     [29|34]  			DJNZ L_6BBD				; $6BC1
+6BC1: 10FA     [29|34]  			DJNZ L3_ICON8x8				; $6BC1
 6BC3: 23       [35]     			INC HL					; $6BC3  ; Next comman
 6BC4: C3296B   [45]     			JP DRAW_LIST			; $6BC4
 6BC7:                   L_6BC7:	
@@ -3184,9 +3213,9 @@
 6BCC: 46       [24]     			LD B,(HL)				; $6BCC ; repeat count
 6BCD: 23       [30]     			INC HL					; $6BCD
 6BCE: 7E       [37]     			LD A,(HL)				; $6BCE ; tile ID
-6BCF: CD4A6C   [17]     L_6BCF:		CALL ICON8x8			; $6BCF
+6BCF: CD4A6C   [17]     L4_ICON8x8:		CALL ICON8x8			; $6BCF
 6BD2: 14       [21]     			INC D					; $6BD2 ; Move dow
-6BD3: 10FA     [29|34]  			DJNZ L_6BCF				; $6BD3
+6BD3: 10FA     [29|34]  			DJNZ L4_ICON8x8				; $6BD3
 6BD5: 23       [35]     			INC HL					; $6BD5 ; Next command
 6BD6: C3296B   [45]     			JP DRAW_LIST			; $6BD6
 6BD9:                   L_6BD9:	
@@ -3209,12 +3238,12 @@
 6BF3: 21F1C2   [62]     			LD HL,FONT_DATA					; $6BF3
 6BF6: 22556C   [78]     			LD (ICON_LD_ADDR+1),HL			; $6BF6
 6BF9: 3E20     [85]     			LD A,$20						; $6BF9  ; Tile ID
-6BFB: CD4A6C   [102]    			CALL ICON8x8					; $6BFB
-6BFE: 1C       [106]    			INC E							; $6BFE  ; Move right
-6BFF: E1       [116]    			POP HL							; $6BFF
-6C00: 22556C   [132]    			LD (ICON_LD_ADDR+1),HL			; $6C00
-6C03: E1       [142]    			POP HL							; $6C03
-6C04: C3296B   [152]    			JP DRAW_LIST					; $6C04
+6BFB: CD4A6C   [17]     L1_ICON8x8:	CALL ICON8x8					; $6BFB
+6BFE: 1C       [21]     			INC E							; $6BFE  ; Move right
+6BFF: E1       [31]     			POP HL							; $6BFF
+6C00: 22556C   [47]     			LD (ICON_LD_ADDR+1),HL			; $6C00
+6C03: E1       [57]     			POP HL							; $6C03
+6C04: C3296B   [67]     			JP DRAW_LIST					; $6C04
                         			; --------------------------------------------------------------------------			
 6C07: FEE8     [ 7]     L_6C07:		CP $E8					; $6C07  ;$E6:store
 6C09: 2008     [14|19]  			JR NZ,L_6C13			; $6C09
@@ -3228,8 +3257,8 @@
 6C1A: FEEA     [ 7]     L_6C1A:		CP $EA					; $6C1A
 6C1C: 2003     [14|19]  			JR NZ,L_6C21			; $6C1C
 6C1E: C3296B   [24]     			JP DRAW_LIST			; $6C1E
-6C21: FEEB     [ 7]     L_6C21:		CP $EB					; $6C21  ; 
-6C23: C0       [12|18]  			RET NZ					; $6C23  ; Return if not (Z flag set if $EB)
+6C21: FEEB     [ 7]     L_6C21:		CP $EB					; $6C21   
+6C23: C0       [12|18]  			RET NZ					; $6C23  ; 
                         
                         			;  (notes: for menu, here HL = $8235 +1)
                         			;------------------------------------------------------------------
@@ -3239,16 +3268,16 @@
 6C26: 6E       [41]     			LD L,(HL)				; $6C26       
 6C27: 2600     [48]     			LD H,$00				; $6C27
 6C29: 29       [59]     			ADD HL,HL				; $6C29  ; X2
-6C2A: 01446C   [69]     			LD BC,$6C44				; $6C2A  ; Lookup  table
+6C2A: 01446C   [69]     			LD BC,FUNC_DRAW_LIST	; $6C2A  ; Lookup  table
 6C2D: 09       [80]     			ADD HL,BC				; $6C2D  ; HL = $6C44 + (2 * index)
 6C2E: 7E       [87]     			LD A,(HL)				; $6C2E  ; Load low byte of target address
 6C2F: 23       [93]     			INC HL					; $6C2F  ; 
 6C30: 66       [100]    			LD H,(HL)				; $6C30  ; Load high byte
 6C31: 6F       [104]    			LD L,A					; $6C31
-6C32: 22316B   [120]    			LD ($6B31),HL			; $6C32  ; Patch CALL ICON8x8 to use new routine
-6C35: 22BE6B   [136]    			LD ($6BBE),HL			; $6C35  ; 
-6C38: 22D06B   [152]    			LD ($6BD0),HL			; $6C38  ; 
-6C3B: 22FC6B   [168]    			LD ($6BFC),HL			; $6C3B  ; 
+6C32: 22316B   [120]    			LD (L2_ICON8x8+1),HL		; $6C32  ; Patch calls in the code that 
+6C35: 22BE6B   [136]    			LD (L3_ICON8x8+1),HL			; $6C35  ;  were using ICON8x8 to use new routine 
+6C38: 22D06B   [152]    			LD (L4_ICON8x8+1),HL			; $6C38  ;  from the FUNC_DRAW_LIST table 
+6C3B: 22FC6B   [168]    			LD (L1_ICON8x8+1),HL		; $6C3B  ;  (call address is replaced!)
 6C3E: E1       [178]    			POP HL					; $6C3E
 6C3F: C1       [188]    			POP BC					; $6C3F
 6C40: 23       [194]    			INC HL					; $6C40  
@@ -3257,8 +3286,12 @@
                         			;------------------------------------------------------------------
                         			; Setup Command ($EB):
                         			; - Table entries are addresses of rendering functions (e.g ICON8x8)
-6C44: 4A6C876C          			defb $4A,$6C,$87,$6C,$87,$6C     ; $6C44  ; Lookup table: addresses for rendering routines
-6C48: 876C              
+                        	;		defb $4A,$6C,$87,$6C,$87,$6C     ; $6C44  ; Lookup table: addresses for rendering routines
+6C44:                   FUNC_DRAW_LIST:  ; looks like this table was never fully used, last 2 items are place holders
+6C44: 4A6C              			defw ICON8x8
+6C46: 876C              			defw L_6C87  ; DO NOTHING - RET
+6C48: 876C              			defw L_6C87	 ; DO NOTHING - RET
+                        			
                         			;------------------------------------------------------------------
                         
                         ; == DISPLAY 8x8 icon ==
@@ -3319,8 +3352,8 @@
 6C84: D1       [138]    			POP DE				; $6C84
 6C85: F1       [148]    			POP AF				; $6C85
 6C86: C9       [158]    			RET					; $6C86
-                        
-6C87: C9       [168]    			RET					; $6C87
+6C87:                   L_6C87
+6C87: C9       [10]     			RET					; $6C87
                         
 6C88:                   CREATE_EJECT_VELOCITY:
 6C88: 3E06     [ 7]     			LD A,$06					; $6C88
@@ -3874,9 +3907,9 @@
 70F6: 200E     [222|227]			JR NZ,USE_AY			; $70F6
                         			;----------------------------------------------------------
                         			; INGAME BEEPER SFX DRIVER - called at a 50% duty cycle
-70F8: 3A1B71   [235]    			LD A,($711B)					; $70F8 ; get
+70F8: 3A1B71   [235]    			LD A,(DUTY_CYCLE)					; $70F8 ; get
 70FB: EE01     [242]    			XOR $01							; $70FB ; flip (A=!A)
-70FD: 321B71   [255]    			LD ($711B),A					; $70FD ; store
+70FD: 321B71   [255]    			LD (DUTY_CYCLE),A					; $70FD ; store
 7100: CCBA85   [265|272]			CALL Z,POLL_SFX_USING_BEEPER 	; $7100 
                         			;----------------------------------------------------------
 7103: C30971   [275]    			JP EXIT_IM2			; $7103
@@ -4946,7 +4979,7 @@
 78D6: D5       [33]     			PUSH DE				; $78D6
 78D7: E5       [44]     			PUSH HL				; $78D7
 78D8: 0E00     [51]     			LD C,$00				; $78D8
-78DA: 21FE78   [61]     			LD HL,L78FE				; $78DA
+78DA: 21FE78   [61]     			LD HL,GAME_SCORE_LAST_DIGIT				; $78DA
 78DD: 0606     [68]     			LD B,$06				; $78DD
 78DF:                   L_78DF:
 78DF: 1A       [ 7]     			LD A,(DE)				; $78DF
@@ -4971,26 +5004,31 @@
 78F7: F1       [67]     			POP AF				; $78F7
 78F8: C9       [77]     			RET				; $78F8
                         
-78F9: 3030              			defb $30,$30                         	 	; $78F9 00
-78FB: 303030            			defb $30,$30,$30							; $78FB
-78FE:                   L78FE:
-78FE: 30303030          			defb $30,$30,$30,$30,$30					; $78FE
-7902: 30                
-7903: 32                			defb $32									; $7903
+78F9:                   GAME_SCORE:
+78F9: 30303030          			defb "00000"
+78FD: 30                
+78FE:                   GAME_SCORE_LAST_DIGIT:
+78FE: 30                			defb "0"
+                        
+78FF: 30303030          			defb $30,$30,$30,$30,$32		; $78FF						
+7903: 32                
 7904:                   L7904:
-7904: 35303030          			defb $35,$30,$30,$30,$31,$30,$30
-7908: 313030            
-790B: 30303032          			defb $30,$30,$30,$32,$35,$30,$30,$30		; $790B 00025000
-790F: 35303030          
-7913: 30353030          			defb $30,$35,$30,$30,$30,$30,$31,$30		; $7913 05000010
-7917: 30303130          
-791B: 30303030          			defb $30,$30,$30,$30,$32,$30,$30,$30		; $791B 00002000
-791F: 32303030          
-7923: 30303530          			defb $30,$30,$35,$30,$30,$30,$30,$31		; $7923 00500001
-7927: 30303031          
-792B: 30303030          			defb $30,$30,$30,$30,$30,$32,$30,$30		; $792B 00000200
-792F: 30323030          
-7933: 3030              			defb $30,$30                             	; $7933 00
+7904: 35303030          			defb $35,$30,$30,$30,$31,$30
+7908: 3130              
+790A: 30303030          			defb $30,$30,$30,$30,$32,$35
+790E: 3235              
+7910: 30303030          			defb $30,$30,$30,$30,$35,$30
+7914: 3530              
+7916: 30303031          			defb $30,$30,$30,$31,$30,$30
+791A: 3030              
+791C: 30303032          			defb $30,$30,$30,$32,$30,$30
+7920: 3030              
+7922: 30303035          			defb $30,$30,$30,$35,$30,$30
+7926: 3030              
+7928: 30303130          			defb $30,$30,$31,$30,$30,$30
+792C: 3030              
+792E: 30303230          			defb $30,$30,$32,$30,$30,$30,$30                             
+7932: 303030            
                         
 7935:                   L_7935:
 7935: 2A7379   [16]     			LD HL,($7973)				; $7935
@@ -6594,9 +6632,10 @@
 8324: 110F0C   [116]    			LD DE,$0C0F						; $8324	 ; Y/X coords of new keys
 8327: 0604     [123]    			LD B,$04						; $8327  ; amount to define
                         
+                        			; ask for new key
 8329: C5       [11]     L_8329:		PUSH BC						; $8329
-832A: 3E3F     [18]     			LD A,$3F					; $832A
-832C: 0E44     [25]     			LD C,$44					; $832C
+832A: 3E3F     [18]     			LD A,"?"					; $832A  ; new char prompt
+832C: 0E44     [25]     			LD C,BRIGHT+GREEN					; $832C  ; colour 01000100
 832E: CD4A6C   [42]     			CALL ICON8x8				; $832E
 8331: D5       [53]     			PUSH DE						; $8331
                         
@@ -8981,221 +9020,264 @@
 947D: F1C2              			defw FONT_DATA	
 947F: DF0905            			defb SET_POS,$09,$05
 9482: E0                			defb GLOBAL_COL  
-9483: 44435942          			defb $44,$43,$59,$42,$45,$52,$4E,$4F				; $9483 DCYBERNO
+9483: 44435942          			defb "DCYBERNO"										; $9483 DCYBERNO
 9487: 45524E4F          
-948B: 49442048          			defb $49,$44,$20,$48,$41,$4C,$4C,$20				; $948B ID HALL 
+948B: 49442048          			defb "ID HALL "										; $948B ID HALL 
 948F: 414C4C20          
-9493: 4F462046          			defb $4F,$46,$20,$46,$41,$4D,$45,$FF				; $9493 OF FAME.
+9493: 4F462046          			defb "OF FAME",$FF									; $9493 OF FAME.
 9497: 414D45FF          
 949B: 00                			defb $00											; $949B .
 949C:                   HI_SCORE_TEXT:			
-949C: 52414646          			defb $52,$41,$46,$46,$41,$45,$4C					; $949C  RAFFAEL
-94A0: 41454C            
-94A3: 45202030          			defb $45,$20,$20,$30,$31,$35,$30,$30				; $94A3 E  01500
-94A7: 31353030          
-94AB: 30535552          			defb $30,$53,$55,$52,$59,$41,$4E,$49				; $94AB 0SURYANI
-94AF: 59414E49          
-94B3: 20202030          			defb $20,$20,$20,$30,$31,$30,$30,$30				; $94B3    01000
-94B7: 31303030          
-94BB: 30424F4E          			defb $30,$42,$4F,$4E,$4E,$49,$45,$20				; $94BB 0BONNIE 
-94BF: 4E494520          
-94C3: 20202030          			defb $20,$20,$20,$30,$30,$35,$30,$30				; $94C3    00500
-94C7: 30353030          
-94CB: 30515545          			defb $30,$51,$55,$45,$45,$4E,$20,$20				; $94CB 0QUEEN  
-94CF: 454E2020          
-94D3: 20202030          			defb $20,$20,$20,$30,$30,$32,$35,$30				; $94D3    00250
-94D7: 30323530          
-94DB: 304E4943          			defb $30,$4E,$49,$43,$4B,$20,$42,$4F				; $94DB 0NICK BO
-94DF: 4B20424F          
-94E3: 59202030          			defb $59,$20,$20,$30,$30,$31,$30,$30				; $94E3 Y  00100
-94E7: 30313030          
-94EB: 3053414E          			defb $30,$53,$41,$4E,$44,$52,$41,$20				; $94EB 0SANDRA 
-94EF: 44524120          
-94F3: 20202030          			defb $20,$20,$20,$30,$30,$31,$30,$30				; $94F3    00100
-94F7: 30313030          
-94FB: 30444156          			defb $30,$44,$41,$56,$49,$44,$2E,$50				; $94FB 0DAVID.P
-94FF: 49442E50          
-9503: 2E202030          			defb $2E,$20,$20,$30,$30,$31,$30,$30				; $9503 .  00100
-9507: 30313030          
-950B: 30534841          			defb $30,$53,$48,$41,$52,$4B,$59,$20				; $950B 0SHARKY 
-950F: 524B5920          
-9513: 20202030          			defb $20,$20,$20,$30,$30,$31,$30,$30				; $9513    00100
-9517: 30313030          
-951B: 30454D49          			defb $30,$45,$4D,$49,$4C,$59,$20,$20				; $951B 0EMILY  
-951F: 4C592020          
-9523: 20202030          			defb $20,$20,$20,$30,$30,$31,$30,$30				; $9523    00100
-9527: 30313030          
-952B: 304F4E49          			defb $30,$4F,$4E,$49,$4F,$4E,$20,$20				; $952B 0ONION  
-952F: 4F4E2020          
-9533: 20202030          			defb $20,$20,$20,$30,$30,$31,$30,$30				; $9533    00100
-9537: 30313030          
-953B: 30FF01A8          			defb $30,$FF,$01,$A8,$00,$8B,$01,$A8				; $953B 0.......
+949C: 52414646          			defb "RAFFAELE  015000"						
+94A0: 41454C45          
+94A4: 20203031          
+94A8: 35303030          
+94AC: 53555259          			defb "SURYANI   010000"						
+94B0: 414E4920          
+94B4: 20203031          
+94B8: 30303030          
+94BC: 424F4E4E          			defb "BONNIE    005000"				
+94C0: 49452020          
+94C4: 20203030          
+94C8: 35303030          
+94CC: 51554545          			defb "QUEEN     002500"					
+94D0: 4E202020          
+94D4: 20203030          
+94D8: 32353030          
+94DC: 4E49434B          			defb "NICK BOY  001000"					
+94E0: 20424F59          
+94E4: 20203030          
+94E8: 31303030          
+94EC: 53414E44          			defb "SANDRA    001000"				
+94F0: 52412020          
+94F4: 20203030          
+94F8: 31303030          
+94FC: 44415649          			defb "DAVID.P.  001000" 				
+9500: 442E502E          
+9504: 20203030          
+9508: 31303030          
+950C: 53484152          			defb "SHARKY    001000"			
+9510: 4B592020          
+9514: 20203030          
+9518: 31303030          
+951C: 454D494C          			defb "EMILY     001000"			
+9520: 59202020          
+9524: 20203030          
+9528: 31303030          
+952C: 4F4E494F          			defb "ONION     00100"		  
+9530: 4E202020          
+9534: 20203030          
+9538: 313030            
+953B:                   HI_SCORE_TEXT_SPARE
+953B: 30FF01A8          			defb "0",$FF,$01,$A8,$00,$8B,$01,$A8	
 953F: 008B01A8          
-9543: 450101A8          			defb $45,$01,$01,$A8,$45,$02,$A8,$A8				; $9543 E...E...
+9543: 450101A8          			defb $45,$01,$01,$A8,$45,$02,$A8,$A8	
 9547: 4502A8A8          
-954B: 45020000          			defb $45,$02,$00,$00                                ; $954B E...
+954B:                   HI_SCORE_TEXT_END:
+954B: 45020000          			defb $45,$02,$00,$00            
                         ;--------------------------------------------------------
 954F:                   FILLOUT_HI_SCORE:		
 954F: DD219C94 [14]     			LD IX,HI_SCORE_TEXT		; $954F
-9553: DDCB007E [20]     L_9553:		BIT 7,(IX+$00)			; $9553
-9557: C24896   [30|30]  			JP NZ,L_9648			; $9557
-                        
+9553: DDCB007E [20]     LOOP_CHECK_SCORES:		BIT 7,(IX+$00)			; $9553
+9557: C24896   [30|30]  			JP NZ,WaitReleaseAnyKey			; $9557  ; end of table
+                        	
 955A: DDE5     [45]     			PUSH IX					; $955A
-955C: 110A00   [55]     			LD DE,$000A				; $955C
+955C: 110A00   [55]     			LD DE,$000A				; $955C  ; score offset
 955F: DD19     [70]     			ADD IX,DE				; $955F
-9561: 21F978   [80]     			LD HL,$78F9				; $9561
-9564: 0606     [87]     			LD B,$06				; $9564
-9566: DD7E00   [19]     L_9566:		LD A,(IX+$00)			; $9566
+9561: 21F978   [80]     			LD HL,$78F9				; $9561  ; players score addr (holds 6 chars)
+9564: 0606     [87]     			LD B,$06				; $9564  ; score length
+                        
+                        ; Digit-by-digit score comparison (chars right to left)
+9566:                   CheckScoreBytes:		
+9566: DD7E00   [19]     			LD A,(IX+$00)			; $9566 ; 
 9569: BE       [26]     			CP (HL)					; $9569
-956A: CA3796   [36|36]  			JP Z,L_9637				; $956A
-956D: D23E96   [46|46]  			JP NC,L_963E			; $956D
-9570: E1       [56]     			POP HL					; $9570
+956A: CA3796   [36|36]  			JP Z,AdvanceScoreByte	; $956A ; Equal, next digit
+956D: D23E96   [46|46]  			JP NC,NextScoreItem		; $956D ; table score > player's, skip to next entry
+                        			
+                        			; find high score terminator
+9570: E1       [56]     			POP HL					; $9570 ; get start of entry
 9571: E5       [67]     			PUSH HL					; $9571
-9572: 3EFF     [74]     			LD A,$FF				; $9572
+9572: 3EFF     [74]     			LD A,$FF				; $9572 ; terminator
 9574: 01E803   [84]     			LD BC,$03E8				; $9574
 9577: EDB1     [100|21] 			CPIR					; $9577
+                        
+                        			; calc hi-score table size
 9579: 21E803   [110]    			LD HL,$03E8				; $9579
-957C: A7       [114]    			AND A					; $957C
-957D: ED42     [129]    			SBC HL,BC				; $957D
+957C: A7       [114]    			AND A					; $957C 
+957D: ED42     [129]    			SBC HL,BC				; $957D  
 957F: E5       [140]    			PUSH HL					; $957F
-9580: C1       [150]    			POP BC					; $9580
-9581: 114B95   [160]    			LD DE,$954B				; $9581
-9584: 213B95   [170]    			LD HL,$953B				; $9584
-9587: EDB8     [186|21] 			LDDR					; $9587
+9580: C1       [150]    			POP BC					; $9580 ; BC = table size
+                        			; Shift table down
+9581: 114B95   [160]    			LD DE,HI_SCORE_TEXT_END		; $9581
+9584: 213B95   [170]    			LD HL,HI_SCORE_TEXT_SPARE	; $9584
+9587: EDB8     [186|21] 			LDDR						; $9587 ; shift table down
+                           		
 9589: 3EFF     [193]    			LD A,$FF				; $9589
 958B: 323C95   [206]    			LD ($953C),A			; $958B
-958E: E1       [216]    			POP HL					; $958E
+                        
+                        			; Insert new score
+958E: E1       [216]    			POP HL					; $958E ; Get entry position again
 958F: E5       [227]    			PUSH HL					; $958F
-9590: 110A00   [237]    			LD DE,$000A				; $9590
+                        			;  note: names use 8 chars and 2 extra spaces to separate score
+9590: 110A00   [237]    			LD DE,$000A				; $9590 ; score offset
 9593: 19       [248]    			ADD HL,DE				; $9593
-9594: EB       [252]    			EX DE,HL				; $9594
-9595: 21F978   [262]    			LD HL,$78F9				; $9595
-9598: 010600   [272]    			LD BC,$0006				; $9598
+9594: EB       [252]    			EX DE,HL				; $9594 ; score position
+9595: 21F978   [262]    			LD HL,$78F9				; $9595 ; player's score
+9598: 010600   [272]    			LD BC,$0006				; $9598 ; 6 digits
 959B: EDB0     [288|21] 			LDIR					; $959B
+                        
 959D: CDAA66   [305]    			CALL CLR_SCREEN			; $959D
 95A0: 1E28     [312]    			LD E,SFX_HISCORE		; $95A0
 95A2: CD42EF   [329]    			CALL PLAY_SFX			; $95A2
-95A5: 21D096   [339]    			LD HL,$96D0				; $95A5
-95A8: 11D196   [349]    			LD DE,$96D1				; $95A8
-95AB: 010700   [359]    			LD BC,$0007				; $95AB
-95AE: 3620     [369]    			LD (HL),$20				; $95AE
-95B0: EDB0     [385|21] 			LDIR					; $95B0
-95B2: CD4F84   [402]    			CALL DRAW_MENU_BORDERS	; $95B2
-95B5: 216496   [412]    			LD HL,$9664				; $95B5
-95B8: CD296B   [429]    			CALL DRAW_LIST			; $95B8
-95BB: 110C0F   [439]    			LD DE,$0F0C				; $95BB
-95BE: 21D096   [449]    			LD HL,$96D0				; $95BE
-95C1: 0E44     [ 7]     L_95C1:		LD C,$44				; $95C1
-95C3: 3E3F     [14]     			LD A,$3F				; $95C3
+                        			
+                        			; Clear name buffer with spaces
+95A5: 21D096   [339]    			LD HL,ENTER_NAME_BUFFER		; $95A5 ; Name buffer start
+95A8: 11D196   [349]    			LD DE,ENTER_NAME_BUFFER+1	; $95A8
+95AB: 010700   [359]    			LD BC,$0007					; $95AB
+95AE: 3620     [369]    			LD (HL)," "					; $95AE 
+95B0: EDB0     [385|21] 			LDIR						; $95B0 ; clear
+                        
+95B2: CD4F84   [402]    			CALL DRAW_MENU_BORDERS	 ; $95B2
+95B5: 216496   [412]    			LD HL,CONGRATS_DRAW_LIST ; $95B5  ; congratlations
+95B8: CD296B   [429]    			CALL DRAW_LIST			 ; $95B8
+                        
+95BB: 110C0F   [439]    			LD DE,$0F0C				 ; $95BB ; coords
+95BE: 21D096   [449]    			LD HL,ENTER_NAME_BUFFER	 ; $95BE ; Name buffer
+                        
+                        			; Current charater to enter for new name
+95C1: 0E44     [ 7]     NewChar:	LD C,BRIGHT+GREEN		; $95C1
+95C3: 3E3F     [14]     			LD A,"?"				; $95C3  ; new char prompt 
 95C5: CD4A6C   [31]     			CALL ICON8x8			; $95C5
-95C8: 01E803   [10]     L_95C8:		LD BC,$03E8				; $95C8
+95C8:                   DelayFeedbackNameFull:		
+95C8: 01E803   [10]     			LD BC,$03E8				; $95C8
 95CB: CD6A67   [27]     			CALL WAIT_21xBC			; $95CB
-95CE: CD7266   [17]     L_95CE:		CALL ANY_KEY_DOWN		; $95CE
+95CE:                   LoopForKeyRelease:		
+95CE: CD7266   [17]     			CALL ANY_KEY_DOWN		; $95CE
 95D1: C4F584   [27|34]  			CALL NZ,SCROLL_BORDER	; $95D1
-95D4: 20F8     [34|39]  			JR NZ,L_95CE			; $95D4
+95D4: 20F8     [34|39]  			JR NZ,LoopForKeyRelease	; $95D4  ; Loop until key released
 95D6: D5       [45]     			PUSH DE					; $95D6
-95D7: CD2B66   [17]     L_95D7:		CALL GET_KEY			; $95D7
+95D7:                   ProcessKeysLoop:		
+95D7: CD2B66   [17]     			CALL GET_KEY			; $95D7
 95DA: B7       [21]     			OR A					; $95DA
 95DB: CCF584   [31|38]  			CALL Z,SCROLL_BORDER	; $95DB
-95DE: 28F7     [38|43]  			JR Z,L_95D7				; $95DE
+95DE: 28F7     [38|43]  			JR Z,ProcessKeysLoop				; $95DE
 95E0: D1       [48]     			POP DE					; $95E0
-95E1: FE0D     [55]     			CP $0D					; $95E1
-95E3: 283A     [62|67]  			JR Z,L_961F				; $95E3
-95E5: FE01     [69]     			CP $01					; $95E5
-95E7: 2807     [76|81]  			JR Z,L_95F0				; $95E7
-95E9: FE02     [83]     			CP $02					; $95E9
-95EB: 2023     [90|95]  			JR NZ,L_9610			; $95EB
+95E1: FE0D     [55]     			CP $0D					; $95E1	; Enter Key
+95E3: 283A     [62|67]  			JR Z,StoreCompletedName	; $95E3
+95E5: FE01     [69]     			CP $01					; $95E5 ; CAPS_KEY (delete last character)
+95E7: 2807     [76|81]  			JR Z,DeleteChar			; $95E7
+95E9: FE02     [83]     			CP $02					; $95E9 ; alphanumeric keys
+95EB: 2023     [90|95]  			JR NZ,UpdateChar		; $95EB
 95ED: D5       [101]    			PUSH DE					; $95ED
-95EE: 18E7     [113]    			JR L_95D7				; $95EE
-95F0: 7B       [ 4]     L_95F0:		LD A,E					; $95F0
-95F1: FE13     [11]     			CP $13					; $95F1
-95F3: 2009     [18|23]  			JR NZ,L_95FE			; $95F3
+95EE: 18E7     [113]    			JR ProcessKeysLoop				; $95EE
+95F0: 7B       [ 4]     DeleteChar:	LD A,E					; $95F0 ; x pos
+95F1: FE13     [11]     			CP $13					; $95F1 ; Rightmost (limit chars)
+95F3: 2009     [18|23]  			JR NZ,backspace			; $95F3
 95F5: 7E       [25]     			LD A,(HL)				; $95F5
 95F6: FE20     [32]     			CP $20					; $95F6
-95F8: 2804     [39|44]  			JR Z,L_95FE				; $95F8
+95F8: 2804     [39|44]  			JR Z,backspace			; $95F8
 95FA: 3620     [49]     			LD (HL),$20				; $95FA
-95FC: 18C3     [61]     			JR L_95C1				; $95FC
-95FE: 7B       [ 4]     L_95FE:		LD A,E					; $95FE
+95FC: 18C3     [61]     			JR NewChar				; $95FC
+95FE: 7B       [ 4]     backspace:	LD A,E					; $95FE
 95FF: FE0C     [11]     			CP $0C					; $95FF
-9601: 28BE     [18|23]  			JR Z,L_95C1				; $9601
-9603: 3E2D     [25]     			LD A,$2D				; $9603
-9605: 0E47     [32]     			LD C,$47				; $9605
+9601: 28BE     [18|23]  			JR Z,NewChar			; $9601
+9603: 3E2D     [25]     			LD A,"-"				; $9603 ; dash char
+9605: 0E47     [32]     			LD C,BRIGHT+WHITE		; $9605 ; colour
 9607: CD4A6C   [49]     			CALL ICON8x8			; $9607
 960A: 2B       [55]     			DEC HL					; $960A
-960B: 3620     [65]     			LD (HL),$20				; $960B
-960D: 1D       [69]     			DEC E					; $960D
-960E: 18B1     [81]     			JR L_95C1				; $960E
-9610: 77       [ 7]     L_9610:		LD (HL),A				; $9610
-9611: 0E46     [14]     			LD C,$46				; $9611
+960B: 3620     [65]     			LD (HL)," "				; $960B ; replace with space
+960D: 1D       [69]     			DEC E					; $960D ; xpos left 
+960E: 18B1     [81]     			JR NewChar				; $960E 
+9610:                   UpdateChar:		
+9610: 77       [ 7]     			LD (HL),A				; $9610 ; store char
+9611: 0E46     [14]     			LD C,BRIGHT+YELLOW		; $9611 ; colour 
 9613: CD4A6C   [31]     			CALL ICON8x8			; $9613
 9616: 7B       [35]     			LD A,E					; $9616
-9617: FE13     [42]     			CP $13					; $9617
-9619: 28AD     [49|54]  			JR Z,L_95C8				; $9619
+9617: FE13     [42]     			CP $13					; $9617 ; limit chars
+9619: 28AD     [49|54]  			JR Z,DelayFeedbackNameFull				; $9619 ; no more chars
 961B: 23       [55]     			INC HL					; $961B
-961C: 1C       [59]     			INC E					; $961C
-961D: 18A2     [71]     			JR L_95C1				; $961D
-961F: D1       [10]     L_961F:		POP DE					; $961F
-9620: 21D096   [20]     			LD HL,$96D0				; $9620
-9623: 010800   [30]     			LD BC,$0008				; $9623
-9626: EDB0     [46|21]  			LDIR					; $9626
-9628: CD7266   [17]     L_9628:		CALL ANY_KEY_DOWN		; $9628
+961C: 1C       [59]     			INC E					; $961C ; xpos right
+961D: 18A2     [71]     			JR NewChar				; $961D
+961F:                   StoreCompletedName:		
+961F: D1       [10]     			POP DE					; $961F ; table
+9620: 21D096   [20]     			LD HL,ENTER_NAME_BUFFER	; $9620 ; Name buffer
+9623: 010800   [30]     			LD BC,$0008				; $9623 ; 8 chars 
+9626: EDB0     [46|21]  			LDIR					; $9626 ; update hi-score table
+                        
+                        			; Wait for key to be released, so we dont leave screen by mistake
+9628:                   ReleaseKeyLoop:		
+9628: CD7266   [17]     			CALL ANY_KEY_DOWN		; $9628
 962B: C4F584   [27|34]  			CALL NZ,SCROLL_BORDER	; $962B
-962E: C22896   [37|37]  			JP NZ,L_9628			; $962E
+962E: C22896   [37|37]  			JP NZ,ReleaseKeyLoop	; $962E
 9631: CD3394   [54]     			CALL DRAW_HI_SCORES		; $9631
 9634: C30465   [64]     			JP MAIN					; $9634
-9637: 23       [ 6]     L_9637:		INC HL					; $9637
+9637:                   AdvanceScoreByte:		
+9637: 23       [ 6]     			INC HL					; $9637
 9638: DD23     [16]     			INC IX					; $9638
 963A: 05       [20]     			DEC B					; $963A
-963B: C26695   [30|30]  			JP NZ,L_9566			; $963B
-963E: DDE1     [14]     L_963E:		POP IX					; $963E
+963B: C26695   [30|30]  			JP NZ,CheckScoreBytes	; $963B
+963E:                   NextScoreItem:		
+963E: DDE1     [14]     			POP IX					; $963E
 9640: 111000   [24]     			LD DE,$0010				; $9640
 9643: DD19     [39]     			ADD IX,DE				; $9643
-9645: C35395   [49]     			JP L_9553				; $9645
-9648: CD7266   [17]     L_9648:		CALL ANY_KEY_DOWN		; $9648
-964B: C24896   [27|27]  			JP NZ,L_9648			; $964B
-964E: 015203   [37]     			LD BC,$0352				; $964E
-9651: 76       [ 4]     L_9651:		HALT					; $9651
+9645: C35395   [49]     			JP LOOP_CHECK_SCORES	; $9645
+9648:                   WaitReleaseAnyKey:		
+9648: CD7266   [17]     			CALL ANY_KEY_DOWN		; $9648
+964B: C24896   [27|27]  			JP NZ,WaitReleaseAnyKey	; $964B ; Wait for key release 
+964E: 015203   [37]     			LD BC,$0352				; $964E ; timer
+                        
+                        			; waits for enter to be released		
+9651:                   ContinueWaiting:	
+9651: 76       [ 4]     			HALT					; $9651
 9652: C5       [15]     			PUSH BC					; $9652
 9653: CD2B66   [32]     			CALL GET_KEY			; $9653
 9656: C1       [42]     			POP BC					; $9656
 9657: B7       [46]     			OR A					; $9657
-9658: C20465   [56|56]  			JP NZ,MAIN				; $9658
-965B: 0B       [62]     			DEC BC					; $965B
+9658: C20465   [56|56]  			JP NZ,MAIN				; $9658 ; key pressed exit
+965B: 0B       [62]     			DEC BC					; $965B ; hi-score timer
 965C: 78       [66]     			LD A,B					; $965C
-965D: B1       [70]     			OR C					; $965D
-965E: C25196   [80|80]  			JP NZ,L_9651			; $965E
+965D: B1       [70]     			OR C					; $965D 
+965E: C25196   [80|80]  			JP NZ,ContinueWaiting	; $965E ; Continue waiting
 9661: C30465   [90]     			JP MAIN					; $9661
                         ;--------------------------------------------------------
-9664: EB00DF09          			defb $EB,$00,$DF,$09,$08,$E0,$46                    ; $9664 ......F
-9668: 08E046            
-966B: E6F1C243          			defb $E6,$F1,$C2,$43,$4F,$4E,$47,$52				; $966B ...CONGR
-966F: 4F4E4752          
-9673: 4154554C          			defb $41,$54,$55,$4C,$41,$54,$49,$4F				; $9673 ATULATIO
-9677: 4154494F          
-967B: 4E53217A          			defb $4E,$53,$21,$7A,$ED,$DB,$50,$4C				; $967B NS!z..PL
-967F: EDDB504C          
-9683: 45415345          			defb $45,$41,$53,$45,$20,$45,$4E,$54				; $9683 EASE ENT
-9687: 20454E54          
-968B: 45522059          			defb $45,$52,$20,$59,$4F,$55,$52,$20				; $968B ER YOUR 
-968F: 4F555220          
-9693: 4E414D45          			defb $4E,$41,$4D,$45,$DF,$0F,$0C,$DE				; $9693 NAME....
-9697: DF0F0CDE          
-969B: 2D2D2D2D          			defb $2D,$2D,$2D,$2D,$2D,$2D,$2D,$2D				; $969B --------
+9664:                   CONGRATS_DRAW_LIST:
+9664: EB00              			defb SETUP,$00
+9666: DF0908            			defb SET_POS,$09,$08
+9669: E046              			defb GLOBAL_COL,$46                   					
+966B: E6                			defb SET_SOURCE_DATA
+966C: F1C2              			defw FONT_DATA
+966E: 434F4E47          			defb "CONGRATULATIONS!"
+9672: 52415455          
+9676: 4C415449          
+967A: 4F4E5321          
+967E: 7AEDDB            			defb RELATIVE_X+2,RELATIVE_Y+62,INK_GREEN 
+9681: 504C4541          			defb "PLEASE ENTER YOUR NAME"
+9685: 53452045          
+9689: 4E544552          
+968D: 20594F55          
+9691: 52204E41          
+9695: 4D45              
+9697: DF0F0C            			defb SET_POS,$0F,$0C
+969A: DE                			defb INK_WHITE
+969B: 2D2D2D2D          			defb "--------"   ; players name section
 969F: 2D2D2D2D          
-96A3: 7BF2DC50          			defb $7B,$F2,$DC,$50,$52,$45,$53,$53				; $96A3 {..PRESS
-96A7: 52455353          
-96AB: 20434150          			defb $20,$43,$41,$50,$53,$20,$54,$4F				; $96AB  CAPS TO
-96AF: 5320544F          
-96B3: 2044454C          			defb $20,$44,$45,$4C,$45,$54,$45,$7A				; $96B3  DELETEz
-96B7: 4554457A          
-96BB: EDDD5052          			defb $ED,$DD,$50,$52,$45,$53,$53,$20				; $96BB ..PRESS 
-96BF: 45535320          
-96C3: 454E5445          			defb $45,$4E,$54,$45,$52,$20,$54,$4F				; $96C3 ENTER TO
-96C7: 5220544F          
-96CB: 20454E44          			defb $20,$45,$4E,$44,$FF,$20,$20,$20				; $96CB  END.   
-96CF: FF202020          
-96D3: 20202020          			defb $20,$20,$20,$20,$20                            ; $96D3
-96D7: 20                
+96A3: 7BF2DC            			defb RELATIVE_X+3,RELATIVE_Y+67,INK_CYAN  	
+96A6: 50524553          			defb "PRESS CAPS TO DELETE"
+96AA: 53204341          
+96AE: 50532054          
+96B2: 4F204445          
+96B6: 4C455445          
+96BA: 7AEDDD            			defb RELATIVE_X+2,RELATIVE_Y+62,INK_YELLOW 
+96BD: 50524553          			defb "PRESS ENTER TO END"
+96C1: 5320454E          
+96C5: 54455220          
+96C9: 544F2045          
+96CD: 4E44              
+96CF: FF                			defb END_MARKER
+                        
+96D0:                   ENTER_NAME_BUFFER:		
+96D0: 20202020          			defb $20,$20,$20,$20,$20,$20,$20,$20                            
+96D4: 20202020          
                         
 96D8: DD219F97 [14]     L_96D8:		LD IX,$979F					; $96D8
 96DC: 67       [18]     			LD H,A						; $96DC
@@ -17580,6 +17662,29 @@ FFFB: 1B03133C          			defb $1B,$03,$13,$3C                                ;
 FFFF:                   CODE2END equ $ ; Marker to show end of object code
                         
                         #end ; terminate #target
+                        
+                        
+                        
+                        
+                        ; NOTES:
+                        ;
+                        ; --- ZX ATTRIBUTE COLOURS ---
+                        ; Bit  7 - colour flashes
+                        ; Bit  6 - colours are rendered bright
+                        ; Bits 5-3 background paper 0-7
+                        ; Bits 2-0 foreground ink 0-7
+                        ;   #################
+                        ;	|7|6|5|4|3|2|1|0|
+                        ;	|F|B|P|P|P|I|I|I|
+                        ;   #################   
+                        ;	0 - black  (000)
+                        ;	1 - blue   (001)
+                        ;	2 - red    (010)
+                        ;	3 - purple (011)
+                        ;	4 - green  (100)
+                        ;	5 - cyan   (101)
+                        ;	6 - yellow (110)
+                        ;	7 - white  (111)
 
 
 ; +++ segments +++
@@ -17593,101 +17698,105 @@ FFFF:                   CODE2END equ $ ; Marker to show end of object code
 
 ; +++ global symbols +++
 
-ADD_BULLET          = $7AB5 = 31413  codeblock2  cybernoid.asm:3056
-ADD_DEBRIS          = $6E8B = 28299  codeblock2  cybernoid.asm:1585
-ADD_ENEMY_SHOT      = $8CBA = 36026  codeblock2  cybernoid.asm:5589
-ADD_EXPLOSION_WITH_SFX = $88EA = 35050  codeblock2  cybernoid.asm:5118
-ADD_ITEM_TO_LIST    = $89A1 = 35233  codeblock2  cybernoid.asm:5215
-ADD_VOLCANO_LOOP    = $7587 = 30087  codeblock2  cybernoid.asm:2429
-ANIMATE_TILES       = $87AC = 34732  codeblock2  cybernoid.asm:4966
-ANIM_TABLE          = $8814 = 34836  codeblock2  cybernoid.asm:5027
-ANY_KEY_DOWN        = $6672 = 26226  codeblock2  cybernoid.asm:243
-ARP_INDEX           = $F21E = 61982  codeblock2  cybernoid.asm:11462
-ARP_SPEED           = $F21F = 61983  codeblock2  cybernoid.asm:11463
-AY_MUSIC            = $EF38 = 61240  codeblock2  cybernoid.asm:11049
-AY_MUSIC_FLAG       = $830A = 33546  codeblock2  cybernoid.asm:4310
-AY_R0               = $F1F6 = 61942  codeblock2  cybernoid.asm:11430
-AY_R1               = $F1F7 = 61943  codeblock2  cybernoid.asm:11431 (unused)
-AY_R10              = $F200 = 61952  codeblock2  cybernoid.asm:11440
-AY_R11              = $F201 = 61953  codeblock2  cybernoid.asm:11441 (unused)
-AY_R12              = $F202 = 61954  codeblock2  cybernoid.asm:11442 (unused)
-AY_R13              = $F203 = 61955  codeblock2  cybernoid.asm:11443
-AY_R2               = $F1F8 = 61944  codeblock2  cybernoid.asm:11432
-AY_R3               = $F1F9 = 61945  codeblock2  cybernoid.asm:11433 (unused)
-AY_R4               = $F1FA = 61946  codeblock2  cybernoid.asm:11434
-AY_R5               = $F1FB = 61947  codeblock2  cybernoid.asm:11435 (unused)
-AY_R6               = $F1FC = 61948  codeblock2  cybernoid.asm:11436
-AY_R7               = $F1FD = 61949  codeblock2  cybernoid.asm:11437
-AY_R8               = $F1FE = 61950  codeblock2  cybernoid.asm:11438
-AY_R9               = $F1FF = 61951  codeblock2  cybernoid.asm:11439
-AY_RESET            = $EF93 = 61331  codeblock2  cybernoid.asm:11098
-AY_RESET_MUSIC      = $EF3B = 61243  codeblock2  cybernoid.asm:11051
-BACKGROUND_DONE     = $72C8 = 29384  codeblock2  cybernoid.asm:2031
-BACKSHOT_ENABLE     = $6AEE = 27374  codeblock2  cybernoid.asm:1032
-BACKSHOT_GFX_BASE   = $6AEF = 27375  codeblock2  cybernoid.asm:1033
-BACKSHOT_OFFSETS    = $7AAA = 31402  codeblock2  cybernoid.asm:3042
-BACKSHOT_POS        = $6AF1 = 27377  codeblock2  cybernoid.asm:1034
-BACK_ZERO_COUNTER   = $FC3B = 64571  codeblock2  cybernoid.asm:11908
-BAD_LUCK_MESSAGE    = $76BB = 30395  codeblock2  cybernoid.asm:2612
-BAD_LUCK_TXT        = $7730 = 30512  codeblock2  cybernoid.asm:2635
-BARREL_OFFSET       = $7AB4 = 31412  codeblock2  cybernoid.asm:3052
-BEEPER_DATA         = $FC4E = 64590  codeblock2  cybernoid.asm:11930
-BEEPER_LIST         = $8710 = 34576  codeblock2  cybernoid.asm:4882
-BEEPER_MUSIC_USED   = $81A5 = 33189  codeblock2  cybernoid.asm:4173
-BEEPER_SETUP        = $8738 = 34616  codeblock2  cybernoid.asm:4894
-BEEPLOOP            = $FC0B = 64523  codeblock2  cybernoid.asm:11872
-BEEP_MUSIC_LOOP     = $FB8D = 64397  codeblock2  cybernoid.asm:11805
-BLANK_LP            = $79EE = 31214  codeblock2  cybernoid.asm:2898
-BOMBS_ARC_DOWN      = $7D75 = 32117  codeblock2  cybernoid.asm:3519
-BOMBS_ARC_UP        = $7D85 = 32133  codeblock2  cybernoid.asm:3523
-BOMBS_LABEL         = $7BAA = 31658  codeblock2  cybernoid.asm:3248
-BOMBS_MAX           = $7BB9 = 31673  codeblock2  cybernoid.asm:3252 (unused)
-BOMBS_START         = $7BB8 = 31672  codeblock2  cybernoid.asm:3251
-BOMB_COLLISION      = $7D58 = 32088  codeblock2  cybernoid.asm:3501
-BOMB_DATA           = $7D95 = 32149  codeblock2  cybernoid.asm:3528
-BOMB_DISPLAY_LOOP   = $7C79 = 31865  codeblock2  cybernoid.asm:3382
-BOMB_IS_DOWN        = $7C6A = 31850  codeblock2  cybernoid.asm:3372
-BOMB_LOOP           = $7CE7 = 31975  codeblock2  cybernoid.asm:3436
-BONUS_POINTS_TXT    = $771A = 30490  codeblock2  cybernoid.asm:2631
-BONUS_TEXT          = $8A69 = 35433  codeblock2  cybernoid.asm:5317
-BONUS_TEXT_DATA     = $8A96 = 35478  codeblock2  cybernoid.asm:5348
-BOTTOM_COL_OCCUPIED = $A49F = 42143  codeblock2  cybernoid.asm:8273
-BOUNCE_DATA         = $7F08 = 32520  codeblock2  cybernoid.asm:3721
-BOUNCE_GUARD        = $9137 = 37175  codeblock2  cybernoid.asm:6179
-BOUNCE_LABEL        = $7BDA = 31706  codeblock2  cybernoid.asm:3263 (unused)
-BOUNCE_MAX          = $7BE9 = 31721  codeblock2  cybernoid.asm:3267 (unused)
-BOUNCE_START        = $7BE8 = 31720  codeblock2  cybernoid.asm:3266 (unused)
-BULLET_LIST         = $7B36 = 31542  codeblock2  cybernoid.asm:3162
-BULLET_LOOP         = $8CFE = 36094  codeblock2  cybernoid.asm:5627
-BULLET_MOVEMENT     = $8BCA = 35786  codeblock2  cybernoid.asm:5512
-BYTE_OPCODE         = $F111 = 61713  codeblock2  cybernoid.asm:11300
-BeeperCounter       = $FC49 = 64585  codeblock2  cybernoid.asm:11923
-CALC_ENVELOPE_ADDR  = $EFC1 = 61377  codeblock2  cybernoid.asm:11124
-CALC_VIBRA_PORTA_ADDR = $EFD2 = 61394  codeblock2  cybernoid.asm:11141
-CHANNEL1            = $F214 = 61972  codeblock2  cybernoid.asm:11452
-CHANNEL2            = $F237 = 62007  codeblock2  cybernoid.asm:11483
-CHANNEL3            = $F25A = 62042  codeblock2  cybernoid.asm:11489
-CHAR_LOOP           = $7B8D = 31629  codeblock2  cybernoid.asm:3223
-CHEAT_KEYS          = $83F6 = 33782  codeblock2  cybernoid.asm:4410
-CHECK_BULLETS_LOOP  = $7AF2 = 31474  codeblock2  cybernoid.asm:3111
-CHECK_KEY_BITS      = $7B67 = 31591  codeblock2  cybernoid.asm:3196
-CHECK_POINT_IN_HITBOX = $6802 = 26626  codeblock2  cybernoid.asm:545
-CHECK_SCENE         = $8D16 = 36118  codeblock2  cybernoid.asm:5639
-CHECK_SCENE_DOWN    = $69C4 = 27076  codeblock2  cybernoid.asm:854
-CHECK_SCENE_LEFT    = $699C = 27036  codeblock2  cybernoid.asm:822
-CHECK_SCENE_RIGHT   = $6972 = 26994  codeblock2  cybernoid.asm:789
-CHECK_SCENE_UP      = $69E6 = 27110  codeblock2  cybernoid.asm:882
-CH_STATUS           = $F224 = 61988  codeblock2  cybernoid.asm:11468
-CLAMP_XPOS          = $A486 = 42118  codeblock2  cybernoid.asm:8248
-CLEAR_MEM_ITEMS     = $8895 = 34965  codeblock2  cybernoid.asm:5059
-CLR_GAME_SCREEN     = $66C0 = 26304  codeblock2  cybernoid.asm:320
-CLR_SCREEN          = $66AA = 26282  codeblock2  cybernoid.asm:306
-CLR_SCR_LOOP        = $66D3 = 26323  codeblock2  cybernoid.asm:329
-CLR_TABLE_5F00      = $7457 = 29783  codeblock2  cybernoid.asm:2264
-CLR_TABLE_ITEMS     = $8892 = 34962  codeblock2  cybernoid.asm:5057
+ADD_BULLET          = $7AB5 = 31413  codeblock2  cybernoid.asm:3079
+ADD_DEBRIS          = $6E8B = 28299  codeblock2  cybernoid.asm:1606
+ADD_ENEMY_SHOT      = $8CBA = 36026  codeblock2  cybernoid.asm:5613
+ADD_EXPLOSION_WITH_SFX = $88EA = 35050  codeblock2  cybernoid.asm:5142
+ADD_ITEM_TO_LIST    = $89A1 = 35233  codeblock2  cybernoid.asm:5239
+ADD_VOLCANO_LOOP    = $7587 = 30087  codeblock2  cybernoid.asm:2450
+ANIMATE_TILES       = $87AC = 34732  codeblock2  cybernoid.asm:4990
+ANIM_TABLE          = $8814 = 34836  codeblock2  cybernoid.asm:5051
+ANY_KEY_DOWN        = $6672 = 26226  codeblock2  cybernoid.asm:257
+ARP_INDEX           = $F21E = 61982  codeblock2  cybernoid.asm:11516
+ARP_SPEED           = $F21F = 61983  codeblock2  cybernoid.asm:11517
+AY_MUSIC            = $EF38 = 61240  codeblock2  cybernoid.asm:11103
+AY_MUSIC_FLAG       = $830A = 33546  codeblock2  cybernoid.asm:4333
+AY_R0               = $F1F6 = 61942  codeblock2  cybernoid.asm:11484
+AY_R1               = $F1F7 = 61943  codeblock2  cybernoid.asm:11485 (unused)
+AY_R10              = $F200 = 61952  codeblock2  cybernoid.asm:11494
+AY_R11              = $F201 = 61953  codeblock2  cybernoid.asm:11495 (unused)
+AY_R12              = $F202 = 61954  codeblock2  cybernoid.asm:11496 (unused)
+AY_R13              = $F203 = 61955  codeblock2  cybernoid.asm:11497
+AY_R2               = $F1F8 = 61944  codeblock2  cybernoid.asm:11486
+AY_R3               = $F1F9 = 61945  codeblock2  cybernoid.asm:11487 (unused)
+AY_R4               = $F1FA = 61946  codeblock2  cybernoid.asm:11488
+AY_R5               = $F1FB = 61947  codeblock2  cybernoid.asm:11489 (unused)
+AY_R6               = $F1FC = 61948  codeblock2  cybernoid.asm:11490
+AY_R7               = $F1FD = 61949  codeblock2  cybernoid.asm:11491
+AY_R8               = $F1FE = 61950  codeblock2  cybernoid.asm:11492
+AY_R9               = $F1FF = 61951  codeblock2  cybernoid.asm:11493
+AY_RESET            = $EF93 = 61331  codeblock2  cybernoid.asm:11152
+AY_RESET_MUSIC      = $EF3B = 61243  codeblock2  cybernoid.asm:11105
+AdvanceScoreByte    = $9637 = 38455  codeblock2  cybernoid.asm:6745
+BACKGROUND_DONE     = $72C8 = 29384  codeblock2  cybernoid.asm:2052
+BACKSHOT_ENABLE     = $6AEE = 27374  codeblock2  cybernoid.asm:1046
+BACKSHOT_GFX_BASE   = $6AEF = 27375  codeblock2  cybernoid.asm:1047
+BACKSHOT_OFFSETS    = $7AAA = 31402  codeblock2  cybernoid.asm:3065
+BACKSHOT_POS        = $6AF1 = 27377  codeblock2  cybernoid.asm:1048
+BACK_ZERO_COUNTER   = $FC3B = 64571  codeblock2  cybernoid.asm:11962
+BAD_LUCK_MESSAGE    = $76BB = 30395  codeblock2  cybernoid.asm:2633
+BAD_LUCK_TXT        = $7730 = 30512  codeblock2  cybernoid.asm:2656
+BARREL_OFFSET       = $7AB4 = 31412  codeblock2  cybernoid.asm:3075
+BEEPER_DATA         = $FC4E = 64590  codeblock2  cybernoid.asm:11984
+BEEPER_LIST         = $8710 = 34576  codeblock2  cybernoid.asm:4906
+BEEPER_MUSIC_USED   = $81A5 = 33189  codeblock2  cybernoid.asm:4196
+BEEPER_SETUP        = $8738 = 34616  codeblock2  cybernoid.asm:4918
+BEEPLOOP            = $FC0B = 64523  codeblock2  cybernoid.asm:11926
+BEEP_MUSIC_LOOP     = $FB8D = 64397  codeblock2  cybernoid.asm:11859
+BLACK               = $0000 =     0  codeblock2  Constants.asm:47
+BLANK_LP            = $79EE = 31214  codeblock2  cybernoid.asm:2921
+BLUE                = $0001 =     1  codeblock2  Constants.asm:48
+BOMBS_ARC_DOWN      = $7D75 = 32117  codeblock2  cybernoid.asm:3542
+BOMBS_ARC_UP        = $7D85 = 32133  codeblock2  cybernoid.asm:3546
+BOMBS_LABEL         = $7BAA = 31658  codeblock2  cybernoid.asm:3271
+BOMBS_MAX           = $7BB9 = 31673  codeblock2  cybernoid.asm:3275 (unused)
+BOMBS_START         = $7BB8 = 31672  codeblock2  cybernoid.asm:3274
+BOMB_COLLISION      = $7D58 = 32088  codeblock2  cybernoid.asm:3524
+BOMB_DATA           = $7D95 = 32149  codeblock2  cybernoid.asm:3551
+BOMB_DISPLAY_LOOP   = $7C79 = 31865  codeblock2  cybernoid.asm:3405
+BOMB_IS_DOWN        = $7C6A = 31850  codeblock2  cybernoid.asm:3395
+BOMB_LOOP           = $7CE7 = 31975  codeblock2  cybernoid.asm:3459
+BONUS_POINTS_TXT    = $771A = 30490  codeblock2  cybernoid.asm:2652
+BONUS_TEXT          = $8A69 = 35433  codeblock2  cybernoid.asm:5341
+BONUS_TEXT_DATA     = $8A96 = 35478  codeblock2  cybernoid.asm:5372
+BOTTOM_COL_OCCUPIED = $A49F = 42143  codeblock2  cybernoid.asm:8327
+BOUNCE_DATA         = $7F08 = 32520  codeblock2  cybernoid.asm:3744
+BOUNCE_GUARD        = $9137 = 37175  codeblock2  cybernoid.asm:6203
+BOUNCE_LABEL        = $7BDA = 31706  codeblock2  cybernoid.asm:3286 (unused)
+BOUNCE_MAX          = $7BE9 = 31721  codeblock2  cybernoid.asm:3290 (unused)
+BOUNCE_START        = $7BE8 = 31720  codeblock2  cybernoid.asm:3289 (unused)
+BRIGHT              = $0040 =    64  codeblock2  Constants.asm:46
+BULLET_LIST         = $7B36 = 31542  codeblock2  cybernoid.asm:3185
+BULLET_LOOP         = $8CFE = 36094  codeblock2  cybernoid.asm:5651
+BULLET_MOVEMENT     = $8BCA = 35786  codeblock2  cybernoid.asm:5536
+BYTE_OPCODE         = $F111 = 61713  codeblock2  cybernoid.asm:11354
+BeeperCounter       = $FC49 = 64585  codeblock2  cybernoid.asm:11977
+CALC_ENVELOPE_ADDR  = $EFC1 = 61377  codeblock2  cybernoid.asm:11178
+CALC_VIBRA_PORTA_ADDR = $EFD2 = 61394  codeblock2  cybernoid.asm:11195
+CHANNEL1            = $F214 = 61972  codeblock2  cybernoid.asm:11506
+CHANNEL2            = $F237 = 62007  codeblock2  cybernoid.asm:11537
+CHANNEL3            = $F25A = 62042  codeblock2  cybernoid.asm:11543
+CHAR_LOOP           = $7B8D = 31629  codeblock2  cybernoid.asm:3246
+CHEAT_KEYS          = $83F6 = 33782  codeblock2  cybernoid.asm:4434
+CHECK_BULLETS_LOOP  = $7AF2 = 31474  codeblock2  cybernoid.asm:3134
+CHECK_KEY_BITS      = $7B67 = 31591  codeblock2  cybernoid.asm:3219
+CHECK_POINT_IN_HITBOX = $6802 = 26626  codeblock2  cybernoid.asm:559
+CHECK_SCENE         = $8D16 = 36118  codeblock2  cybernoid.asm:5663
+CHECK_SCENE_DOWN    = $69C4 = 27076  codeblock2  cybernoid.asm:868
+CHECK_SCENE_LEFT    = $699C = 27036  codeblock2  cybernoid.asm:836
+CHECK_SCENE_RIGHT   = $6972 = 26994  codeblock2  cybernoid.asm:803
+CHECK_SCENE_UP      = $69E6 = 27110  codeblock2  cybernoid.asm:896
+CH_STATUS           = $F224 = 61988  codeblock2  cybernoid.asm:11522
+CLAMP_XPOS          = $A486 = 42118  codeblock2  cybernoid.asm:8302
+CLEAR_MEM_ITEMS     = $8895 = 34965  codeblock2  cybernoid.asm:5083
+CLR_GAME_SCREEN     = $66C0 = 26304  codeblock2  cybernoid.asm:334
+CLR_SCREEN          = $66AA = 26282  codeblock2  cybernoid.asm:320
+CLR_SCR_LOOP        = $66D3 = 26323  codeblock2  cybernoid.asm:343
+CLR_TABLE_5F00      = $7457 = 29783  codeblock2  cybernoid.asm:2285
+CLR_TABLE_ITEMS     = $8892 = 34962  codeblock2  cybernoid.asm:5081
 CODE1END            = $5B00 = 23296  CODE_DATA   LoadSection.asm:116
 CODE1START          = $4000 = 16384  CODE_HEADER LoadSection.asm:103
-CODE2END            = $FFFF = 65535  codeblock2  cybernoid.asm:12204
+CODE2END            = $FFFF = 65535  codeblock2  cybernoid.asm:12258
 CODE2START          = $6103 = 24835  header2     LoadSection.asm:123
 CODE_DATA           = $4000 = 16384  CODE_DATA   LoadSection.asm:106 (unused)
 CODE_DATA_end       = $5B00 = 23296  CODE_DATA   LoadSection.asm:106 (unused)
@@ -17695,200 +17804,213 @@ CODE_DATA_size      = $1B00 =  6912  CODE_DATA   LoadSection.asm:106 (unused)
 CODE_HEADER         = $0000 =     0  CODE_HEADER LoadSection.asm:95 (unused)
 CODE_HEADER_end     = $0011 =    17  CODE_HEADER LoadSection.asm:95 (unused)
 CODE_HEADER_size    = $0011 =    17  CODE_HEADER LoadSection.asm:95 (unused)
-COLLISION_BOXES_TABLE = $67EE = 26606  codeblock2  cybernoid.asm:535
-COLOUR_16X16_SPRITE = $A47B = 42107  codeblock2  cybernoid.asm:8239
-COLOUR_LOOKUP       = $E9B9 = 59833  codeblock2  cybernoid.asm:10843
-COLOUR_LOOP         = $A48B = 42123  codeblock2  cybernoid.asm:8253
-COLOUR_SPRITE       = $A4AD = 42157  codeblock2  cybernoid.asm:8285
-CONTINUE_MODULATION = $F0BC = 61628  codeblock2  cybernoid.asm:11253
-CONTINUE_SOUND      = $861D = 34333  codeblock2  cybernoid.asm:4743
-COPY_COLOUR_ATTRIBUTES = $67AD = 26541  codeblock2  cybernoid.asm:490
-COUNTDOWN_TIMER     = $7A1B = 31259  codeblock2  cybernoid.asm:2940
-COUNTDOWN_TIMER_RESET = $7A1D = 31261  codeblock2  cybernoid.asm:2941
-COUNT_DIGIT_DONE    = $7999 = 31129  codeblock2  cybernoid.asm:2842
-COUNT_DIGIT_VALUE   = $7993 = 31123  codeblock2  cybernoid.asm:2837
-CREATE_EJECT_VELOCITY = $6C88 = 27784  codeblock2  cybernoid.asm:1316
-CRL_BLOCK           = $F206 = 61958  codeblock2  cybernoid.asm:11446
-CURRENT_DATA_PTR    = $F226 = 61990  codeblock2  cybernoid.asm:11470
-CURRENT_LEVEL       = $74E1 = 29921  codeblock2  cybernoid.asm:2350
-CUSTOM_ENV_PTR      = $F22E = 61998  codeblock2  cybernoid.asm:11475
-CheckKey            = $6639 = 26169  codeblock2  cybernoid.asm:215
-Counter             = $0009 =     9  codeblock2  Constants.asm:65
+COLLISION_BOXES_TABLE = $67EE = 26606  codeblock2  cybernoid.asm:549
+COLOUR_16X16_SPRITE = $A47B = 42107  codeblock2  cybernoid.asm:8293
+COLOUR_LOOKUP       = $E9B9 = 59833  codeblock2  cybernoid.asm:10897
+COLOUR_LOOP         = $A48B = 42123  codeblock2  cybernoid.asm:8307
+COLOUR_SPRITE       = $A4AD = 42157  codeblock2  cybernoid.asm:8339
+CONGRATS_DRAW_LIST  = $9664 = 38500  codeblock2  cybernoid.asm:6774
+CONTINUE_MODULATION = $F0BC = 61628  codeblock2  cybernoid.asm:11307
+CONTINUE_SOUND      = $861D = 34333  codeblock2  cybernoid.asm:4767
+COPY_COLOUR_ATTRIBUTES = $67AD = 26541  codeblock2  cybernoid.asm:504
+COUNTDOWN_TIMER     = $7A1B = 31259  codeblock2  cybernoid.asm:2963
+COUNTDOWN_TIMER_RESET = $7A1D = 31261  codeblock2  cybernoid.asm:2964
+COUNT_DIGIT_DONE    = $7999 = 31129  codeblock2  cybernoid.asm:2865
+COUNT_DIGIT_VALUE   = $7993 = 31123  codeblock2  cybernoid.asm:2860
+CREATE_EJECT_VELOCITY = $6C88 = 27784  codeblock2  cybernoid.asm:1337
+CRL_BLOCK           = $F206 = 61958  codeblock2  cybernoid.asm:11500
+CURRENT_DATA_PTR    = $F226 = 61990  codeblock2  cybernoid.asm:11524
+CURRENT_LEVEL       = $74E1 = 29921  codeblock2  cybernoid.asm:2371
+CUSTOM_ENV_PTR      = $F22E = 61998  codeblock2  cybernoid.asm:11529
+CYAN                = $0005 =     5  codeblock2  Constants.asm:52
+CheckKey            = $6639 = 26169  codeblock2  cybernoid.asm:229
+CheckScoreBytes     = $9566 = 38246  codeblock2  cybernoid.asm:6622
+ContinueWaiting     = $9651 = 38481  codeblock2  cybernoid.asm:6761
+Counter             = $0009 =     9  codeblock2  Constants.asm:78
 DATAFLAG            = $00FF =   255              LoadSection.asm:40
-DATA_04             = $8A0B = 35339  codeblock2  cybernoid.asm:5271
-DATA_05             = $979F = 38815  codeblock2  cybernoid.asm:6831
-DATA_06             = $99B3 = 39347  codeblock2  cybernoid.asm:7069
-DATA_07             = $A002 = 40962  codeblock2  cybernoid.asm:7546
-DATA_08             = $6CFC = 27900  codeblock2  cybernoid.asm:1385
-DATA_10             = $6E52 = 28242  codeblock2  cybernoid.asm:1574
-DATA_ANIM           = $8847 = 34887  codeblock2  cybernoid.asm:5036
-DEBRIS_DATA         = $6EC4 = 28356  codeblock2  cybernoid.asm:1634
-DEBRIS_SPRITES      = $7069 = 28777  codeblock2  cybernoid.asm:1691
-DEFAULT_KEYS        = $6816 = 26646  codeblock2  cybernoid.asm:566
-DEFINE_KEYS         = $83F1 = 33777  codeblock2  cybernoid.asm:4408 (unused)
-DELAY1BEEP          = $FC0C = 64524  codeblock2  cybernoid.asm:11873
-DELAY2BEEP          = $FC1A = 64538  codeblock2  cybernoid.asm:11885
-DESTORY_TILE_FROM_BULLET = $74EF = 29935  codeblock2  cybernoid.asm:2367
-DESTORY_TILE_FROM_SUPER_WEAPON = $74E2 = 29922  codeblock2  cybernoid.asm:2354
-DESTROYABLE_TILE_DATA = $7533 = 30003  codeblock2  cybernoid.asm:2413
-DONE_X              = $690E = 26894  codeblock2  cybernoid.asm:723
-DONE_Y              = $692D = 26925  codeblock2  cybernoid.asm:741
-DO_EGG_TIMER        = $79FE = 31230  codeblock2  cybernoid.asm:2920
-DO_ENEMY_FIRE_SHOTS = $8C98 = 35992  codeblock2  cybernoid.asm:5569
-DO_EXPLOSIONS       = $8923 = 35107  codeblock2  cybernoid.asm:5163
-DO_FADE_VIBTA       = $F192 = 61842  codeblock2  cybernoid.asm:11359
-DO_GAME_OVER        = $8F95 = 36757  codeblock2  cybernoid.asm:5956
-DO_MENU             = $81A6 = 33190  codeblock2  cybernoid.asm:4176
-DO_MINES            = $7E27 = 32295  codeblock2  cybernoid.asm:3597
-DO_PICKUPS          = $A086 = 41094  codeblock2  cybernoid.asm:7607
-DO_PLR_SHOOTING     = $7A50 = 31312  codeblock2  cybernoid.asm:2983
-DO_ROCKET           = $970F = 38671  codeblock2  cybernoid.asm:6765
-DO_SCENE_COLLISION  = $6C9A = 27802  codeblock2  cybernoid.asm:1328
-DO_SCENE_UPDATE_CHECKS = $71D6 = 29142  codeblock2  cybernoid.asm:1872
-DO_SEEKER           = $8066 = 32870  codeblock2  cybernoid.asm:3916
-DO_SIMPLE_INK       = $6B64 = 27492  codeblock2  cybernoid.asm:1094
-DO_TOP_BAR          = $77FF = 30719  codeblock2  cybernoid.asm:2665
-DO_TOP_EDGE         = $7204 = 29188  codeblock2  cybernoid.asm:1903
-DO_VERT_CHECK       = $71F2 = 29170  codeblock2  cybernoid.asm:1891
-DRAW16x16_TILE      = $A548 = 42312  codeblock2  cybernoid.asm:8427
-DRAW4X4SPRITE       = $A4DB = 42203  codeblock2  cybernoid.asm:8323
-DRAW_BY_LINE        = $A508 = 42248  codeblock2  cybernoid.asm:8363
-DRAW_ENEMY_SHIPS    = $98B4 = 39092  codeblock2  cybernoid.asm:6944
-DRAW_ENEMY_SHOTS    = $8CD7 = 36055  codeblock2  cybernoid.asm:5608
-DRAW_HI_SCORES      = $9433 = 37939  codeblock2  cybernoid.asm:6513
-DRAW_HOR_BORDER     = $84B5 = 33973  codeblock2  cybernoid.asm:4486
-DRAW_LIST           = $6B29 = 27433  codeblock2  cybernoid.asm:1052
-DRAW_MENU_BORDERS   = $844F = 33871  codeblock2  cybernoid.asm:4432
-DRAW_PICKUPS        = $A04E = 41038  codeblock2  cybernoid.asm:7571
-DRAW_PLAYER         = $8F0C = 36620  codeblock2  cybernoid.asm:5892
-DRAW_PLR_BULLETS    = $7A1F = 31263  codeblock2  cybernoid.asm:2945
-DRAW_SPRITE16X8     = $80BD = 32957  codeblock2  cybernoid.asm:3968
-DRAW_SPRITE_LOOP    = $A25F = 41567  codeblock2  cybernoid.asm:7850
-DRAW_TEXT           = $A548 = 42312  codeblock2  cybernoid.asm:8428 (unused)
-DRAW_TRACER_EFFECT  = $8ADA = 35546  codeblock2  cybernoid.asm:5383
-DRAW_VERT_BORDER    = $84C6 = 33990  codeblock2  cybernoid.asm:4497
-DURATION_COUNTER    = $F225 = 61989  codeblock2  cybernoid.asm:11469
-DURATION_LOOP       = $8639 = 34361  codeblock2  cybernoid.asm:4761
-DUTY_CYCLE          = $711B = 28955  codeblock2  cybernoid.asm:1827 (unused)
-Display3DigitNumber = $7977 = 31095  codeblock2  cybernoid.asm:2820
-Display8x8Digits    = $7991 = 31121  codeblock2  cybernoid.asm:2835
-Duration1st         = $FC45 = 64581  codeblock2  cybernoid.asm:11920
-Duration2nd         = $FC46 = 64582  codeblock2  cybernoid.asm:11921
-EGG_TIMER           = $79D3 = 31187  codeblock2  cybernoid.asm:2876
-EGG_TIMER_MASK      = $79FA = 31226  codeblock2  cybernoid.asm:2909
-EMPLACEMENT_ANIM    = $8D7A = 36218  codeblock2  cybernoid.asm:5717
-EMPLACEMENT_EXISTS  = $8D53 = 36179  codeblock2  cybernoid.asm:5682
-EMPLACEMENT_FIRE_BALLS = $8E02 = 36354  codeblock2  cybernoid.asm:5793
-EMPLACEMENT_FIRE_LEFT = $8DF7 = 36343  codeblock2  cybernoid.asm:5787
-EMPLACEMENT_FIRE_RIGHT = $8E0F = 36367  codeblock2  cybernoid.asm:5801
-EMPLACEMENT_FIRING  = $8D95 = 36245  codeblock2  cybernoid.asm:5733
-EMPLACEMENT_FIRING2 = $8DC8 = 36296  codeblock2  cybernoid.asm:5761
-EMPLACEMENT_LIST    = $8E1C = 36380  codeblock2  cybernoid.asm:5809
-EMPLACEMENT_RULES   = $8D7B = 36219  codeblock2  cybernoid.asm:5719
-EMPTY_SLOT          = $8CEF = 36079  codeblock2  cybernoid.asm:5621
-END_ENEMY_SHOTS     = $8CD0 = 36048  codeblock2  cybernoid.asm:5599
-END_LEVEL           = $75B8 = 30136  codeblock2  cybernoid.asm:2458
+DATA_04             = $8A0B = 35339  codeblock2  cybernoid.asm:5295
+DATA_05             = $979F = 38815  codeblock2  cybernoid.asm:6885
+DATA_06             = $99B3 = 39347  codeblock2  cybernoid.asm:7123
+DATA_07             = $A002 = 40962  codeblock2  cybernoid.asm:7600
+DATA_08             = $6CFC = 27900  codeblock2  cybernoid.asm:1406
+DATA_10             = $6E52 = 28242  codeblock2  cybernoid.asm:1595
+DATA_ANIM           = $8847 = 34887  codeblock2  cybernoid.asm:5060
+DEBRIS_DATA         = $6EC4 = 28356  codeblock2  cybernoid.asm:1655
+DEBRIS_SPRITES      = $7069 = 28777  codeblock2  cybernoid.asm:1712
+DEFAULT_KEYS        = $6816 = 26646  codeblock2  cybernoid.asm:580
+DEFINE_KEYS         = $83F1 = 33777  codeblock2  cybernoid.asm:4432 (unused)
+DELAY1BEEP          = $FC0C = 64524  codeblock2  cybernoid.asm:11927
+DELAY2BEEP          = $FC1A = 64538  codeblock2  cybernoid.asm:11939
+DESTORY_TILE_FROM_BULLET = $74EF = 29935  codeblock2  cybernoid.asm:2388
+DESTORY_TILE_FROM_SUPER_WEAPON = $74E2 = 29922  codeblock2  cybernoid.asm:2375
+DESTROYABLE_TILE_DATA = $7533 = 30003  codeblock2  cybernoid.asm:2434
+DONE_X              = $690E = 26894  codeblock2  cybernoid.asm:737
+DONE_Y              = $692D = 26925  codeblock2  cybernoid.asm:755
+DO_EGG_TIMER        = $79FE = 31230  codeblock2  cybernoid.asm:2943
+DO_ENEMY_FIRE_SHOTS = $8C98 = 35992  codeblock2  cybernoid.asm:5593
+DO_EXPLOSIONS       = $8923 = 35107  codeblock2  cybernoid.asm:5187
+DO_FADE_VIBTA       = $F192 = 61842  codeblock2  cybernoid.asm:11413
+DO_GAME_OVER        = $8F95 = 36757  codeblock2  cybernoid.asm:5980
+DO_MENU             = $81A6 = 33190  codeblock2  cybernoid.asm:4199
+DO_MINES            = $7E27 = 32295  codeblock2  cybernoid.asm:3620
+DO_PICKUPS          = $A086 = 41094  codeblock2  cybernoid.asm:7661
+DO_PLR_SHOOTING     = $7A50 = 31312  codeblock2  cybernoid.asm:3006
+DO_ROCKET           = $970F = 38671  codeblock2  cybernoid.asm:6819
+DO_SCENE_COLLISION  = $6C9A = 27802  codeblock2  cybernoid.asm:1349
+DO_SCENE_UPDATE_CHECKS = $71D6 = 29142  codeblock2  cybernoid.asm:1893
+DO_SEEKER           = $8066 = 32870  codeblock2  cybernoid.asm:3939
+DO_SIMPLE_INK       = $6B64 = 27492  codeblock2  cybernoid.asm:1109
+DO_TOP_BAR          = $77FF = 30719  codeblock2  cybernoid.asm:2686
+DO_TOP_EDGE         = $7204 = 29188  codeblock2  cybernoid.asm:1924
+DO_VERT_CHECK       = $71F2 = 29170  codeblock2  cybernoid.asm:1912
+DRAW16x16_TILE      = $A548 = 42312  codeblock2  cybernoid.asm:8481
+DRAW4X4SPRITE       = $A4DB = 42203  codeblock2  cybernoid.asm:8377
+DRAW_BY_LINE        = $A508 = 42248  codeblock2  cybernoid.asm:8417
+DRAW_ENEMY_SHIPS    = $98B4 = 39092  codeblock2  cybernoid.asm:6998
+DRAW_ENEMY_SHOTS    = $8CD7 = 36055  codeblock2  cybernoid.asm:5632
+DRAW_HI_SCORES      = $9433 = 37939  codeblock2  cybernoid.asm:6537
+DRAW_HOR_BORDER     = $84B5 = 33973  codeblock2  cybernoid.asm:4510
+DRAW_LIST           = $6B29 = 27433  codeblock2  cybernoid.asm:1066
+DRAW_MENU_BORDERS   = $844F = 33871  codeblock2  cybernoid.asm:4456
+DRAW_PICKUPS        = $A04E = 41038  codeblock2  cybernoid.asm:7625
+DRAW_PLAYER         = $8F0C = 36620  codeblock2  cybernoid.asm:5916
+DRAW_PLR_BULLETS    = $7A1F = 31263  codeblock2  cybernoid.asm:2968
+DRAW_SPRITE16X8     = $80BD = 32957  codeblock2  cybernoid.asm:3991
+DRAW_SPRITE_LOOP    = $A25F = 41567  codeblock2  cybernoid.asm:7904
+DRAW_TEXT           = $A548 = 42312  codeblock2  cybernoid.asm:8482 (unused)
+DRAW_TRACER_EFFECT  = $8ADA = 35546  codeblock2  cybernoid.asm:5407
+DRAW_VERT_BORDER    = $84C6 = 33990  codeblock2  cybernoid.asm:4521
+DURATION_COUNTER    = $F225 = 61989  codeblock2  cybernoid.asm:11523
+DURATION_LOOP       = $8639 = 34361  codeblock2  cybernoid.asm:4785
+DUTY_CYCLE          = $711B = 28955  codeblock2  cybernoid.asm:1848
+DelayFeedbackNameFull = $95C8 = 38344  codeblock2  cybernoid.asm:6682
+DeleteChar          = $95F0 = 38384  codeblock2  cybernoid.asm:6704
+Display3DigitNumber = $7977 = 31095  codeblock2  cybernoid.asm:2843
+Display8x8Digits    = $7991 = 31121  codeblock2  cybernoid.asm:2858
+Duration1st         = $FC45 = 64581  codeblock2  cybernoid.asm:11974
+Duration2nd         = $FC46 = 64582  codeblock2  cybernoid.asm:11975
+EGG_TIMER           = $79D3 = 31187  codeblock2  cybernoid.asm:2899
+EGG_TIMER_MASK      = $79FA = 31226  codeblock2  cybernoid.asm:2932
+EMPLACEMENT_ANIM    = $8D7A = 36218  codeblock2  cybernoid.asm:5741
+EMPLACEMENT_EXISTS  = $8D53 = 36179  codeblock2  cybernoid.asm:5706
+EMPLACEMENT_FIRE_BALLS = $8E02 = 36354  codeblock2  cybernoid.asm:5817
+EMPLACEMENT_FIRE_LEFT = $8DF7 = 36343  codeblock2  cybernoid.asm:5811
+EMPLACEMENT_FIRE_RIGHT = $8E0F = 36367  codeblock2  cybernoid.asm:5825
+EMPLACEMENT_FIRING  = $8D95 = 36245  codeblock2  cybernoid.asm:5757
+EMPLACEMENT_FIRING2 = $8DC8 = 36296  codeblock2  cybernoid.asm:5785
+EMPLACEMENT_LIST    = $8E1C = 36380  codeblock2  cybernoid.asm:5833
+EMPLACEMENT_RULES   = $8D7B = 36219  codeblock2  cybernoid.asm:5743
+EMPTY_SLOT          = $8CEF = 36079  codeblock2  cybernoid.asm:5645
+END_ENEMY_SHOTS     = $8CD0 = 36048  codeblock2  cybernoid.asm:5623
+END_LEVEL           = $75B8 = 30136  codeblock2  cybernoid.asm:2479
 END_MARKER          = $00FF =   255  codeblock2  Constants.asm:41
-END_OF_LIST         = $89D0 = 35280  codeblock2  cybernoid.asm:5239
-END_PICKUP_PLACEMENT = $A1F1 = 41457  codeblock2  cybernoid.asm:7758
-ENEMY_COLLISIONS    = $9A75 = 39541  codeblock2  cybernoid.asm:7121
-ENEMY_COLLISIONS_END = $9AC2 = 39618  codeblock2  cybernoid.asm:7166
-ENEMY_SHIPS         = $9BE2 = 39906  codeblock2  cybernoid.asm:7330
-ENEMY_SHOTS_DATA    = $8C0B = 35851  codeblock2  cybernoid.asm:5548
-ENEMY_SHOTS_LOOP    = $8CE7 = 36071  codeblock2  cybernoid.asm:5617
-ENEMY_SHOT_LOOP     = $8CA3 = 36003  codeblock2  cybernoid.asm:5577
-ENVELOPE_DATA       = $F28E = 62094  codeblock2  cybernoid.asm:11500
-ENVELOPE_MODULATION = $F1C9 = 61897  codeblock2  cybernoid.asm:11398
-ENVELOPE_STEP       = $F214 = 61972  codeblock2  cybernoid.asm:11453
-ENVELOPE_SUBSTEP    = $F215 = 61973  codeblock2  cybernoid.asm:11454
-ENV_BASE_SPEED      = $F21A = 61978  codeblock2  cybernoid.asm:11458
-ENV_DATA_PTR        = $F218 = 61976  codeblock2  cybernoid.asm:11457
-ENV_LOOP_COUNTER    = $F21C = 61980  codeblock2  cybernoid.asm:11460
-ENV_OVERRIDE_FLAG   = $F22D = 61997  codeblock2  cybernoid.asm:11474
-ENV_PHASE           = $F216 = 61974  codeblock2  cybernoid.asm:11455
-ENV_RELEASE_RATE    = $F232 = 62002  codeblock2  cybernoid.asm:11477
-ENV_SPEED_MOD       = $F21B = 61979  codeblock2  cybernoid.asm:11459
-EXIT1bitMUSIC       = $FC40 = 64576  codeblock2  cybernoid.asm:11912
-EXIT_GROUP_SETUP    = $73F0 = 29680  codeblock2  cybernoid.asm:2201
-EXIT_IM2            = $7109 = 28937  codeblock2  cybernoid.asm:1808
-EXPLOSIONS_LOOP     = $8927 = 35111  codeblock2  cybernoid.asm:5165
-EXPLOSION_CLUSTER   = $89D7 = 35287  codeblock2  cybernoid.asm:5247
-EXPLOSION_COORDS_LIST = $896E = 35182  codeblock2  cybernoid.asm:5204
-EXPLOSION_IN_USE    = $895E = 35166  codeblock2  cybernoid.asm:5194
-FILLOUT_HI_SCORE    = $954F = 38223  codeblock2  cybernoid.asm:6594
-FILLOUT_INGAME_TABLE = $670E = 26382  codeblock2  cybernoid.asm:359
-FILLOUT_MENU_TABLE  = $672B = 26411  codeblock2  cybernoid.asm:373
-FIND_EMPTY_SLOT_LOOP = $8CDB = 36059  codeblock2  cybernoid.asm:5610
-FIND_PLACE_PICKUP   = $A1D6 = 41430  codeblock2  cybernoid.asm:7735
-FIND_UNUSED_LOOP    = $7ABD = 31421  codeblock2  cybernoid.asm:3063
-FIRE_BUTTON         = $68AA = 26794  codeblock2  cybernoid.asm:660
-FIRE_PRESSED        = $7A5F = 31327  codeblock2  cybernoid.asm:2994
-FIRE_SUPER_WEAPONS  = $7C10 = 31760  codeblock2  cybernoid.asm:3294
-FONT_DATA           = $C2F1 = 49905  codeblock2  cybernoid.asm:9531
-FOUND_ENTRY         = $73BF = 29631  codeblock2  cybernoid.asm:2161
-FOUND_ITEM          = $9A8D = 39565  codeblock2  cybernoid.asm:7138
-FOUND_KEY           = $8762 = 34658  codeblock2  cybernoid.asm:4924
-FRAME_COUNTER       = $711A = 28954  codeblock2  cybernoid.asm:1826
-FREQ_CNT_1          = $85A7 = 34215  codeblock2  cybernoid.asm:4648
-FREQ_CNT_2          = $85AA = 34218  codeblock2  cybernoid.asm:4651
-FREQ_DELTA          = $85A2 = 34210  codeblock2  cybernoid.asm:4641
-FREQ_PARAM1_HIGH    = $859F = 34207  codeblock2  cybernoid.asm:4638
-FREQ_PARAM1_LOW     = $859E = 34206  codeblock2  cybernoid.asm:4637
-FREQ_PARAM2_HIGH    = $85A1 = 34209  codeblock2  cybernoid.asm:4640
-FREQ_PARAM2_LOW     = $85A0 = 34208  codeblock2  cybernoid.asm:4639
-FrameHigh           = $0005 =     5  codeblock2  Constants.asm:61
-FrameLow            = $0004 =     4  codeblock2  Constants.asm:60
-GAME_COUNTER_8BIT   = $65EA = 26090  codeblock2  cybernoid.asm:158
-GAME_OVER_TXT       = $8FCD = 36813  codeblock2  cybernoid.asm:5989
-GEMS_LOOP           = $78BF = 30911  codeblock2  cybernoid.asm:2724
-GET_16X16TILE_GFX_AS_HL = $A539 = 42297  codeblock2  cybernoid.asm:8411
-GET_ADR_FROM_TABLE  = $744D = 29773  codeblock2  cybernoid.asm:2251
-GET_CACHED_TILE_AS_HL = $678F = 26511  codeblock2  cybernoid.asm:466
-GET_COLOUR_ATT_AS_HL = $6799 = 26521  codeblock2  cybernoid.asm:474
-GET_KEY             = $662B = 26155  codeblock2  cybernoid.asm:206
-GET_LSB             = $688A = 26762  codeblock2  cybernoid.asm:639
-GET_NEXT_DATA       = $F02D = 61485  codeblock2  cybernoid.asm:11186
-GET_RAND_VALUE      = $6679 = 26233  codeblock2  cybernoid.asm:262
-GET_TILE_ADDR_OFFSET = $6779 = 26489  codeblock2  cybernoid.asm:446
-GFX_DATA16X16       = $D479 = 54393  codeblock2  cybernoid.asm:10144
+END_OF_LIST         = $89D0 = 35280  codeblock2  cybernoid.asm:5263
+END_PICKUP_PLACEMENT = $A1F1 = 41457  codeblock2  cybernoid.asm:7812
+ENEMY_COLLISIONS    = $9A75 = 39541  codeblock2  cybernoid.asm:7175
+ENEMY_COLLISIONS_END = $9AC2 = 39618  codeblock2  cybernoid.asm:7220
+ENEMY_SHIPS         = $9BE2 = 39906  codeblock2  cybernoid.asm:7384
+ENEMY_SHOTS_DATA    = $8C0B = 35851  codeblock2  cybernoid.asm:5572
+ENEMY_SHOTS_LOOP    = $8CE7 = 36071  codeblock2  cybernoid.asm:5641
+ENEMY_SHOT_LOOP     = $8CA3 = 36003  codeblock2  cybernoid.asm:5601
+ENTER_NAME_BUFFER   = $96D0 = 38608  codeblock2  cybernoid.asm:6792
+ENVELOPE_DATA       = $F28E = 62094  codeblock2  cybernoid.asm:11554
+ENVELOPE_MODULATION = $F1C9 = 61897  codeblock2  cybernoid.asm:11452
+ENVELOPE_STEP       = $F214 = 61972  codeblock2  cybernoid.asm:11507
+ENVELOPE_SUBSTEP    = $F215 = 61973  codeblock2  cybernoid.asm:11508
+ENV_BASE_SPEED      = $F21A = 61978  codeblock2  cybernoid.asm:11512
+ENV_DATA_PTR        = $F218 = 61976  codeblock2  cybernoid.asm:11511
+ENV_LOOP_COUNTER    = $F21C = 61980  codeblock2  cybernoid.asm:11514
+ENV_OVERRIDE_FLAG   = $F22D = 61997  codeblock2  cybernoid.asm:11528
+ENV_PHASE           = $F216 = 61974  codeblock2  cybernoid.asm:11509
+ENV_RELEASE_RATE    = $F232 = 62002  codeblock2  cybernoid.asm:11531
+ENV_SPEED_MOD       = $F21B = 61979  codeblock2  cybernoid.asm:11513
+EXIT1bitMUSIC       = $FC40 = 64576  codeblock2  cybernoid.asm:11966
+EXIT_GROUP_SETUP    = $73F0 = 29680  codeblock2  cybernoid.asm:2222
+EXIT_IM2            = $7109 = 28937  codeblock2  cybernoid.asm:1829
+EXPLOSIONS_LOOP     = $8927 = 35111  codeblock2  cybernoid.asm:5189
+EXPLOSION_CLUSTER   = $89D7 = 35287  codeblock2  cybernoid.asm:5271
+EXPLOSION_COORDS_LIST = $896E = 35182  codeblock2  cybernoid.asm:5228
+EXPLOSION_IN_USE    = $895E = 35166  codeblock2  cybernoid.asm:5218
+FILLOUT_HI_SCORE    = $954F = 38223  codeblock2  cybernoid.asm:6610
+FILLOUT_INGAME_TABLE = $670E = 26382  codeblock2  cybernoid.asm:373
+FILLOUT_MENU_TABLE  = $672B = 26411  codeblock2  cybernoid.asm:387
+FIND_EMPTY_SLOT_LOOP = $8CDB = 36059  codeblock2  cybernoid.asm:5634
+FIND_PLACE_PICKUP   = $A1D6 = 41430  codeblock2  cybernoid.asm:7789
+FIND_UNUSED_LOOP    = $7ABD = 31421  codeblock2  cybernoid.asm:3086
+FIRE_BUTTON         = $68AA = 26794  codeblock2  cybernoid.asm:674
+FIRE_PRESSED        = $7A5F = 31327  codeblock2  cybernoid.asm:3017
+FIRE_SUPER_WEAPONS  = $7C10 = 31760  codeblock2  cybernoid.asm:3317
+FONT_DATA           = $C2F1 = 49905  codeblock2  cybernoid.asm:9585
+FOUND_ENTRY         = $73BF = 29631  codeblock2  cybernoid.asm:2182
+FOUND_ITEM          = $9A8D = 39565  codeblock2  cybernoid.asm:7192
+FOUND_KEY           = $8762 = 34658  codeblock2  cybernoid.asm:4948
+FRAME_COUNTER       = $711A = 28954  codeblock2  cybernoid.asm:1847
+FREQ_CNT_1          = $85A7 = 34215  codeblock2  cybernoid.asm:4672
+FREQ_CNT_2          = $85AA = 34218  codeblock2  cybernoid.asm:4675
+FREQ_DELTA          = $85A2 = 34210  codeblock2  cybernoid.asm:4665
+FREQ_PARAM1_HIGH    = $859F = 34207  codeblock2  cybernoid.asm:4662
+FREQ_PARAM1_LOW     = $859E = 34206  codeblock2  cybernoid.asm:4661
+FREQ_PARAM2_HIGH    = $85A1 = 34209  codeblock2  cybernoid.asm:4664
+FREQ_PARAM2_LOW     = $85A0 = 34208  codeblock2  cybernoid.asm:4663
+FUNC_DRAW_LIST      = $6C44 = 27716  codeblock2  cybernoid.asm:1269
+FrameHigh           = $0005 =     5  codeblock2  Constants.asm:74
+FrameLow            = $0004 =     4  codeblock2  Constants.asm:73
+GAME_COUNTER_8BIT   = $65EA = 26090  codeblock2  cybernoid.asm:172
+GAME_OVER_TXT       = $8FCD = 36813  codeblock2  cybernoid.asm:6013
+GAME_SCORE          = $78F9 = 30969  codeblock2  cybernoid.asm:2794
+GAME_SCORE_LAST_DIGIT = $78FE = 30974  codeblock2  cybernoid.asm:2796
+GEMS_LOOP           = $78BF = 30911  codeblock2  cybernoid.asm:2745
+GET_16X16TILE_GFX_AS_HL = $A539 = 42297  codeblock2  cybernoid.asm:8465
+GET_ADR_FROM_TABLE  = $744D = 29773  codeblock2  cybernoid.asm:2272
+GET_CACHED_TILE_AS_HL = $678F = 26511  codeblock2  cybernoid.asm:480
+GET_COLOUR_ATT_AS_HL = $6799 = 26521  codeblock2  cybernoid.asm:488
+GET_KEY             = $662B = 26155  codeblock2  cybernoid.asm:220
+GET_LSB             = $688A = 26762  codeblock2  cybernoid.asm:653
+GET_NEXT_DATA       = $F02D = 61485  codeblock2  cybernoid.asm:11240
+GET_RAND_VALUE      = $6679 = 26233  codeblock2  cybernoid.asm:276
+GET_TILE_ADDR_OFFSET = $6779 = 26489  codeblock2  cybernoid.asm:460
+GFX_DATA16X16       = $D479 = 54393  codeblock2  cybernoid.asm:10198
 GLOBAL_COL          = $00E0 =   224  codeblock2  Constants.asm:38
-GO_25FPS            = $6574 = 25972  codeblock2  cybernoid.asm:104
-GUARDIAN_DATA       = $9140 = 37184  codeblock2  cybernoid.asm:6186
-GUARDIAN_DOWNWARD   = $90CA = 37066  codeblock2  cybernoid.asm:6124
-GUARDIAN_INIT_DATA  = $9030 = 36912  codeblock2  cybernoid.asm:6045
-GUARDIAN_UPWARD     = $905D = 36957  codeblock2  cybernoid.asm:6069
-GUN_EMPLACEMENTS    = $8D3C = 36156  codeblock2  cybernoid.asm:5660
-HANDLE_COUNTDOWN    = $8809 = 34825  codeblock2  cybernoid.asm:5019
+GO_25FPS            = $6574 = 25972  codeblock2  cybernoid.asm:109
+GREEN               = $0004 =     4  codeblock2  Constants.asm:51
+GUARDIAN_DATA       = $9140 = 37184  codeblock2  cybernoid.asm:6210
+GUARDIAN_DOWNWARD   = $90CA = 37066  codeblock2  cybernoid.asm:6148
+GUARDIAN_INIT_DATA  = $9030 = 36912  codeblock2  cybernoid.asm:6069
+GUARDIAN_UPWARD     = $905D = 36957  codeblock2  cybernoid.asm:6093
+GUN_EMPLACEMENTS    = $8D3C = 36156  codeblock2  cybernoid.asm:5684
+HANDLE_COUNTDOWN    = $8809 = 34825  codeblock2  cybernoid.asm:5043
 HEADERFLAG          = $0000 =     0              LoadSection.asm:39
-HI_SCORE_DRAW_LIST  = $947C = 38012  codeblock2  cybernoid.asm:6560
-HI_SCORE_TEXT       = $949C = 38044  codeblock2  cybernoid.asm:6569
-ICON8x8             = $6C4A = 27722  codeblock2  cybernoid.asm:1258
-ICON_LD_ADDR        = $6C54 = 27732  codeblock2  cybernoid.asm:1269
-IMMUNE_TIMER        = $71B2 = 29106  codeblock2  cybernoid.asm:1840
-INGAME_LOOP         = $656A = 25962  codeblock2  cybernoid.asm:90
-INGAME_RESET        = $660B = 26123  codeblock2  cybernoid.asm:188
-INIT_GAME_SCREEN_TABLES = $66E7 = 26343  codeblock2  cybernoid.asm:344
-INIT_MENU_SCREEN_TABLES = $671E = 26398  codeblock2  cybernoid.asm:368
-INK_BLACK           = $00D7 =   215  codeblock2  Constants.asm:44 (unused)
-INK_BLUE            = $00D8 =   216  codeblock2  Constants.asm:45 (unused)
-INK_CYAN            = $00DC =   220  codeblock2  Constants.asm:49
-INK_GREEN           = $00DB =   219  codeblock2  Constants.asm:48
-INK_PURPLE          = $00DA =   218  codeblock2  Constants.asm:47
-INK_RED             = $00D9 =   217  codeblock2  Constants.asm:46
-INK_WHITE           = $00DE =   222  codeblock2  Constants.asm:51 (unused)
-INK_YELLOW          = $00DD =   221  codeblock2  Constants.asm:50
-INPUTS_DISABLED     = $8F58 = 36696  codeblock2  cybernoid.asm:5928
-INPUT_ENABLED       = $8F94 = 36756  codeblock2  cybernoid.asm:5953
-INPUT_TYPE          = $68AB = 26795  codeblock2  cybernoid.asm:662
-INTERFACE2_JOY      = $6845 = 26693  codeblock2  cybernoid.asm:599
-INVALID_KEY_PRESS   = $8229 = 33321  codeblock2  cybernoid.asm:4246
-ISR                 = $70D3 = 28883  codeblock2  cybernoid.asm:1768
-InitCounter         = $0008 =     8  codeblock2  Constants.asm:64
-KEMPSTON_JOYSTICK   = $686A = 26730  codeblock2  cybernoid.asm:621
-KEY_LOOP            = $6632 = 26162  codeblock2  cybernoid.asm:210
-KEY_PRESSED         = $6645 = 26181  codeblock2  cybernoid.asm:222
-KEY_SEARCH          = $8751 = 34641  codeblock2  cybernoid.asm:4912
-KEY_TABLE           = $6649 = 26185  codeblock2  cybernoid.asm:228
+HI_SCORE_DRAW_LIST  = $947C = 38012  codeblock2  cybernoid.asm:6584
+HI_SCORE_TEXT       = $949C = 38044  codeblock2  cybernoid.asm:6593
+HI_SCORE_TEXT_END   = $954B = 38219  codeblock2  cybernoid.asm:6607
+HI_SCORE_TEXT_SPARE = $953B = 38203  codeblock2  cybernoid.asm:6604
+ICON8x8             = $6C4A = 27722  codeblock2  cybernoid.asm:1279
+ICON_LD_ADDR        = $6C54 = 27732  codeblock2  cybernoid.asm:1290
+IMMUNE_TIMER        = $71B2 = 29106  codeblock2  cybernoid.asm:1861
+INGAME_LOOP         = $656A = 25962  codeblock2  cybernoid.asm:95
+INGAME_RESET        = $660B = 26123  codeblock2  cybernoid.asm:202
+INIT_GAME_SCREEN_TABLES = $66E7 = 26343  codeblock2  cybernoid.asm:358
+INIT_MENU_SCREEN_TABLES = $671E = 26398  codeblock2  cybernoid.asm:382
+INK_BLACK           = $00D7 =   215  codeblock2  Constants.asm:57 (unused)
+INK_BLUE            = $00D8 =   216  codeblock2  Constants.asm:58 (unused)
+INK_CYAN            = $00DC =   220  codeblock2  Constants.asm:62
+INK_GREEN           = $00DB =   219  codeblock2  Constants.asm:61
+INK_PURPLE          = $00DA =   218  codeblock2  Constants.asm:60
+INK_RED             = $00D9 =   217  codeblock2  Constants.asm:59
+INK_WHITE           = $00DE =   222  codeblock2  Constants.asm:64
+INK_YELLOW          = $00DD =   221  codeblock2  Constants.asm:63
+INPUTS_DISABLED     = $8F58 = 36696  codeblock2  cybernoid.asm:5952
+INPUT_ENABLED       = $8F94 = 36756  codeblock2  cybernoid.asm:5977
+INPUT_TYPE          = $68AB = 26795  codeblock2  cybernoid.asm:676
+INTERFACE2_JOY      = $6845 = 26693  codeblock2  cybernoid.asm:613
+INVALID_KEY_PRESS   = $8229 = 33321  codeblock2  cybernoid.asm:4269
+ISR                 = $70D3 = 28883  codeblock2  cybernoid.asm:1789
+InitCounter         = $0008 =     8  codeblock2  Constants.asm:77
+KEMPSTON_JOYSTICK   = $686A = 26730  codeblock2  cybernoid.asm:635
+KEY_LOOP            = $6632 = 26162  codeblock2  cybernoid.asm:224
+KEY_PRESSED         = $6645 = 26181  codeblock2  cybernoid.asm:236
+KEY_SEARCH          = $8751 = 34641  codeblock2  cybernoid.asm:4936
+KEY_TABLE           = $6649 = 26185  codeblock2  cybernoid.asm:242
 KWRDAT              = $00AC =   172              LoadSection.asm:12 (unused)
 KWRDBEEP            = $00D7 =   215              LoadSection.asm:19 (unused)
 KWRDBORDER          = $00E7 =   231              LoadSection.asm:28
@@ -17916,484 +18038,475 @@ KWRDSTOP            = $00E2 =   226              LoadSection.asm:24 (unused)
 KWRDUSR             = $00C0 =   192              LoadSection.asm:16
 KWRDVAL             = $00B0 =   176              LoadSection.asm:14 (unused)
 L10END              = $002B =    43  PROG_DATA   LoadSection.asm:70
+L1_ICON8x8          = $6BFB = 27643  codeblock2  cybernoid.asm:1220
 L20END              = $003D =    61  PROG_DATA   LoadSection.asm:80
+L2_ICON8x8          = $6B30 = 27440  codeblock2  cybernoid.asm:1071
 L30END              = $0051 =    81  PROG_DATA   LoadSection.asm:88
+L3_ICON8x8          = $6BBD = 27581  codeblock2  cybernoid.asm:1181
 L40END              = $0063 =    99  PROG_DATA   LoadSection.asm:96
-L78FE               = $78FE = 30974  codeblock2  cybernoid.asm:2775
-L7904               = $7904 = 30980  codeblock2  cybernoid.asm:2778
-LABELSPR            = $A29A = 41626  codeblock2  cybernoid.asm:7905
-LABEL_X1_CHECK      = $6806 = 26630  codeblock2  cybernoid.asm:550
-LABEL_X2_CHECK      = $6804 = 26628  codeblock2  cybernoid.asm:548
-LABEL_Y1_CHECK      = $680F = 26639  codeblock2  cybernoid.asm:558
-LABEL_Y2_CHECK      = $680D = 26637  codeblock2  cybernoid.asm:556
-LANE_GUARDIANS      = $9040 = 36928  codeblock2  cybernoid.asm:6056
-LAST_SND_EFFECT_ID  = $859B = 34203  codeblock2  cybernoid.asm:4631
-LAST_WEAPON_USED    = $7B49 = 31561  codeblock2  cybernoid.asm:3171
-LEFT_BUTTON         = $68A7 = 26791  codeblock2  cybernoid.asm:657
-LEFT_EDGE           = $71E9 = 29161  codeblock2  cybernoid.asm:1884
-LEFT_OFFSET         = $80EE = 33006  codeblock2  cybernoid.asm:4019
-LEVEL_COMPLETE_DATA = $7644 = 30276  codeblock2  cybernoid.asm:2543
-LEVEL_COMPLETE_LIFT_DISTANCE = $7643 = 30275  codeblock2  cybernoid.asm:2541
-LEVEL_INDEX         = $744B = 29771  codeblock2  cybernoid.asm:2248
-LEVEL_OFFSET        = $744C = 29772  codeblock2  cybernoid.asm:2249
-LEVEL_SELECTOR_DRAW_LIST = $6615 = 26133  codeblock2  cybernoid.asm:198 (unused)
-LIST_LOOP           = $89B1 = 35249  codeblock2  cybernoid.asm:5226
-LIST_OF_TABS_FOR_SETUP = $7413 = 29715  codeblock2  cybernoid.asm:2218
-LIVES               = $78D3 = 30931  codeblock2  cybernoid.asm:2740
-LOCK_ON             = $8B71 = 35697  codeblock2  cybernoid.asm:5440
-LOGO_DATA           = $84D7 = 34007  codeblock2  cybernoid.asm:4508
-LOOKUP_6300_ADDR_OFFSET = $673B = 26427  codeblock2  cybernoid.asm:384
-LOOKUP_CRL_TABLE    = $F1A1 = 61857  codeblock2  cybernoid.asm:11366
-LOOP_BLM_FIRE       = $76C1 = 30401  codeblock2  cybernoid.asm:2615
-LOOP_CTR            = $6B8A = 27530  codeblock2  cybernoid.asm:1126
-LOOP_DEBRIS         = $706C = 28780  codeblock2  cybernoid.asm:1693
-LOOP_EMPLACEMENT    = $8D3F = 36159  codeblock2  cybernoid.asm:5663
-LOOP_GK             = $6604 = 26116  codeblock2  cybernoid.asm:180
-LOOP_HOR            = $84B7 = 33975  codeblock2  cybernoid.asm:4488
-LOOP_INPUT          = $833B = 33595  codeblock2  cybernoid.asm:4339
-LOOP_ITEMS          = $9A7D = 39549  codeblock2  cybernoid.asm:7128
-LOOP_KD             = $65FF = 26111  codeblock2  cybernoid.asm:177
-LOOP_MENU_LOGO      = $849D = 33949  codeblock2  cybernoid.asm:4469
-LOOP_PHRASE_START   = $F0D2 = 61650  codeblock2  cybernoid.asm:11262
-LOOP_PICKUP_COMPARE = $A1E1 = 41441  codeblock2  cybernoid.asm:7745
-LOOP_SCENE_COLLISION = $6CAC = 27820  codeblock2  cybernoid.asm:1343
-LOOP_SEARCH         = $73B1 = 29617  codeblock2  cybernoid.asm:2152
-LOOP_SPRITE16       = $80E8 = 33000  codeblock2  cybernoid.asm:4009
-LOOP_START          = $F0C6 = 61638  codeblock2  cybernoid.asm:11257
-LOOP_START_PTR      = $F228 = 61992  codeblock2  cybernoid.asm:11471
-LOOP_VERT           = $84C8 = 33992  codeblock2  cybernoid.asm:4499
-LOOP_WDM_FIRE       = $76B0 = 30384  codeblock2  cybernoid.asm:2604
-LOW_PRIORITY_SFX    = $F089 = 61577  codeblock2  cybernoid.asm:11229
-L_6501              = $6501 = 25857  codeblock2  cybernoid.asm:30
-L_6827              = $6827 = 26663  codeblock2  cybernoid.asm:576
-L_6831              = $6831 = 26673  codeblock2  cybernoid.asm:583
-L_683B              = $683B = 26683  codeblock2  cybernoid.asm:590
-L_68FE              = $68FE = 26878  codeblock2  cybernoid.asm:713
-L_6953              = $6953 = 26963  codeblock2  cybernoid.asm:763
-L_6A0A              = $6A0A = 27146  codeblock2  cybernoid.asm:914
-L_6A36              = $6A36 = 27190  codeblock2  cybernoid.asm:931
-L_6A46              = $6A46 = 27206  codeblock2  cybernoid.asm:938
-L_6A67              = $6A67 = 27239  codeblock2  cybernoid.asm:952
-L_6A6B              = $6A6B = 27243  codeblock2  cybernoid.asm:954
-L_6A70              = $6A70 = 27248  codeblock2  cybernoid.asm:957
-L_6A71              = $6A71 = 27249  codeblock2  cybernoid.asm:958
-L_6A87              = $6A87 = 27271  codeblock2  cybernoid.asm:975
-L_6AB1              = $6AB1 = 27313  codeblock2  cybernoid.asm:995
-L_6ABA              = $6ABA = 27322  codeblock2  cybernoid.asm:1005
-L_6AE2              = $6AE2 = 27362  codeblock2  cybernoid.asm:1025
-L_6BB5              = $6BB5 = 27573  codeblock2  cybernoid.asm:1158
-L_6BBD              = $6BBD = 27581  codeblock2  cybernoid.asm:1166
-L_6BC7              = $6BC7 = 27591  codeblock2  cybernoid.asm:1171
-L_6BCF              = $6BCF = 27599  codeblock2  cybernoid.asm:1179
-L_6BD9              = $6BD9 = 27609  codeblock2  cybernoid.asm:1184
-L_6BEA              = $6BEA = 27626  codeblock2  cybernoid.asm:1196
-L_6C07              = $6C07 = 27655  codeblock2  cybernoid.asm:1211
-L_6C13              = $6C13 = 27667  codeblock2  cybernoid.asm:1217
-L_6C1A              = $6C1A = 27674  codeblock2  cybernoid.asm:1220
-L_6C21              = $6C21 = 27681  codeblock2  cybernoid.asm:1223
-L_6C6B              = $6C6B = 27755  codeblock2  cybernoid.asm:1288
-L_6D4D              = $6D4D = 27981  codeblock2  cybernoid.asm:1398
-L_6D7A              = $6D7A = 28026  codeblock2  cybernoid.asm:1422
-L_6D7F              = $6D7F = 28031  codeblock2  cybernoid.asm:1425
-L_6D96              = $6D96 = 28054  codeblock2  cybernoid.asm:1443
-L_6DE0              = $6DE0 = 28128  codeblock2  cybernoid.asm:1488
-L_6E0D              = $6E0D = 28173  codeblock2  cybernoid.asm:1527
-L_6E1D              = $6E1D = 28189  codeblock2  cybernoid.asm:1537
-L_6E21              = $6E21 = 28193  codeblock2  cybernoid.asm:1542
-L_6E95              = $6E95 = 28309  codeblock2  cybernoid.asm:1592
-L_6EA0              = $6EA0 = 28320  codeblock2  cybernoid.asm:1600
-L_6EBF              = $6EBF = 28351  codeblock2  cybernoid.asm:1626
-L_72C2              = $72C2 = 29378  codeblock2  cybernoid.asm:2027
-L_72DF              = $72DF = 29407  codeblock2  cybernoid.asm:2044
-L_72EC              = $72EC = 29420  codeblock2  cybernoid.asm:2049
-L_730E              = $730E = 29454  codeblock2  cybernoid.asm:2071
-L_732A              = $732A = 29482  codeblock2  cybernoid.asm:2081
-L_7337              = $7337 = 29495  codeblock2  cybernoid.asm:2090
-L_735B              = $735B = 29531  codeblock2  cybernoid.asm:2121
-L_74F3              = $74F3 = 29939  codeblock2  cybernoid.asm:2372
-L_74F8              = $74F8 = 29944  codeblock2  cybernoid.asm:2375
-L_7502              = $7502 = 29954  codeblock2  cybernoid.asm:2384
-L_752F              = $752F = 29999  codeblock2  cybernoid.asm:2409
-L_7647              = $7647 = 30279  codeblock2  cybernoid.asm:2546
-L_7676              = $7676 = 30326  codeblock2  cybernoid.asm:2575
-L_78D4              = $78D4 = 30932  codeblock2  cybernoid.asm:2742
-L_78DF              = $78DF = 30943  codeblock2  cybernoid.asm:2750
-L_78EE              = $78EE = 30958  codeblock2  cybernoid.asm:2760
-L_78EF              = $78EF = 30959  codeblock2  cybernoid.asm:2762
-L_7935              = $7935 = 31029  codeblock2  cybernoid.asm:2787
-L_7940              = $7940 = 31040  codeblock2  cybernoid.asm:2791
-L_7948              = $7948 = 31048  codeblock2  cybernoid.asm:2795
-L_7950              = $7950 = 31056  codeblock2  cybernoid.asm:2802
-L_79A7              = $79A7 = 31143  codeblock2  cybernoid.asm:2855
-L_79B7              = $79B7 = 31159  codeblock2  cybernoid.asm:2868
-L_79D4              = $79D4 = 31188  codeblock2  cybernoid.asm:2878
-L_7A48              = $7A48 = 31304  codeblock2  cybernoid.asm:2974
-L_7A4C              = $7A4C = 31308  codeblock2  cybernoid.asm:2978
-L_7A6B              = $7A6B = 31339  codeblock2  cybernoid.asm:3003
-L_7A88              = $7A88 = 31368  codeblock2  cybernoid.asm:3020
-L_7B6E              = $7B6E = 31598  codeblock2  cybernoid.asm:3203
-L_7C8C              = $7C8C = 31884  codeblock2  cybernoid.asm:3392
-L_7CC4              = $7CC4 = 31940  codeblock2  cybernoid.asm:3420
-L_7CDB              = $7CDB = 31963  codeblock2  cybernoid.asm:3429
-L_7CEF              = $7CEF = 31983  codeblock2  cybernoid.asm:3440
-L_7D15              = $7D15 = 32021  codeblock2  cybernoid.asm:3463
-L_7DDF              = $7DDF = 32223  codeblock2  cybernoid.asm:3554
-L_7DF7              = $7DF7 = 32247  codeblock2  cybernoid.asm:3569
-L_7DFA              = $7DFA = 32250  codeblock2  cybernoid.asm:3570
-L_7E0A              = $7E0A = 32266  codeblock2  cybernoid.asm:3580
-L_7E31              = $7E31 = 32305  codeblock2  cybernoid.asm:3602
-L_7EE4              = $7EE4 = 32484  codeblock2  cybernoid.asm:3694
-L_7EE7              = $7EE7 = 32487  codeblock2  cybernoid.asm:3695
-L_7F25              = $7F25 = 32549  codeblock2  cybernoid.asm:3732
-L_7F45              = $7F45 = 32581  codeblock2  cybernoid.asm:3758
-L_7F4C              = $7F4C = 32588  codeblock2  cybernoid.asm:3763
-L_7F5B              = $7F5B = 32603  codeblock2  cybernoid.asm:3770
-L_7F62              = $7F62 = 32610  codeblock2  cybernoid.asm:3775
-L_7F97              = $7F97 = 32663  codeblock2  cybernoid.asm:3808
-L_7FBF              = $7FBF = 32703  codeblock2  cybernoid.asm:3830
-L_8020              = $8020 = 32800  codeblock2  cybernoid.asm:3887
-L_8038              = $8038 = 32824  codeblock2  cybernoid.asm:3898
-L_8043              = $8043 = 32835  codeblock2  cybernoid.asm:3903
-L_8049              = $8049 = 32841  codeblock2  cybernoid.asm:3905
-L_8077              = $8077 = 32887  codeblock2  cybernoid.asm:3924
-L_809E              = $809E = 32926  codeblock2  cybernoid.asm:3946
-L_8205              = $8205 = 33285  codeblock2  cybernoid.asm:4230
-L_8214              = $8214 = 33300  codeblock2  cybernoid.asm:4235
-L_82E5              = $82E5 = 33509  codeblock2  cybernoid.asm:4285
-L_8329              = $8329 = 33577  codeblock2  cybernoid.asm:4328
-L_8360              = $8360 = 33632  codeblock2  cybernoid.asm:4356
-L_8367              = $8367 = 33639  codeblock2  cybernoid.asm:4359
-L_836E              = $836E = 33646  codeblock2  cybernoid.asm:4362
-L_8375              = $8375 = 33653  codeblock2  cybernoid.asm:4365
-L_8391              = $8391 = 33681  codeblock2  cybernoid.asm:4376
-L_83B1              = $83B1 = 33713  codeblock2  cybernoid.asm:4393
-L_8500              = $8500 = 34048  codeblock2  cybernoid.asm:4522
-L_8503              = $8503 = 34051  codeblock2  cybernoid.asm:4524
-L_851F              = $851F = 34079  codeblock2  cybernoid.asm:4543
-L_8535              = $8535 = 34101  codeblock2  cybernoid.asm:4556
-L_8553              = $8553 = 34131  codeblock2  cybernoid.asm:4575
-L_856E              = $856E = 34158  codeblock2  cybernoid.asm:4593
-L_8571              = $8571 = 34161  codeblock2  cybernoid.asm:4596
-L_858D              = $858D = 34189  codeblock2  cybernoid.asm:4615
-L_865D              = $865D = 34397  codeblock2  cybernoid.asm:4785
-L_866D              = $866D = 34413  codeblock2  cybernoid.asm:4791
-L_866F              = $866F = 34415  codeblock2  cybernoid.asm:4793
-L_8699              = $8699 = 34457  codeblock2  cybernoid.asm:4815
-L_86A5              = $86A5 = 34469  codeblock2  cybernoid.asm:4821
-L_86AC              = $86AC = 34476  codeblock2  cybernoid.asm:4825
-L_86B8              = $86B8 = 34488  codeblock2  cybernoid.asm:4831
-L_86BF              = $86BF = 34495  codeblock2  cybernoid.asm:4835
-L_86CF              = $86CF = 34511  codeblock2  cybernoid.asm:4843
-L_86EA              = $86EA = 34538  codeblock2  cybernoid.asm:4856
-L_86EC              = $86EC = 34540  codeblock2  cybernoid.asm:4857
-L_86F8              = $86F8 = 34552  codeblock2  cybernoid.asm:4863
-L_86FB              = $86FB = 34555  codeblock2  cybernoid.asm:4866
-L_86FE              = $86FE = 34558  codeblock2  cybernoid.asm:4867
-L_877B              = $877B = 34683  codeblock2  cybernoid.asm:4937
-L_87A5              = $87A5 = 34725  codeblock2  cybernoid.asm:4957
-L_88F0              = $88F0 = 35056  codeblock2  cybernoid.asm:5123
-L_891F              = $891F = 35103  codeblock2  cybernoid.asm:5153
-L_89DB              = $89DB = 35291  codeblock2  cybernoid.asm:5249
-L_89E4              = $89E4 = 35300  codeblock2  cybernoid.asm:5254
-L_89EC              = $89EC = 35308  codeblock2  cybernoid.asm:5257
-L_8A3E              = $8A3E = 35390  codeblock2  cybernoid.asm:5281
-L_8A46              = $8A46 = 35398  codeblock2  cybernoid.asm:5288
-L_8A64              = $8A64 = 35428  codeblock2  cybernoid.asm:5311
-L_8A6C              = $8A6C = 35436  codeblock2  cybernoid.asm:5319
-L_8AC6              = $8AC6 = 35526  codeblock2  cybernoid.asm:5364
-L_8AD8              = $8AD8 = 35544  codeblock2  cybernoid.asm:5378
-L_8B8C              = $8B8C = 35724  codeblock2  cybernoid.asm:5466
-L_8B95              = $8B95 = 35733  codeblock2  cybernoid.asm:5475
-L_8BB0              = $8BB0 = 35760  codeblock2  cybernoid.asm:5494
-L_8BDC              = $8BDC = 35804  codeblock2  cybernoid.asm:5523
-L_8BE8              = $8BE8 = 35816  codeblock2  cybernoid.asm:5528
-L_8BF1              = $8BF1 = 35825  codeblock2  cybernoid.asm:5531
-L_8D4F              = $8D4F = 36175  codeblock2  cybernoid.asm:5678
-L_8D5A              = $8D5A = 36186  codeblock2  cybernoid.asm:5687
-L_8D6C              = $8D6C = 36204  codeblock2  cybernoid.asm:5697
-L_8DAF              = $8DAF = 36271  codeblock2  cybernoid.asm:5747
-L_8DE2              = $8DE2 = 36322  codeblock2  cybernoid.asm:5774
-L_9044              = $9044 = 36932  codeblock2  cybernoid.asm:6058
-L_926B              = $926B = 37483  codeblock2  cybernoid.asm:6284
-L_9277              = $9277 = 37495  codeblock2  cybernoid.asm:6290
-L_927F              = $927F = 37503  codeblock2  cybernoid.asm:6293
-L_92A5              = $92A5 = 37541  codeblock2  cybernoid.asm:6309
-L_92B2              = $92B2 = 37554  codeblock2  cybernoid.asm:6314
-L_92BC              = $92BC = 37564  codeblock2  cybernoid.asm:6318
-L_92C9              = $92C9 = 37577  codeblock2  cybernoid.asm:6323
-L_92D3              = $92D3 = 37587  codeblock2  cybernoid.asm:6327
-L_92E0              = $92E0 = 37600  codeblock2  cybernoid.asm:6332
-L_92EA              = $92EA = 37610  codeblock2  cybernoid.asm:6336
-L_92F7              = $92F7 = 37623  codeblock2  cybernoid.asm:6341
-L_9304              = $9304 = 37636  codeblock2  cybernoid.asm:6347
-L_9312              = $9312 = 37650  codeblock2  cybernoid.asm:6355
-L_931C              = $931C = 37660  codeblock2  cybernoid.asm:6362
-L_9325              = $9325 = 37669  codeblock2  cybernoid.asm:6368
-L_932B              = $932B = 37675  codeblock2  cybernoid.asm:6373
-L_9349              = $9349 = 37705  codeblock2  cybernoid.asm:6386
-L_9376              = $9376 = 37750  codeblock2  cybernoid.asm:6402
-L_939A              = $939A = 37786  codeblock2  cybernoid.asm:6416
-L_93AC              = $93AC = 37804  codeblock2  cybernoid.asm:6423
-L_93BE              = $93BE = 37822  codeblock2  cybernoid.asm:6430
-L_93D0              = $93D0 = 37840  codeblock2  cybernoid.asm:6437
-L_93EA              = $93EA = 37866  codeblock2  cybernoid.asm:6455
-L_93F9              = $93F9 = 37881  codeblock2  cybernoid.asm:6466
-L_93FC              = $93FC = 37884  codeblock2  cybernoid.asm:6469
-L_940C              = $940C = 37900  codeblock2  cybernoid.asm:6481
-L_940F              = $940F = 37903  codeblock2  cybernoid.asm:6484
-L_941E              = $941E = 37918  codeblock2  cybernoid.asm:6495
-L_9421              = $9421 = 37921  codeblock2  cybernoid.asm:6498
-L_9430              = $9430 = 37936  codeblock2  cybernoid.asm:6509
-L_9553              = $9553 = 38227  codeblock2  cybernoid.asm:6596
-L_9566              = $9566 = 38246  codeblock2  cybernoid.asm:6604
-L_95C1              = $95C1 = 38337  codeblock2  cybernoid.asm:6644
-L_95C8              = $95C8 = 38344  codeblock2  cybernoid.asm:6647
-L_95CE              = $95CE = 38350  codeblock2  cybernoid.asm:6649
-L_95D7              = $95D7 = 38359  codeblock2  cybernoid.asm:6653
-L_95F0              = $95F0 = 38384  codeblock2  cybernoid.asm:6666
-L_95FE              = $95FE = 38398  codeblock2  cybernoid.asm:6674
-L_9610              = $9610 = 38416  codeblock2  cybernoid.asm:6684
-L_961F              = $961F = 38431  codeblock2  cybernoid.asm:6693
-L_9628              = $9628 = 38440  codeblock2  cybernoid.asm:6697
-L_9637              = $9637 = 38455  codeblock2  cybernoid.asm:6702
-L_963E              = $963E = 38462  codeblock2  cybernoid.asm:6706
-L_9648              = $9648 = 38472  codeblock2  cybernoid.asm:6710
-L_9651              = $9651 = 38481  codeblock2  cybernoid.asm:6713
-L_96D8              = $96D8 = 38616  codeblock2  cybernoid.asm:6741
-L_96DD              = $96DD = 38621  codeblock2  cybernoid.asm:6743
-L_96F3              = $96F3 = 38643  codeblock2  cybernoid.asm:6754
-L_9713              = $9713 = 38675  codeblock2  cybernoid.asm:6766
-L_9728              = $9728 = 38696  codeblock2  cybernoid.asm:6775
-L_974C              = $974C = 38732  codeblock2  cybernoid.asm:6790
-L_9758              = $9758 = 38744  codeblock2  cybernoid.asm:6795
-L_97F3              = $97F3 = 38899  codeblock2  cybernoid.asm:6849
-L_9803              = $9803 = 38915  codeblock2  cybernoid.asm:6862
-L_9807              = $9807 = 38919  codeblock2  cybernoid.asm:6864
-L_9810              = $9810 = 38928  codeblock2  cybernoid.asm:6867
-L_9817              = $9817 = 38935  codeblock2  cybernoid.asm:6871
-L_988E              = $988E = 39054  codeblock2  cybernoid.asm:6923
-L_989A              = $989A = 39066  codeblock2  cybernoid.asm:6929
-L_98AA              = $98AA = 39082  codeblock2  cybernoid.asm:6937
-L_98B8              = $98B8 = 39096  codeblock2  cybernoid.asm:6946
-L_98D5              = $98D5 = 39125  codeblock2  cybernoid.asm:6959
-L_98F5              = $98F5 = 39157  codeblock2  cybernoid.asm:6976
-L_9902              = $9902 = 39170  codeblock2  cybernoid.asm:6985
-L_9911              = $9911 = 39185  codeblock2  cybernoid.asm:6993
-L_9920              = $9920 = 39200  codeblock2  cybernoid.asm:6998
-L_9939              = $9939 = 39225  codeblock2  cybernoid.asm:7009
-L_9947              = $9947 = 39239  codeblock2  cybernoid.asm:7015
-L_996E              = $996E = 39278  codeblock2  cybernoid.asm:7038
-L_999B              = $999B = 39323  codeblock2  cybernoid.asm:7059
-L_99A3              = $99A3 = 39331  codeblock2  cybernoid.asm:7062
-L_9A2C              = $9A2C = 39468  codeblock2  cybernoid.asm:7087
-L_9A31              = $9A31 = 39473  codeblock2  cybernoid.asm:7090
-L_9A44              = $9A44 = 39492  codeblock2  cybernoid.asm:7102
-L_9AB8              = $9AB8 = 39608  codeblock2  cybernoid.asm:7162
-L_9AD0              = $9AD0 = 39632  codeblock2  cybernoid.asm:7177
-L_9AE0              = $9AE0 = 39648  codeblock2  cybernoid.asm:7185
-L_9AF0              = $9AF0 = 39664  codeblock2  cybernoid.asm:7195
-L_9B00              = $9B00 = 39680  codeblock2  cybernoid.asm:7203
-L_9B10              = $9B10 = 39696  codeblock2  cybernoid.asm:7213
-L_9B20              = $9B20 = 39712  codeblock2  cybernoid.asm:7221
-L_9B51              = $9B51 = 39761  codeblock2  cybernoid.asm:7236
-L_9B61              = $9B61 = 39777  codeblock2  cybernoid.asm:7245
-L_9BD8              = $9BD8 = 39896  codeblock2  cybernoid.asm:7325
-L_9C24              = $9C24 = 39972  codeblock2  cybernoid.asm:7362
-L_9C30              = $9C30 = 39984  codeblock2  cybernoid.asm:7367
-L_9C49              = $9C49 = 40009  codeblock2  cybernoid.asm:7378
-L_9FC9              = $9FC9 = 40905  codeblock2  cybernoid.asm:7517
-L_9FDE              = $9FDE = 40926  codeblock2  cybernoid.asm:7527
-L_9FFB              = $9FFB = 40955  codeblock2  cybernoid.asm:7539
-L_A03F              = $A03F = 41023  codeblock2  cybernoid.asm:7557
-L_A051              = $A051 = 41041  codeblock2  cybernoid.asm:7572
-L_A058              = $A058 = 41048  codeblock2  cybernoid.asm:7577
-L_A05F              = $A05F = 41055  codeblock2  cybernoid.asm:7581
-L_A082              = $A082 = 41090  codeblock2  cybernoid.asm:7605
-L_A08F              = $A08F = 41103  codeblock2  cybernoid.asm:7610
-L_A0A0              = $A0A0 = 41120  codeblock2  cybernoid.asm:7619
-L_A0CC              = $A0CC = 41164  codeblock2  cybernoid.asm:7641
-L_A0D4              = $A0D4 = 41172  codeblock2  cybernoid.asm:7644
-L_A0F6              = $A0F6 = 41206  codeblock2  cybernoid.asm:7666
-L_A2F3              = $A2F3 = 41715  codeblock2  cybernoid.asm:7962
-L_A31B              = $A31B = 41755  codeblock2  cybernoid.asm:7984
-L_A32C              = $A32C = 41772  codeblock2  cybernoid.asm:7995
-L_A367              = $A367 = 41831  codeblock2  cybernoid.asm:8049
-L_A3C8              = $A3C8 = 41928  codeblock2  cybernoid.asm:8107
-L_A402              = $A402 = 41986  codeblock2  cybernoid.asm:8137
-L_A40B              = $A40B = 41995  codeblock2  cybernoid.asm:8143
-L_A453              = $A453 = 42067  codeblock2  cybernoid.asm:8208
-L_A456              = $A456 = 42070  codeblock2  cybernoid.asm:8209
-L_A462              = $A462 = 42082  codeblock2  cybernoid.asm:8218
-L_A469              = $A469 = 42089  codeblock2  cybernoid.asm:8224
-L_A470              = $A470 = 42096  codeblock2  cybernoid.asm:8230
-L_A4BA              = $A4BA = 42170  codeblock2  cybernoid.asm:8295
-L_A4BD              = $A4BD = 42173  codeblock2  cybernoid.asm:8296
-L_A4C9              = $A4C9 = 42185  codeblock2  cybernoid.asm:8305
-L_A4D0              = $A4D0 = 42192  codeblock2  cybernoid.asm:8311
-L_C067              = $C067 = 49255  codeblock2  cybernoid.asm:9438
-L_EF4E              = $EF4E = 61262  codeblock2  cybernoid.asm:11066
-L_EFB0              = $EFB0 = 61360  codeblock2  cybernoid.asm:11111
-L_F156              = $F156 = 61782  codeblock2  cybernoid.asm:11329
-L_F162              = $F162 = 61794  codeblock2  cybernoid.asm:11334
-L_FB90              = $FB90 = 64400  codeblock2  cybernoid.asm:11806
-L_FB97              = $FB97 = 64407  codeblock2  cybernoid.asm:11811
-L_FE62              = $FE62 = 65122  codeblock2  cybernoid.asm:12003
-L_FE87              = $FE87 = 65159  codeblock2  cybernoid.asm:12027
-L_FEBC              = $FEBC = 65212  codeblock2  cybernoid.asm:12051
-L_FECC              = $FECC = 65228  codeblock2  cybernoid.asm:12059
-L_FED8              = $FED8 = 65240  codeblock2  cybernoid.asm:12070
-L_FEE2              = $FEE2 = 65250  codeblock2  cybernoid.asm:12076
-L_FEEA              = $FEEA = 65258  codeblock2  cybernoid.asm:12081
-L_FEF2              = $FEF2 = 65266  codeblock2  cybernoid.asm:12086
-L_FF02              = $FF02 = 65282  codeblock2  cybernoid.asm:12095
-L_FF13              = $FF13 = 65299  codeblock2  cybernoid.asm:12107
-L_FF2D              = $FF2D = 65325  codeblock2  cybernoid.asm:12125
-L_FF43              = $FF43 = 65347  codeblock2  cybernoid.asm:12136
-L_FF67              = $FF67 = 65383  codeblock2  cybernoid.asm:12160
-L_FF77              = $FF77 = 65399  codeblock2  cybernoid.asm:12173
-L_FF7F              = $FF7F = 65407  codeblock2  cybernoid.asm:12179
-MACE_ENABLE         = $6AF3 = 27379  codeblock2  cybernoid.asm:1036
-MACE_GFX_BASE       = $6AF4 = 27380  codeblock2  cybernoid.asm:1037
-MACE_POS            = $6AF6 = 27382  codeblock2  cybernoid.asm:1038
-MACE_SPIN_INDEX     = $6AF8 = 27384  codeblock2  cybernoid.asm:1039
-MAIN                = $6504 = 25860  codeblock2  cybernoid.asm:34
-MAP01               = $A5AA = 42410  codeblock2  cybernoid.asm:8518
-MAP02               = $A625 = 42533  codeblock2  cybernoid.asm:8535
-MAP03               = $A682 = 42626  codeblock2  cybernoid.asm:8547
-MAP04               = $A6D3 = 42707  codeblock2  cybernoid.asm:8558
-MAP05               = $A742 = 42818  codeblock2  cybernoid.asm:8572
-MAP06               = $A7BD = 42941  codeblock2  cybernoid.asm:8589
-MAP07               = $A7C0 = 42944  codeblock2  cybernoid.asm:8590
-MAP08               = $A82D = 43053  codeblock2  cybernoid.asm:8605
-MAP09               = $A8A9 = 43177  codeblock2  cybernoid.asm:8621
-MAP10               = $A903 = 43267  codeblock2  cybernoid.asm:8633
-MAP11               = $A971 = 43377  codeblock2  cybernoid.asm:8647
-MAP12               = $A9CB = 43467  codeblock2  cybernoid.asm:8659
-MAP13               = $A9CE = 43470  codeblock2  cybernoid.asm:8660
-MAP14               = $AA32 = 43570  codeblock2  cybernoid.asm:8673
-MAP15               = $AAA1 = 43681  codeblock2  cybernoid.asm:8688
-MAP16               = $AB19 = 43801  codeblock2  cybernoid.asm:8704
-MAP17               = $AB98 = 43928  codeblock2  cybernoid.asm:8721
-MAP18               = $AC03 = 44035  codeblock2  cybernoid.asm:8735
-MAP19               = $AC06 = 44038  codeblock2  cybernoid.asm:8736
-MAP20               = $AC95 = 44181  codeblock2  cybernoid.asm:8755
-MAP21               = $AD08 = 44296  codeblock2  cybernoid.asm:8770
-MAP22               = $AD83 = 44419  codeblock2  cybernoid.asm:8786
-MAP23               = $ADFB = 44539  codeblock2  cybernoid.asm:8802
-MAP24               = $AE79 = 44665  codeblock2  cybernoid.asm:8818
-MAP25               = $AED2 = 44754  codeblock2  cybernoid.asm:8830
-MAP26               = $AF40 = 44864  codeblock2  cybernoid.asm:8845
-MAP27               = $AFCD = 45005  codeblock2  cybernoid.asm:8864
-MAP28               = $B037 = 45111  codeblock2  cybernoid.asm:8879
-MAP29               = $B0C6 = 45254  codeblock2  cybernoid.asm:8898
-MAP30               = $B145 = 45381  codeblock2  cybernoid.asm:8915
-MAP31               = $B1B8 = 45496  codeblock2  cybernoid.asm:8930
-MAP32               = $B22D = 45613  codeblock2  cybernoid.asm:8947
-MAP33               = $B286 = 45702  codeblock2  cybernoid.asm:8959
-MAP34               = $B2DA = 45786  codeblock2  cybernoid.asm:8970
-MAP35               = $B35B = 45915  codeblock2  cybernoid.asm:8987
-MAP36               = $B3D8 = 46040  codeblock2  cybernoid.asm:9003
-MAP37               = $B44C = 46156  codeblock2  cybernoid.asm:9019
-MAP38               = $B4C4 = 46276  codeblock2  cybernoid.asm:9035
-MAP39               = $B522 = 46370  codeblock2  cybernoid.asm:9047
-MAP40               = $B58F = 46479  codeblock2  cybernoid.asm:9062
-MAP41               = $B606 = 46598  codeblock2  cybernoid.asm:9078
-MAP42               = $B699 = 46745  codeblock2  cybernoid.asm:9097
-MAP43               = $B69C = 46748  codeblock2  cybernoid.asm:9099
-MAP44               = $B716 = 46870  codeblock2  cybernoid.asm:9115
-MAP45               = $B78B = 46987  codeblock2  cybernoid.asm:9130
-MAP46               = $B7DA = 47066  codeblock2  cybernoid.asm:9140
-MAP47               = $B811 = 47121  codeblock2  cybernoid.asm:9148
-MAP48               = $B84F = 47183  codeblock2  cybernoid.asm:9157
-MAP49               = $B8C0 = 47296  codeblock2  cybernoid.asm:9172
-MAP50               = $B928 = 47400  codeblock2  cybernoid.asm:9186
-MAP51               = $B991 = 47505  codeblock2  cybernoid.asm:9200
-MAP52               = $B9FF = 47615  codeblock2  cybernoid.asm:9215
-MAP53               = $BA62 = 47714  codeblock2  cybernoid.asm:9228
-MAP54               = $BAC9 = 47817  codeblock2  cybernoid.asm:9242
-MAP55               = $BB1D = 47901  codeblock2  cybernoid.asm:9254
-MAP56               = $BB86 = 48006  codeblock2  cybernoid.asm:9268
-MAP57               = $BC18 = 48152  codeblock2  cybernoid.asm:9287
-MAP58               = $BC76 = 48246  codeblock2  cybernoid.asm:9300
-MAP59               = $BCD7 = 48343  codeblock2  cybernoid.asm:9313
-MAP60               = $BD3D = 48445  codeblock2  cybernoid.asm:9327
-MAP61               = $BDC9 = 48585  codeblock2  cybernoid.asm:9345
-MAP62               = $BE33 = 48691  codeblock2  cybernoid.asm:9359
-MAP63               = $BEB4 = 48820  codeblock2  cybernoid.asm:9376
-MAP64               = $BF16 = 48918  codeblock2  cybernoid.asm:9389
-MAP65               = $BF5E = 48990  codeblock2  cybernoid.asm:9399
-MAP66               = $BFCC = 49100  codeblock2  cybernoid.asm:9414
-MAP67               = $C03C = 49212  codeblock2  cybernoid.asm:9430
-MAP68               = $C0AB = 49323  codeblock2  cybernoid.asm:9452
-MAP69               = $C105 = 49413  codeblock2  cybernoid.asm:9464
-MAP70               = $C1A5 = 49573  codeblock2  cybernoid.asm:9485
-MAP71               = $C245 = 49733  codeblock2  cybernoid.asm:9506
-MAP72               = $C2AC = 49836  codeblock2  cybernoid.asm:9520
-MAP73               = $C2FD = 49917  codeblock2  cybernoid.asm:9535
-MAP74               = $C375 = 50037  codeblock2  cybernoid.asm:9551
-MAP75               = $7791 = 30609  codeblock2  cybernoid.asm:2648
-MAP_LEVEL_LOOKUP    = $711C = 28956  codeblock2  cybernoid.asm:1830
-MAP_TILE_TO_GROUP   = $73F4 = 29684  codeblock2  cybernoid.asm:2207
-MENU_LOOP           = $81D4 = 33236  codeblock2  cybernoid.asm:4205
-MENU_TEXT           = $8235 = 33333  codeblock2  cybernoid.asm:4258
-MINES_DATA          = $7E57 = 32343  codeblock2  cybernoid.asm:3624
-MINES_LABEL         = $7BBA = 31674  codeblock2  cybernoid.asm:3253 (unused)
-MINES_MAX           = $7BC9 = 31689  codeblock2  cybernoid.asm:3257 (unused)
-MINES_START         = $7BC8 = 31688  codeblock2  cybernoid.asm:3256 (unused)
+L4_ICON8x8          = $6BCF = 27599  codeblock2  cybernoid.asm:1195
+L7904               = $7904 = 30980  codeblock2  cybernoid.asm:2800
+LABELSPR            = $A29A = 41626  codeblock2  cybernoid.asm:7959
+LABEL_X1_CHECK      = $6806 = 26630  codeblock2  cybernoid.asm:564
+LABEL_X2_CHECK      = $6804 = 26628  codeblock2  cybernoid.asm:562
+LABEL_Y1_CHECK      = $680F = 26639  codeblock2  cybernoid.asm:572
+LABEL_Y2_CHECK      = $680D = 26637  codeblock2  cybernoid.asm:570
+LANE_GUARDIANS      = $9040 = 36928  codeblock2  cybernoid.asm:6080
+LAST_SND_EFFECT_ID  = $859B = 34203  codeblock2  cybernoid.asm:4655
+LAST_WEAPON_USED    = $7B49 = 31561  codeblock2  cybernoid.asm:3194
+LEFT_BUTTON         = $68A7 = 26791  codeblock2  cybernoid.asm:671
+LEFT_EDGE           = $71E9 = 29161  codeblock2  cybernoid.asm:1905
+LEFT_OFFSET         = $80EE = 33006  codeblock2  cybernoid.asm:4042
+LEVEL_COMPLETE_DATA = $7644 = 30276  codeblock2  cybernoid.asm:2564
+LEVEL_COMPLETE_LIFT_DISTANCE = $7643 = 30275  codeblock2  cybernoid.asm:2562
+LEVEL_INDEX         = $744B = 29771  codeblock2  cybernoid.asm:2269
+LEVEL_OFFSET        = $744C = 29772  codeblock2  cybernoid.asm:2270
+LEVEL_SELECTOR_DRAW_LIST = $6615 = 26133  codeblock2  cybernoid.asm:212 (unused)
+LIST_LOOP           = $89B1 = 35249  codeblock2  cybernoid.asm:5250
+LIST_OF_TABS_FOR_SETUP = $7413 = 29715  codeblock2  cybernoid.asm:2239
+LIVES               = $78D3 = 30931  codeblock2  cybernoid.asm:2761
+LOCK_ON             = $8B71 = 35697  codeblock2  cybernoid.asm:5464
+LOGO_DATA           = $84D7 = 34007  codeblock2  cybernoid.asm:4532
+LOOKUP_6300_ADDR_OFFSET = $673B = 26427  codeblock2  cybernoid.asm:398
+LOOKUP_CRL_TABLE    = $F1A1 = 61857  codeblock2  cybernoid.asm:11420
+LOOP_BLM_FIRE       = $76C1 = 30401  codeblock2  cybernoid.asm:2636
+LOOP_CHECK_SCORES   = $9553 = 38227  codeblock2  cybernoid.asm:6612
+LOOP_CTR            = $6B8A = 27530  codeblock2  cybernoid.asm:1141
+LOOP_DEBRIS         = $706C = 28780  codeblock2  cybernoid.asm:1714
+LOOP_EMPLACEMENT    = $8D3F = 36159  codeblock2  cybernoid.asm:5687
+LOOP_GK             = $6604 = 26116  codeblock2  cybernoid.asm:194
+LOOP_HOR            = $84B7 = 33975  codeblock2  cybernoid.asm:4512
+LOOP_INPUT          = $833B = 33595  codeblock2  cybernoid.asm:4363
+LOOP_ITEMS          = $9A7D = 39549  codeblock2  cybernoid.asm:7182
+LOOP_KD             = $65FF = 26111  codeblock2  cybernoid.asm:191
+LOOP_MENU_LOGO      = $849D = 33949  codeblock2  cybernoid.asm:4493
+LOOP_PHRASE_START   = $F0D2 = 61650  codeblock2  cybernoid.asm:11316
+LOOP_PICKUP_COMPARE = $A1E1 = 41441  codeblock2  cybernoid.asm:7799
+LOOP_SCENE_COLLISION = $6CAC = 27820  codeblock2  cybernoid.asm:1364
+LOOP_SEARCH         = $73B1 = 29617  codeblock2  cybernoid.asm:2173
+LOOP_SPRITE16       = $80E8 = 33000  codeblock2  cybernoid.asm:4032
+LOOP_START          = $F0C6 = 61638  codeblock2  cybernoid.asm:11311
+LOOP_START_PTR      = $F228 = 61992  codeblock2  cybernoid.asm:11525
+LOOP_VERT           = $84C8 = 33992  codeblock2  cybernoid.asm:4523
+LOOP_WDM_FIRE       = $76B0 = 30384  codeblock2  cybernoid.asm:2625
+LOW_PRIORITY_SFX    = $F089 = 61577  codeblock2  cybernoid.asm:11283
+L_6501              = $6501 = 25857  codeblock2  cybernoid.asm:28
+L_6827              = $6827 = 26663  codeblock2  cybernoid.asm:590
+L_6831              = $6831 = 26673  codeblock2  cybernoid.asm:597
+L_683B              = $683B = 26683  codeblock2  cybernoid.asm:604
+L_68FE              = $68FE = 26878  codeblock2  cybernoid.asm:727
+L_6953              = $6953 = 26963  codeblock2  cybernoid.asm:777
+L_6A0A              = $6A0A = 27146  codeblock2  cybernoid.asm:928
+L_6A36              = $6A36 = 27190  codeblock2  cybernoid.asm:945
+L_6A46              = $6A46 = 27206  codeblock2  cybernoid.asm:952
+L_6A67              = $6A67 = 27239  codeblock2  cybernoid.asm:966
+L_6A6B              = $6A6B = 27243  codeblock2  cybernoid.asm:968
+L_6A70              = $6A70 = 27248  codeblock2  cybernoid.asm:971
+L_6A71              = $6A71 = 27249  codeblock2  cybernoid.asm:972
+L_6A87              = $6A87 = 27271  codeblock2  cybernoid.asm:989
+L_6AB1              = $6AB1 = 27313  codeblock2  cybernoid.asm:1009
+L_6ABA              = $6ABA = 27322  codeblock2  cybernoid.asm:1019
+L_6AE2              = $6AE2 = 27362  codeblock2  cybernoid.asm:1039
+L_6BB5              = $6BB5 = 27573  codeblock2  cybernoid.asm:1173
+L_6BC7              = $6BC7 = 27591  codeblock2  cybernoid.asm:1187
+L_6BD9              = $6BD9 = 27609  codeblock2  cybernoid.asm:1200
+L_6BEA              = $6BEA = 27626  codeblock2  cybernoid.asm:1212
+L_6C07              = $6C07 = 27655  codeblock2  cybernoid.asm:1227
+L_6C13              = $6C13 = 27667  codeblock2  cybernoid.asm:1233
+L_6C1A              = $6C1A = 27674  codeblock2  cybernoid.asm:1236
+L_6C21              = $6C21 = 27681  codeblock2  cybernoid.asm:1239
+L_6C6B              = $6C6B = 27755  codeblock2  cybernoid.asm:1309
+L_6C87              = $6C87 = 27783  codeblock2  cybernoid.asm:1334
+L_6D4D              = $6D4D = 27981  codeblock2  cybernoid.asm:1419
+L_6D7A              = $6D7A = 28026  codeblock2  cybernoid.asm:1443
+L_6D7F              = $6D7F = 28031  codeblock2  cybernoid.asm:1446
+L_6D96              = $6D96 = 28054  codeblock2  cybernoid.asm:1464
+L_6DE0              = $6DE0 = 28128  codeblock2  cybernoid.asm:1509
+L_6E0D              = $6E0D = 28173  codeblock2  cybernoid.asm:1548
+L_6E1D              = $6E1D = 28189  codeblock2  cybernoid.asm:1558
+L_6E21              = $6E21 = 28193  codeblock2  cybernoid.asm:1563
+L_6E95              = $6E95 = 28309  codeblock2  cybernoid.asm:1613
+L_6EA0              = $6EA0 = 28320  codeblock2  cybernoid.asm:1621
+L_6EBF              = $6EBF = 28351  codeblock2  cybernoid.asm:1647
+L_72C2              = $72C2 = 29378  codeblock2  cybernoid.asm:2048
+L_72DF              = $72DF = 29407  codeblock2  cybernoid.asm:2065
+L_72EC              = $72EC = 29420  codeblock2  cybernoid.asm:2070
+L_730E              = $730E = 29454  codeblock2  cybernoid.asm:2092
+L_732A              = $732A = 29482  codeblock2  cybernoid.asm:2102
+L_7337              = $7337 = 29495  codeblock2  cybernoid.asm:2111
+L_735B              = $735B = 29531  codeblock2  cybernoid.asm:2142
+L_74F3              = $74F3 = 29939  codeblock2  cybernoid.asm:2393
+L_74F8              = $74F8 = 29944  codeblock2  cybernoid.asm:2396
+L_7502              = $7502 = 29954  codeblock2  cybernoid.asm:2405
+L_752F              = $752F = 29999  codeblock2  cybernoid.asm:2430
+L_7647              = $7647 = 30279  codeblock2  cybernoid.asm:2567
+L_7676              = $7676 = 30326  codeblock2  cybernoid.asm:2596
+L_78D4              = $78D4 = 30932  codeblock2  cybernoid.asm:2763
+L_78DF              = $78DF = 30943  codeblock2  cybernoid.asm:2771
+L_78EE              = $78EE = 30958  codeblock2  cybernoid.asm:2781
+L_78EF              = $78EF = 30959  codeblock2  cybernoid.asm:2783
+L_7935              = $7935 = 31029  codeblock2  cybernoid.asm:2810
+L_7940              = $7940 = 31040  codeblock2  cybernoid.asm:2814
+L_7948              = $7948 = 31048  codeblock2  cybernoid.asm:2818
+L_7950              = $7950 = 31056  codeblock2  cybernoid.asm:2825
+L_79A7              = $79A7 = 31143  codeblock2  cybernoid.asm:2878
+L_79B7              = $79B7 = 31159  codeblock2  cybernoid.asm:2891
+L_79D4              = $79D4 = 31188  codeblock2  cybernoid.asm:2901
+L_7A48              = $7A48 = 31304  codeblock2  cybernoid.asm:2997
+L_7A4C              = $7A4C = 31308  codeblock2  cybernoid.asm:3001
+L_7A6B              = $7A6B = 31339  codeblock2  cybernoid.asm:3026
+L_7A88              = $7A88 = 31368  codeblock2  cybernoid.asm:3043
+L_7B6E              = $7B6E = 31598  codeblock2  cybernoid.asm:3226
+L_7C8C              = $7C8C = 31884  codeblock2  cybernoid.asm:3415
+L_7CC4              = $7CC4 = 31940  codeblock2  cybernoid.asm:3443
+L_7CDB              = $7CDB = 31963  codeblock2  cybernoid.asm:3452
+L_7CEF              = $7CEF = 31983  codeblock2  cybernoid.asm:3463
+L_7D15              = $7D15 = 32021  codeblock2  cybernoid.asm:3486
+L_7DDF              = $7DDF = 32223  codeblock2  cybernoid.asm:3577
+L_7DF7              = $7DF7 = 32247  codeblock2  cybernoid.asm:3592
+L_7DFA              = $7DFA = 32250  codeblock2  cybernoid.asm:3593
+L_7E0A              = $7E0A = 32266  codeblock2  cybernoid.asm:3603
+L_7E31              = $7E31 = 32305  codeblock2  cybernoid.asm:3625
+L_7EE4              = $7EE4 = 32484  codeblock2  cybernoid.asm:3717
+L_7EE7              = $7EE7 = 32487  codeblock2  cybernoid.asm:3718
+L_7F25              = $7F25 = 32549  codeblock2  cybernoid.asm:3755
+L_7F45              = $7F45 = 32581  codeblock2  cybernoid.asm:3781
+L_7F4C              = $7F4C = 32588  codeblock2  cybernoid.asm:3786
+L_7F5B              = $7F5B = 32603  codeblock2  cybernoid.asm:3793
+L_7F62              = $7F62 = 32610  codeblock2  cybernoid.asm:3798
+L_7F97              = $7F97 = 32663  codeblock2  cybernoid.asm:3831
+L_7FBF              = $7FBF = 32703  codeblock2  cybernoid.asm:3853
+L_8020              = $8020 = 32800  codeblock2  cybernoid.asm:3910
+L_8038              = $8038 = 32824  codeblock2  cybernoid.asm:3921
+L_8043              = $8043 = 32835  codeblock2  cybernoid.asm:3926
+L_8049              = $8049 = 32841  codeblock2  cybernoid.asm:3928
+L_8077              = $8077 = 32887  codeblock2  cybernoid.asm:3947
+L_809E              = $809E = 32926  codeblock2  cybernoid.asm:3969
+L_8205              = $8205 = 33285  codeblock2  cybernoid.asm:4253
+L_8214              = $8214 = 33300  codeblock2  cybernoid.asm:4258
+L_82E5              = $82E5 = 33509  codeblock2  cybernoid.asm:4308
+L_8329              = $8329 = 33577  codeblock2  cybernoid.asm:4352
+L_8360              = $8360 = 33632  codeblock2  cybernoid.asm:4380
+L_8367              = $8367 = 33639  codeblock2  cybernoid.asm:4383
+L_836E              = $836E = 33646  codeblock2  cybernoid.asm:4386
+L_8375              = $8375 = 33653  codeblock2  cybernoid.asm:4389
+L_8391              = $8391 = 33681  codeblock2  cybernoid.asm:4400
+L_83B1              = $83B1 = 33713  codeblock2  cybernoid.asm:4417
+L_8500              = $8500 = 34048  codeblock2  cybernoid.asm:4546
+L_8503              = $8503 = 34051  codeblock2  cybernoid.asm:4548
+L_851F              = $851F = 34079  codeblock2  cybernoid.asm:4567
+L_8535              = $8535 = 34101  codeblock2  cybernoid.asm:4580
+L_8553              = $8553 = 34131  codeblock2  cybernoid.asm:4599
+L_856E              = $856E = 34158  codeblock2  cybernoid.asm:4617
+L_8571              = $8571 = 34161  codeblock2  cybernoid.asm:4620
+L_858D              = $858D = 34189  codeblock2  cybernoid.asm:4639
+L_865D              = $865D = 34397  codeblock2  cybernoid.asm:4809
+L_866D              = $866D = 34413  codeblock2  cybernoid.asm:4815
+L_866F              = $866F = 34415  codeblock2  cybernoid.asm:4817
+L_8699              = $8699 = 34457  codeblock2  cybernoid.asm:4839
+L_86A5              = $86A5 = 34469  codeblock2  cybernoid.asm:4845
+L_86AC              = $86AC = 34476  codeblock2  cybernoid.asm:4849
+L_86B8              = $86B8 = 34488  codeblock2  cybernoid.asm:4855
+L_86BF              = $86BF = 34495  codeblock2  cybernoid.asm:4859
+L_86CF              = $86CF = 34511  codeblock2  cybernoid.asm:4867
+L_86EA              = $86EA = 34538  codeblock2  cybernoid.asm:4880
+L_86EC              = $86EC = 34540  codeblock2  cybernoid.asm:4881
+L_86F8              = $86F8 = 34552  codeblock2  cybernoid.asm:4887
+L_86FB              = $86FB = 34555  codeblock2  cybernoid.asm:4890
+L_86FE              = $86FE = 34558  codeblock2  cybernoid.asm:4891
+L_877B              = $877B = 34683  codeblock2  cybernoid.asm:4961
+L_87A5              = $87A5 = 34725  codeblock2  cybernoid.asm:4981
+L_88F0              = $88F0 = 35056  codeblock2  cybernoid.asm:5147
+L_891F              = $891F = 35103  codeblock2  cybernoid.asm:5177
+L_89DB              = $89DB = 35291  codeblock2  cybernoid.asm:5273
+L_89E4              = $89E4 = 35300  codeblock2  cybernoid.asm:5278
+L_89EC              = $89EC = 35308  codeblock2  cybernoid.asm:5281
+L_8A3E              = $8A3E = 35390  codeblock2  cybernoid.asm:5305
+L_8A46              = $8A46 = 35398  codeblock2  cybernoid.asm:5312
+L_8A64              = $8A64 = 35428  codeblock2  cybernoid.asm:5335
+L_8A6C              = $8A6C = 35436  codeblock2  cybernoid.asm:5343
+L_8AC6              = $8AC6 = 35526  codeblock2  cybernoid.asm:5388
+L_8AD8              = $8AD8 = 35544  codeblock2  cybernoid.asm:5402
+L_8B8C              = $8B8C = 35724  codeblock2  cybernoid.asm:5490
+L_8B95              = $8B95 = 35733  codeblock2  cybernoid.asm:5499
+L_8BB0              = $8BB0 = 35760  codeblock2  cybernoid.asm:5518
+L_8BDC              = $8BDC = 35804  codeblock2  cybernoid.asm:5547
+L_8BE8              = $8BE8 = 35816  codeblock2  cybernoid.asm:5552
+L_8BF1              = $8BF1 = 35825  codeblock2  cybernoid.asm:5555
+L_8D4F              = $8D4F = 36175  codeblock2  cybernoid.asm:5702
+L_8D5A              = $8D5A = 36186  codeblock2  cybernoid.asm:5711
+L_8D6C              = $8D6C = 36204  codeblock2  cybernoid.asm:5721
+L_8DAF              = $8DAF = 36271  codeblock2  cybernoid.asm:5771
+L_8DE2              = $8DE2 = 36322  codeblock2  cybernoid.asm:5798
+L_9044              = $9044 = 36932  codeblock2  cybernoid.asm:6082
+L_926B              = $926B = 37483  codeblock2  cybernoid.asm:6308
+L_9277              = $9277 = 37495  codeblock2  cybernoid.asm:6314
+L_927F              = $927F = 37503  codeblock2  cybernoid.asm:6317
+L_92A5              = $92A5 = 37541  codeblock2  cybernoid.asm:6333
+L_92B2              = $92B2 = 37554  codeblock2  cybernoid.asm:6338
+L_92BC              = $92BC = 37564  codeblock2  cybernoid.asm:6342
+L_92C9              = $92C9 = 37577  codeblock2  cybernoid.asm:6347
+L_92D3              = $92D3 = 37587  codeblock2  cybernoid.asm:6351
+L_92E0              = $92E0 = 37600  codeblock2  cybernoid.asm:6356
+L_92EA              = $92EA = 37610  codeblock2  cybernoid.asm:6360
+L_92F7              = $92F7 = 37623  codeblock2  cybernoid.asm:6365
+L_9304              = $9304 = 37636  codeblock2  cybernoid.asm:6371
+L_9312              = $9312 = 37650  codeblock2  cybernoid.asm:6379
+L_931C              = $931C = 37660  codeblock2  cybernoid.asm:6386
+L_9325              = $9325 = 37669  codeblock2  cybernoid.asm:6392
+L_932B              = $932B = 37675  codeblock2  cybernoid.asm:6397
+L_9349              = $9349 = 37705  codeblock2  cybernoid.asm:6410
+L_9376              = $9376 = 37750  codeblock2  cybernoid.asm:6426
+L_939A              = $939A = 37786  codeblock2  cybernoid.asm:6440
+L_93AC              = $93AC = 37804  codeblock2  cybernoid.asm:6447
+L_93BE              = $93BE = 37822  codeblock2  cybernoid.asm:6454
+L_93D0              = $93D0 = 37840  codeblock2  cybernoid.asm:6461
+L_93EA              = $93EA = 37866  codeblock2  cybernoid.asm:6479
+L_93F9              = $93F9 = 37881  codeblock2  cybernoid.asm:6490
+L_93FC              = $93FC = 37884  codeblock2  cybernoid.asm:6493
+L_940C              = $940C = 37900  codeblock2  cybernoid.asm:6505
+L_940F              = $940F = 37903  codeblock2  cybernoid.asm:6508
+L_941E              = $941E = 37918  codeblock2  cybernoid.asm:6519
+L_9421              = $9421 = 37921  codeblock2  cybernoid.asm:6522
+L_9430              = $9430 = 37936  codeblock2  cybernoid.asm:6533
+L_96D8              = $96D8 = 38616  codeblock2  cybernoid.asm:6795
+L_96DD              = $96DD = 38621  codeblock2  cybernoid.asm:6797
+L_96F3              = $96F3 = 38643  codeblock2  cybernoid.asm:6808
+L_9713              = $9713 = 38675  codeblock2  cybernoid.asm:6820
+L_9728              = $9728 = 38696  codeblock2  cybernoid.asm:6829
+L_974C              = $974C = 38732  codeblock2  cybernoid.asm:6844
+L_9758              = $9758 = 38744  codeblock2  cybernoid.asm:6849
+L_97F3              = $97F3 = 38899  codeblock2  cybernoid.asm:6903
+L_9803              = $9803 = 38915  codeblock2  cybernoid.asm:6916
+L_9807              = $9807 = 38919  codeblock2  cybernoid.asm:6918
+L_9810              = $9810 = 38928  codeblock2  cybernoid.asm:6921
+L_9817              = $9817 = 38935  codeblock2  cybernoid.asm:6925
+L_988E              = $988E = 39054  codeblock2  cybernoid.asm:6977
+L_989A              = $989A = 39066  codeblock2  cybernoid.asm:6983
+L_98AA              = $98AA = 39082  codeblock2  cybernoid.asm:6991
+L_98B8              = $98B8 = 39096  codeblock2  cybernoid.asm:7000
+L_98D5              = $98D5 = 39125  codeblock2  cybernoid.asm:7013
+L_98F5              = $98F5 = 39157  codeblock2  cybernoid.asm:7030
+L_9902              = $9902 = 39170  codeblock2  cybernoid.asm:7039
+L_9911              = $9911 = 39185  codeblock2  cybernoid.asm:7047
+L_9920              = $9920 = 39200  codeblock2  cybernoid.asm:7052
+L_9939              = $9939 = 39225  codeblock2  cybernoid.asm:7063
+L_9947              = $9947 = 39239  codeblock2  cybernoid.asm:7069
+L_996E              = $996E = 39278  codeblock2  cybernoid.asm:7092
+L_999B              = $999B = 39323  codeblock2  cybernoid.asm:7113
+L_99A3              = $99A3 = 39331  codeblock2  cybernoid.asm:7116
+L_9A2C              = $9A2C = 39468  codeblock2  cybernoid.asm:7141
+L_9A31              = $9A31 = 39473  codeblock2  cybernoid.asm:7144
+L_9A44              = $9A44 = 39492  codeblock2  cybernoid.asm:7156
+L_9AB8              = $9AB8 = 39608  codeblock2  cybernoid.asm:7216
+L_9AD0              = $9AD0 = 39632  codeblock2  cybernoid.asm:7231
+L_9AE0              = $9AE0 = 39648  codeblock2  cybernoid.asm:7239
+L_9AF0              = $9AF0 = 39664  codeblock2  cybernoid.asm:7249
+L_9B00              = $9B00 = 39680  codeblock2  cybernoid.asm:7257
+L_9B10              = $9B10 = 39696  codeblock2  cybernoid.asm:7267
+L_9B20              = $9B20 = 39712  codeblock2  cybernoid.asm:7275
+L_9B51              = $9B51 = 39761  codeblock2  cybernoid.asm:7290
+L_9B61              = $9B61 = 39777  codeblock2  cybernoid.asm:7299
+L_9BD8              = $9BD8 = 39896  codeblock2  cybernoid.asm:7379
+L_9C24              = $9C24 = 39972  codeblock2  cybernoid.asm:7416
+L_9C30              = $9C30 = 39984  codeblock2  cybernoid.asm:7421
+L_9C49              = $9C49 = 40009  codeblock2  cybernoid.asm:7432
+L_9FC9              = $9FC9 = 40905  codeblock2  cybernoid.asm:7571
+L_9FDE              = $9FDE = 40926  codeblock2  cybernoid.asm:7581
+L_9FFB              = $9FFB = 40955  codeblock2  cybernoid.asm:7593
+L_A03F              = $A03F = 41023  codeblock2  cybernoid.asm:7611
+L_A051              = $A051 = 41041  codeblock2  cybernoid.asm:7626
+L_A058              = $A058 = 41048  codeblock2  cybernoid.asm:7631
+L_A05F              = $A05F = 41055  codeblock2  cybernoid.asm:7635
+L_A082              = $A082 = 41090  codeblock2  cybernoid.asm:7659
+L_A08F              = $A08F = 41103  codeblock2  cybernoid.asm:7664
+L_A0A0              = $A0A0 = 41120  codeblock2  cybernoid.asm:7673
+L_A0CC              = $A0CC = 41164  codeblock2  cybernoid.asm:7695
+L_A0D4              = $A0D4 = 41172  codeblock2  cybernoid.asm:7698
+L_A0F6              = $A0F6 = 41206  codeblock2  cybernoid.asm:7720
+L_A2F3              = $A2F3 = 41715  codeblock2  cybernoid.asm:8016
+L_A31B              = $A31B = 41755  codeblock2  cybernoid.asm:8038
+L_A32C              = $A32C = 41772  codeblock2  cybernoid.asm:8049
+L_A367              = $A367 = 41831  codeblock2  cybernoid.asm:8103
+L_A3C8              = $A3C8 = 41928  codeblock2  cybernoid.asm:8161
+L_A402              = $A402 = 41986  codeblock2  cybernoid.asm:8191
+L_A40B              = $A40B = 41995  codeblock2  cybernoid.asm:8197
+L_A453              = $A453 = 42067  codeblock2  cybernoid.asm:8262
+L_A456              = $A456 = 42070  codeblock2  cybernoid.asm:8263
+L_A462              = $A462 = 42082  codeblock2  cybernoid.asm:8272
+L_A469              = $A469 = 42089  codeblock2  cybernoid.asm:8278
+L_A470              = $A470 = 42096  codeblock2  cybernoid.asm:8284
+L_A4BA              = $A4BA = 42170  codeblock2  cybernoid.asm:8349
+L_A4BD              = $A4BD = 42173  codeblock2  cybernoid.asm:8350
+L_A4C9              = $A4C9 = 42185  codeblock2  cybernoid.asm:8359
+L_A4D0              = $A4D0 = 42192  codeblock2  cybernoid.asm:8365
+L_C067              = $C067 = 49255  codeblock2  cybernoid.asm:9492
+L_EF4E              = $EF4E = 61262  codeblock2  cybernoid.asm:11120
+L_EFB0              = $EFB0 = 61360  codeblock2  cybernoid.asm:11165
+L_F156              = $F156 = 61782  codeblock2  cybernoid.asm:11383
+L_F162              = $F162 = 61794  codeblock2  cybernoid.asm:11388
+L_FB90              = $FB90 = 64400  codeblock2  cybernoid.asm:11860
+L_FB97              = $FB97 = 64407  codeblock2  cybernoid.asm:11865
+L_FE62              = $FE62 = 65122  codeblock2  cybernoid.asm:12057
+L_FE87              = $FE87 = 65159  codeblock2  cybernoid.asm:12081
+L_FEBC              = $FEBC = 65212  codeblock2  cybernoid.asm:12105
+L_FECC              = $FECC = 65228  codeblock2  cybernoid.asm:12113
+L_FED8              = $FED8 = 65240  codeblock2  cybernoid.asm:12124
+L_FEE2              = $FEE2 = 65250  codeblock2  cybernoid.asm:12130
+L_FEEA              = $FEEA = 65258  codeblock2  cybernoid.asm:12135
+L_FEF2              = $FEF2 = 65266  codeblock2  cybernoid.asm:12140
+L_FF02              = $FF02 = 65282  codeblock2  cybernoid.asm:12149
+L_FF13              = $FF13 = 65299  codeblock2  cybernoid.asm:12161
+L_FF2D              = $FF2D = 65325  codeblock2  cybernoid.asm:12179
+L_FF43              = $FF43 = 65347  codeblock2  cybernoid.asm:12190
+L_FF67              = $FF67 = 65383  codeblock2  cybernoid.asm:12214
+L_FF77              = $FF77 = 65399  codeblock2  cybernoid.asm:12227
+L_FF7F              = $FF7F = 65407  codeblock2  cybernoid.asm:12233
+LoopForKeyRelease   = $95CE = 38350  codeblock2  cybernoid.asm:6685
+MACE_ENABLE         = $6AF3 = 27379  codeblock2  cybernoid.asm:1050
+MACE_GFX_BASE       = $6AF4 = 27380  codeblock2  cybernoid.asm:1051
+MACE_POS            = $6AF6 = 27382  codeblock2  cybernoid.asm:1052
+MACE_SPIN_INDEX     = $6AF8 = 27384  codeblock2  cybernoid.asm:1053
+MAIN                = $6504 = 25860  codeblock2  cybernoid.asm:32
+MAP01               = $A5AA = 42410  codeblock2  cybernoid.asm:8572
+MAP02               = $A625 = 42533  codeblock2  cybernoid.asm:8589
+MAP03               = $A682 = 42626  codeblock2  cybernoid.asm:8601
+MAP04               = $A6D3 = 42707  codeblock2  cybernoid.asm:8612
+MAP05               = $A742 = 42818  codeblock2  cybernoid.asm:8626
+MAP06               = $A7BD = 42941  codeblock2  cybernoid.asm:8643
+MAP07               = $A7C0 = 42944  codeblock2  cybernoid.asm:8644
+MAP08               = $A82D = 43053  codeblock2  cybernoid.asm:8659
+MAP09               = $A8A9 = 43177  codeblock2  cybernoid.asm:8675
+MAP10               = $A903 = 43267  codeblock2  cybernoid.asm:8687
+MAP11               = $A971 = 43377  codeblock2  cybernoid.asm:8701
+MAP12               = $A9CB = 43467  codeblock2  cybernoid.asm:8713
+MAP13               = $A9CE = 43470  codeblock2  cybernoid.asm:8714
+MAP14               = $AA32 = 43570  codeblock2  cybernoid.asm:8727
+MAP15               = $AAA1 = 43681  codeblock2  cybernoid.asm:8742
+MAP16               = $AB19 = 43801  codeblock2  cybernoid.asm:8758
+MAP17               = $AB98 = 43928  codeblock2  cybernoid.asm:8775
+MAP18               = $AC03 = 44035  codeblock2  cybernoid.asm:8789
+MAP19               = $AC06 = 44038  codeblock2  cybernoid.asm:8790
+MAP20               = $AC95 = 44181  codeblock2  cybernoid.asm:8809
+MAP21               = $AD08 = 44296  codeblock2  cybernoid.asm:8824
+MAP22               = $AD83 = 44419  codeblock2  cybernoid.asm:8840
+MAP23               = $ADFB = 44539  codeblock2  cybernoid.asm:8856
+MAP24               = $AE79 = 44665  codeblock2  cybernoid.asm:8872
+MAP25               = $AED2 = 44754  codeblock2  cybernoid.asm:8884
+MAP26               = $AF40 = 44864  codeblock2  cybernoid.asm:8899
+MAP27               = $AFCD = 45005  codeblock2  cybernoid.asm:8918
+MAP28               = $B037 = 45111  codeblock2  cybernoid.asm:8933
+MAP29               = $B0C6 = 45254  codeblock2  cybernoid.asm:8952
+MAP30               = $B145 = 45381  codeblock2  cybernoid.asm:8969
+MAP31               = $B1B8 = 45496  codeblock2  cybernoid.asm:8984
+MAP32               = $B22D = 45613  codeblock2  cybernoid.asm:9001
+MAP33               = $B286 = 45702  codeblock2  cybernoid.asm:9013
+MAP34               = $B2DA = 45786  codeblock2  cybernoid.asm:9024
+MAP35               = $B35B = 45915  codeblock2  cybernoid.asm:9041
+MAP36               = $B3D8 = 46040  codeblock2  cybernoid.asm:9057
+MAP37               = $B44C = 46156  codeblock2  cybernoid.asm:9073
+MAP38               = $B4C4 = 46276  codeblock2  cybernoid.asm:9089
+MAP39               = $B522 = 46370  codeblock2  cybernoid.asm:9101
+MAP40               = $B58F = 46479  codeblock2  cybernoid.asm:9116
+MAP41               = $B606 = 46598  codeblock2  cybernoid.asm:9132
+MAP42               = $B699 = 46745  codeblock2  cybernoid.asm:9151
+MAP43               = $B69C = 46748  codeblock2  cybernoid.asm:9153
+MAP44               = $B716 = 46870  codeblock2  cybernoid.asm:9169
+MAP45               = $B78B = 46987  codeblock2  cybernoid.asm:9184
+MAP46               = $B7DA = 47066  codeblock2  cybernoid.asm:9194
+MAP47               = $B811 = 47121  codeblock2  cybernoid.asm:9202
+MAP48               = $B84F = 47183  codeblock2  cybernoid.asm:9211
+MAP49               = $B8C0 = 47296  codeblock2  cybernoid.asm:9226
+MAP50               = $B928 = 47400  codeblock2  cybernoid.asm:9240
+MAP51               = $B991 = 47505  codeblock2  cybernoid.asm:9254
+MAP52               = $B9FF = 47615  codeblock2  cybernoid.asm:9269
+MAP53               = $BA62 = 47714  codeblock2  cybernoid.asm:9282
+MAP54               = $BAC9 = 47817  codeblock2  cybernoid.asm:9296
+MAP55               = $BB1D = 47901  codeblock2  cybernoid.asm:9308
+MAP56               = $BB86 = 48006  codeblock2  cybernoid.asm:9322
+MAP57               = $BC18 = 48152  codeblock2  cybernoid.asm:9341
+MAP58               = $BC76 = 48246  codeblock2  cybernoid.asm:9354
+MAP59               = $BCD7 = 48343  codeblock2  cybernoid.asm:9367
+MAP60               = $BD3D = 48445  codeblock2  cybernoid.asm:9381
+MAP61               = $BDC9 = 48585  codeblock2  cybernoid.asm:9399
+MAP62               = $BE33 = 48691  codeblock2  cybernoid.asm:9413
+MAP63               = $BEB4 = 48820  codeblock2  cybernoid.asm:9430
+MAP64               = $BF16 = 48918  codeblock2  cybernoid.asm:9443
+MAP65               = $BF5E = 48990  codeblock2  cybernoid.asm:9453
+MAP66               = $BFCC = 49100  codeblock2  cybernoid.asm:9468
+MAP67               = $C03C = 49212  codeblock2  cybernoid.asm:9484
+MAP68               = $C0AB = 49323  codeblock2  cybernoid.asm:9506
+MAP69               = $C105 = 49413  codeblock2  cybernoid.asm:9518
+MAP70               = $C1A5 = 49573  codeblock2  cybernoid.asm:9539
+MAP71               = $C245 = 49733  codeblock2  cybernoid.asm:9560
+MAP72               = $C2AC = 49836  codeblock2  cybernoid.asm:9574
+MAP73               = $C2FD = 49917  codeblock2  cybernoid.asm:9589
+MAP74               = $C375 = 50037  codeblock2  cybernoid.asm:9605
+MAP75               = $7791 = 30609  codeblock2  cybernoid.asm:2669
+MAP_LEVEL_LOOKUP    = $711C = 28956  codeblock2  cybernoid.asm:1851
+MAP_TILE_TO_GROUP   = $73F4 = 29684  codeblock2  cybernoid.asm:2228
+MENU_LOOP           = $81D4 = 33236  codeblock2  cybernoid.asm:4228
+MENU_TEXT           = $8235 = 33333  codeblock2  cybernoid.asm:4281
+MINES_DATA          = $7E57 = 32343  codeblock2  cybernoid.asm:3647
+MINES_LABEL         = $7BBA = 31674  codeblock2  cybernoid.asm:3276 (unused)
+MINES_MAX           = $7BC9 = 31689  codeblock2  cybernoid.asm:3280 (unused)
+MINES_START         = $7BC8 = 31688  codeblock2  cybernoid.asm:3279 (unused)
 MOVE                = $0078 =   120  codeblock2  Constants.asm:36
-MOVE_SHIP           = $68AC = 26796  codeblock2  cybernoid.asm:665
-MOVE_SHIP_LEFT      = $68EC = 26860  codeblock2  cybernoid.asm:703
-MOVE_SHIP_RIGHT     = $68D9 = 26841  codeblock2  cybernoid.asm:691
-MUSIC_DATA          = $F40C = 62476  codeblock2  cybernoid.asm:11554 (unused)
-MUSIC_UPDATE        = $EFE5 = 61413  codeblock2  cybernoid.asm:11159
-NEW_SOUND           = $85D1 = 34257  codeblock2  cybernoid.asm:4690
-NEW_SOUND_COMMAND   = $F033 = 61491  codeblock2  cybernoid.asm:11189
-NEXT_ANIM_SPRITE    = $880C = 34828  codeblock2  cybernoid.asm:5021
-NEXT_DATA           = $FC38 = 64568  codeblock2  cybernoid.asm:11905
-NEXT_GUARD_LOOP     = $9055 = 36949  codeblock2  cybernoid.asm:6065
-NEXT_LOGO_PART      = $849B = 33947  codeblock2  cybernoid.asm:4467
-NEXT_SCENE_COLLISION = $6CF5 = 27893  codeblock2  cybernoid.asm:1381
-NEXT_SCREEN_LINE    = $674C = 26444  codeblock2  cybernoid.asm:402
-NEXT_SNAKE_SLOT     = $9265 = 37477  codeblock2  cybernoid.asm:6280
-NOISE_EFFECTS       = $F0F9 = 61689  codeblock2  cybernoid.asm:11281
-NOISE_MIXER         = $F1B1 = 61873  codeblock2  cybernoid.asm:11381
-NOTE_EVENT          = $F113 = 61715  codeblock2  cybernoid.asm:11301
-NOTE_OFF            = $F116 = 61718  codeblock2  cybernoid.asm:11302
-NOT_HIT_L           = $8158 = 33112  codeblock2  cybernoid.asm:4112
-NO_DOWN_HIT         = $69E1 = 27105  codeblock2  cybernoid.asm:875
-NO_ENEMY_HIT        = $9A86 = 39558  codeblock2  cybernoid.asm:7134
-NO_GRAV             = $6944 = 26948  codeblock2  cybernoid.asm:757
-NO_HIT_B            = $817C = 33148  codeblock2  cybernoid.asm:4139
-NO_HIT_R            = $8134 = 33076  codeblock2  cybernoid.asm:4085
-NO_HIT_T            = $81A0 = 33184  codeblock2  cybernoid.asm:4166
-NO_LEFT_HIT         = $69BF = 27071  codeblock2  cybernoid.asm:847
-NO_RIGHT_HIT        = $6997 = 27031  codeblock2  cybernoid.asm:815
-NO_SCENE_COLLISION  = $6CEE = 27886  codeblock2  cybernoid.asm:1373
-NO_SCENE_UPDATE     = $71CD = 29133  codeblock2  cybernoid.asm:1862
-NO_SHIELD           = $6ACE = 27342  codeblock2  cybernoid.asm:1017
-NO_UP_HIT           = $6A03 = 27139  codeblock2  cybernoid.asm:903
-OFF_SCREEN          = $70AA = 28842  codeblock2  cybernoid.asm:1738
-OLD_POS_XY          = $6970 = 26992  codeblock2  cybernoid.asm:780
-PAUSE_GAME          = $65EB = 26091  codeblock2  cybernoid.asm:164
-PAUSE_LOOP          = $8FC1 = 36801  codeblock2  cybernoid.asm:5981
-PHASE_LOOP          = $8636 = 34358  codeblock2  cybernoid.asm:4758
-PHRASE_START_PTR    = $F22A = 61994  codeblock2  cybernoid.asm:11472
-PICKUP_TABLE        = $A1F6 = 41462  codeblock2  cybernoid.asm:7765
-PLACE_PICKUP        = $9FA2 = 40866  codeblock2  cybernoid.asm:7491
-PLAYER_COLLISION    = $8EDB = 36571  codeblock2  cybernoid.asm:5857
-PLAYER_HAZARD_LIST  = $8E31 = 36401  codeblock2  cybernoid.asm:5816
-PLAY_SFX            = $EF42 = 61250  codeblock2  cybernoid.asm:11059
-PLR_DIRECTION       = $696B = 26987  codeblock2  cybernoid.asm:776
-PLR_MOVEMENT_FLAG   = $696F = 26991  codeblock2  cybernoid.asm:779
-PLR_MOVE_YPOS       = $696C = 26988  codeblock2  cybernoid.asm:777
-PLR_UPDATE_SHOTS    = $7AEA = 31466  codeblock2  cybernoid.asm:3107
-POLL_SFX_USING_BEEPER = $85BA = 34234  codeblock2  cybernoid.asm:4676
-PORTAMENTO_SPEED    = $F223 = 61987  codeblock2  cybernoid.asm:11467
-PORTAMENTO_TARGET   = $F222 = 61986  codeblock2  cybernoid.asm:11466
-POS_XY              = $6969 = 26985  codeblock2  cybernoid.asm:775
-POS_XY_COPY         = $6A08 = 27144  codeblock2  cybernoid.asm:910
-PREVIOUS_SCREEN_LINE = $675B = 26459  codeblock2  cybernoid.asm:417
-PROCESS_CHAN        = $F01B = 61467  codeblock2  cybernoid.asm:11177
+MOVE_SHIP           = $68AC = 26796  codeblock2  cybernoid.asm:679
+MOVE_SHIP_LEFT      = $68EC = 26860  codeblock2  cybernoid.asm:717
+MOVE_SHIP_RIGHT     = $68D9 = 26841  codeblock2  cybernoid.asm:705
+MUSIC_DATA          = $F40C = 62476  codeblock2  cybernoid.asm:11608 (unused)
+MUSIC_UPDATE        = $EFE5 = 61413  codeblock2  cybernoid.asm:11213
+NEW_SOUND           = $85D1 = 34257  codeblock2  cybernoid.asm:4714
+NEW_SOUND_COMMAND   = $F033 = 61491  codeblock2  cybernoid.asm:11243
+NEXT_ANIM_SPRITE    = $880C = 34828  codeblock2  cybernoid.asm:5045
+NEXT_DATA           = $FC38 = 64568  codeblock2  cybernoid.asm:11959
+NEXT_GUARD_LOOP     = $9055 = 36949  codeblock2  cybernoid.asm:6089
+NEXT_LOGO_PART      = $849B = 33947  codeblock2  cybernoid.asm:4491
+NEXT_SCENE_COLLISION = $6CF5 = 27893  codeblock2  cybernoid.asm:1402
+NEXT_SCREEN_LINE    = $674C = 26444  codeblock2  cybernoid.asm:416
+NEXT_SNAKE_SLOT     = $9265 = 37477  codeblock2  cybernoid.asm:6304
+NOISE_EFFECTS       = $F0F9 = 61689  codeblock2  cybernoid.asm:11335
+NOISE_MIXER         = $F1B1 = 61873  codeblock2  cybernoid.asm:11435
+NOTE_EVENT          = $F113 = 61715  codeblock2  cybernoid.asm:11355
+NOTE_OFF            = $F116 = 61718  codeblock2  cybernoid.asm:11356
+NOT_HIT_L           = $8158 = 33112  codeblock2  cybernoid.asm:4135
+NO_DOWN_HIT         = $69E1 = 27105  codeblock2  cybernoid.asm:889
+NO_ENEMY_HIT        = $9A86 = 39558  codeblock2  cybernoid.asm:7188
+NO_GRAV             = $6944 = 26948  codeblock2  cybernoid.asm:771
+NO_HIT_B            = $817C = 33148  codeblock2  cybernoid.asm:4162
+NO_HIT_R            = $8134 = 33076  codeblock2  cybernoid.asm:4108
+NO_HIT_T            = $81A0 = 33184  codeblock2  cybernoid.asm:4189
+NO_LEFT_HIT         = $69BF = 27071  codeblock2  cybernoid.asm:861
+NO_RIGHT_HIT        = $6997 = 27031  codeblock2  cybernoid.asm:829
+NO_SCENE_COLLISION  = $6CEE = 27886  codeblock2  cybernoid.asm:1394
+NO_SCENE_UPDATE     = $71CD = 29133  codeblock2  cybernoid.asm:1883
+NO_SHIELD           = $6ACE = 27342  codeblock2  cybernoid.asm:1031
+NO_UP_HIT           = $6A03 = 27139  codeblock2  cybernoid.asm:917
+NewChar             = $95C1 = 38337  codeblock2  cybernoid.asm:6679
+NextScoreItem       = $963E = 38462  codeblock2  cybernoid.asm:6750
+OFF_SCREEN          = $70AA = 28842  codeblock2  cybernoid.asm:1759
+OLD_POS_XY          = $6970 = 26992  codeblock2  cybernoid.asm:794
+PAUSE_GAME          = $65EB = 26091  codeblock2  cybernoid.asm:178
+PAUSE_LOOP          = $8FC1 = 36801  codeblock2  cybernoid.asm:6005
+PHASE_LOOP          = $8636 = 34358  codeblock2  cybernoid.asm:4782
+PHRASE_START_PTR    = $F22A = 61994  codeblock2  cybernoid.asm:11526
+PICKUP_TABLE        = $A1F6 = 41462  codeblock2  cybernoid.asm:7819
+PLACE_PICKUP        = $9FA2 = 40866  codeblock2  cybernoid.asm:7545
+PLAYER_COLLISION    = $8EDB = 36571  codeblock2  cybernoid.asm:5881
+PLAYER_HAZARD_LIST  = $8E31 = 36401  codeblock2  cybernoid.asm:5840
+PLAY_SFX            = $EF42 = 61250  codeblock2  cybernoid.asm:11113
+PLR_DIRECTION       = $696B = 26987  codeblock2  cybernoid.asm:790
+PLR_MOVEMENT_FLAG   = $696F = 26991  codeblock2  cybernoid.asm:793
+PLR_MOVE_YPOS       = $696C = 26988  codeblock2  cybernoid.asm:791
+PLR_UPDATE_SHOTS    = $7AEA = 31466  codeblock2  cybernoid.asm:3130
+POLL_SFX_USING_BEEPER = $85BA = 34234  codeblock2  cybernoid.asm:4700
+PORTAMENTO_SPEED    = $F223 = 61987  codeblock2  cybernoid.asm:11521
+PORTAMENTO_TARGET   = $F222 = 61986  codeblock2  cybernoid.asm:11520
+POS_XY              = $6969 = 26985  codeblock2  cybernoid.asm:789
+POS_XY_COPY         = $6A08 = 27144  codeblock2  cybernoid.asm:924
+PREVIOUS_SCREEN_LINE = $675B = 26459  codeblock2  cybernoid.asm:431
+PROCESS_CHAN        = $F01B = 61467  codeblock2  cybernoid.asm:11231
 PROGRAM1END         = $0064 =   100  PROG_DATA   LoadSection.asm:98
 PROG_DATA           = $0000 =     0  PROG_DATA   LoadSection.asm:47 (unused)
 PROG_DATA_end       = $0064 =   100  PROG_DATA   LoadSection.asm:47 (unused)
@@ -18401,68 +18514,74 @@ PROG_DATA_size      = $0064 =   100  PROG_DATA   LoadSection.asm:47 (unused)
 PROG_HEADER         = $0000 =     0  PROG_HEADER LoadSection.asm:38 (unused)
 PROG_HEADER_end     = $0011 =    17  PROG_HEADER LoadSection.asm:38 (unused)
 PROG_HEADER_size    = $0011 =    17  PROG_HEADER LoadSection.asm:38 (unused)
-PROXIMITY_ROCKET    = $97F0 = 38896  codeblock2  cybernoid.asm:6847
-PROXIMITY_ROCKET_DATA = $9879 = 39033  codeblock2  cybernoid.asm:6917
-PUT_CHARS           = $9452 = 37970  codeblock2  cybernoid.asm:6529
-Pattern1st          = $FC43 = 64579  codeblock2  cybernoid.asm:11916
-Pattern2nd          = $FC44 = 64580  codeblock2  cybernoid.asm:11917
-RAND_STATE          = $66A8 = 26280  codeblock2  cybernoid.asm:302
-REDEFINE_KEYS       = $830C = 33548  codeblock2  cybernoid.asm:4314
-RELEASE_KEYS        = $8332 = 33586  codeblock2  cybernoid.asm:4334
-RESERVED            = $F217 = 61975  codeblock2  cybernoid.asm:11456
-RESERVED_09         = $F21D = 61981  codeblock2  cybernoid.asm:11461
-RESERVED_1F         = $F233 = 62003  codeblock2  cybernoid.asm:11478
-RESET_BALL_LOOP     = $7FF4 = 32756  codeblock2  cybernoid.asm:3859
-RESET_FOR_NEXT_SCREEN = $721E = 29214  codeblock2  cybernoid.asm:1917
-RESET_TABLE_LIST    = $742E = 29742  codeblock2  cybernoid.asm:2232
-RESET_TABLE_LOOP    = $7435 = 29749  codeblock2  cybernoid.asm:2235
-RESET_WEAPON_TIMER  = $7A5B = 31323  codeblock2  cybernoid.asm:2990
-RESTORE_ALL_WEAPONS = $7BFC = 31740  codeblock2  cybernoid.asm:3282
-RESTORE_COLOUR      = $67A3 = 26531  codeblock2  cybernoid.asm:482
-RIGHT_BUTTON        = $68A8 = 26792  codeblock2  cybernoid.asm:658
-RIGHT_OFFSET        = $8101 = 33025  codeblock2  cybernoid.asm:4041
-RND_LOOP            = $669C = 26268  codeblock2  cybernoid.asm:288
-ROCKET_LOOP         = $9720 = 38688  codeblock2  cybernoid.asm:6772
-ROCKET_NO_HIT       = $9787 = 38791  codeblock2  cybernoid.asm:6817
+PROXIMITY_ROCKET    = $97F0 = 38896  codeblock2  cybernoid.asm:6901
+PROXIMITY_ROCKET_DATA = $9879 = 39033  codeblock2  cybernoid.asm:6971
+PURPLE              = $0003 =     3  codeblock2  Constants.asm:50
+PUT_CHARS           = $9452 = 37970  codeblock2  cybernoid.asm:6553
+Pattern1st          = $FC43 = 64579  codeblock2  cybernoid.asm:11970
+Pattern2nd          = $FC44 = 64580  codeblock2  cybernoid.asm:11971
+ProcessKeysLoop     = $95D7 = 38359  codeblock2  cybernoid.asm:6690
+RAND_STATE          = $66A8 = 26280  codeblock2  cybernoid.asm:316
+RED                 = $0002 =     2  codeblock2  Constants.asm:49
+REDEFINE_KEYS       = $830C = 33548  codeblock2  cybernoid.asm:4337
+RELATIVE_X          = $0078 =   120  codeblock2  Constants.asm:42
+RELATIVE_Y          = $00AF =   175  codeblock2  Constants.asm:43
+RELEASE_KEYS        = $8332 = 33586  codeblock2  cybernoid.asm:4358
+RESERVED            = $F217 = 61975  codeblock2  cybernoid.asm:11510
+RESERVED_09         = $F21D = 61981  codeblock2  cybernoid.asm:11515
+RESERVED_1F         = $F233 = 62003  codeblock2  cybernoid.asm:11532
+RESET_BALL_LOOP     = $7FF4 = 32756  codeblock2  cybernoid.asm:3882
+RESET_FOR_NEXT_SCREEN = $721E = 29214  codeblock2  cybernoid.asm:1938
+RESET_TABLE_LIST    = $742E = 29742  codeblock2  cybernoid.asm:2253
+RESET_TABLE_LOOP    = $7435 = 29749  codeblock2  cybernoid.asm:2256
+RESET_WEAPON_TIMER  = $7A5B = 31323  codeblock2  cybernoid.asm:3013
+RESTORE_ALL_WEAPONS = $7BFC = 31740  codeblock2  cybernoid.asm:3305
+RESTORE_COLOUR      = $67A3 = 26531  codeblock2  cybernoid.asm:496
+RIGHT_BUTTON        = $68A8 = 26792  codeblock2  cybernoid.asm:672
+RIGHT_OFFSET        = $8101 = 33025  codeblock2  cybernoid.asm:4064
+RND_LOOP            = $669C = 26268  codeblock2  cybernoid.asm:302
+ROCKET_LOOP         = $9720 = 38688  codeblock2  cybernoid.asm:6826
+ROCKET_NO_HIT       = $9787 = 38791  codeblock2  cybernoid.asm:6871
 ROM48K_ADDRESS      = $386E = 14446  codeblock2  Constants.asm:1
-ReadLocation        = $FC47 = 64583  codeblock2  cybernoid.asm:11922
-SCENCE_TRANSITION   = $720E = 29198  codeblock2  cybernoid.asm:1910
-SCENE_COLLISION_BOTTOM = $815D = 33117  codeblock2  cybernoid.asm:4118
-SCENE_COLLISION_LEFT = $8139 = 33081  codeblock2  cybernoid.asm:4091
-SCENE_COLLISION_RIGHT = $8115 = 33045  codeblock2  cybernoid.asm:4064
-SCENE_COLLISION_TOP = $8181 = 33153  codeblock2  cybernoid.asm:4145
-SCORE_LINE_LOOP     = $944F = 37967  codeblock2  cybernoid.asm:6526
-SCORE_LOOP          = $78A2 = 30882  codeblock2  cybernoid.asm:2705
-SCORE_TIMER_LOOP    = $946C = 37996  codeblock2  cybernoid.asm:6547
-SCROLL_BORDER       = $84F5 = 34037  codeblock2  cybernoid.asm:4513
-SCROLL_WAIT_KEY_UP  = $9460 = 37984  codeblock2  cybernoid.asm:6540
-SEARCH_UNUSED       = $8766 = 34662  codeblock2  cybernoid.asm:4926
-SEEKER_LABEL        = $7BEA = 31722  codeblock2  cybernoid.asm:3268 (unused)
-SEEKER_LIST         = $80B1 = 32945  codeblock2  cybernoid.asm:3961
-SEEKER_MAX          = $7BF9 = 31737  codeblock2  cybernoid.asm:3272 (unused)
-SEEKER_START        = $7BF8 = 31736  codeblock2  cybernoid.asm:3271 (unused)
-SELECTED_WEAPON     = $7BFA = 31738  codeblock2  cybernoid.asm:3277
-SELECT_PLR_WEAPON   = $7B4A = 31562  codeblock2  cybernoid.asm:3175
+ReadLocation        = $FC47 = 64583  codeblock2  cybernoid.asm:11976
+ReleaseKeyLoop      = $9628 = 38440  codeblock2  cybernoid.asm:6739
+SCENCE_TRANSITION   = $720E = 29198  codeblock2  cybernoid.asm:1931
+SCENE_COLLISION_BOTTOM = $815D = 33117  codeblock2  cybernoid.asm:4141
+SCENE_COLLISION_LEFT = $8139 = 33081  codeblock2  cybernoid.asm:4114
+SCENE_COLLISION_RIGHT = $8115 = 33045  codeblock2  cybernoid.asm:4087
+SCENE_COLLISION_TOP = $8181 = 33153  codeblock2  cybernoid.asm:4168
+SCORE_LINE_LOOP     = $944F = 37967  codeblock2  cybernoid.asm:6550
+SCORE_LOOP          = $78A2 = 30882  codeblock2  cybernoid.asm:2726
+SCORE_TIMER_LOOP    = $946C = 37996  codeblock2  cybernoid.asm:6571
+SCROLL_BORDER       = $84F5 = 34037  codeblock2  cybernoid.asm:4537
+SCROLL_WAIT_KEY_UP  = $9460 = 37984  codeblock2  cybernoid.asm:6564
+SEARCH_UNUSED       = $8766 = 34662  codeblock2  cybernoid.asm:4950
+SEEKER_LABEL        = $7BEA = 31722  codeblock2  cybernoid.asm:3291 (unused)
+SEEKER_LIST         = $80B1 = 32945  codeblock2  cybernoid.asm:3984
+SEEKER_MAX          = $7BF9 = 31737  codeblock2  cybernoid.asm:3295 (unused)
+SEEKER_START        = $7BF8 = 31736  codeblock2  cybernoid.asm:3294 (unused)
+SELECTED_WEAPON     = $7BFA = 31738  codeblock2  cybernoid.asm:3300
+SELECT_PLR_WEAPON   = $7B4A = 31562  codeblock2  cybernoid.asm:3198
 SETUP               = $00EB =   235  codeblock2  Constants.asm:40
-SETUP_ANIMATED_TILES = $8748 = 34632  codeblock2  cybernoid.asm:4903
-SETUP_END_LIFT_SCENE = $75DC = 30172  codeblock2  cybernoid.asm:2485
-SETUP_IM2_JUMP_TABLE = $70B4 = 28852  codeblock2  cybernoid.asm:1748
-SETUP_LEVEL         = $7465 = 29797  codeblock2  cybernoid.asm:2273
-SETUP_NEST          = $6E07 = 28167  codeblock2  cybernoid.asm:1522
-SETUP_TILES_BY_GROUP = $73AA = 29610  codeblock2  cybernoid.asm:2145
-SET_BEEPER_SFX      = $85B0 = 34224  codeblock2  cybernoid.asm:4662
-SET_COLLISION_BOX   = $67B9 = 26553  codeblock2  cybernoid.asm:497
-SET_COUNTER         = $FC33 = 64563  codeblock2  cybernoid.asm:11902
-SET_MODEL           = $652A = 25898  codeblock2  cybernoid.asm:56
-SET_NOISE           = $F093 = 61587  codeblock2  cybernoid.asm:11235
-SET_PORTA           = $F0A4 = 61604  codeblock2  cybernoid.asm:11243
+SETUP_ANIMATED_TILES = $8748 = 34632  codeblock2  cybernoid.asm:4927
+SETUP_END_LIFT_SCENE = $75DC = 30172  codeblock2  cybernoid.asm:2506
+SETUP_IM2_JUMP_TABLE = $70B4 = 28852  codeblock2  cybernoid.asm:1769
+SETUP_LEVEL         = $7465 = 29797  codeblock2  cybernoid.asm:2294
+SETUP_NEST          = $6E07 = 28167  codeblock2  cybernoid.asm:1543
+SETUP_TILES_BY_GROUP = $73AA = 29610  codeblock2  cybernoid.asm:2166
+SET_BEEPER_SFX      = $85B0 = 34224  codeblock2  cybernoid.asm:4686
+SET_COLLISION_BOX   = $67B9 = 26553  codeblock2  cybernoid.asm:511
+SET_COUNTER         = $FC33 = 64563  codeblock2  cybernoid.asm:11956
+SET_MODEL           = $652A = 25898  codeblock2  cybernoid.asm:54
+SET_NOISE           = $F093 = 61587  codeblock2  cybernoid.asm:11289
+SET_PORTA           = $F0A4 = 61604  codeblock2  cybernoid.asm:11297
 SET_POS             = $00DF =   223  codeblock2  Constants.asm:37
-SET_SCRN_ATTR       = $A446 = 42054  codeblock2  cybernoid.asm:8197
+SET_SCRN_ATTR       = $A446 = 42054  codeblock2  cybernoid.asm:8251
 SET_SOURCE_DATA     = $00E6 =   230  codeblock2  Constants.asm:39
-SET_TILE16X16_COL   = $A57F = 42367  codeblock2  cybernoid.asm:8477
-SET_TRANS           = $F09E = 61598  codeblock2  cybernoid.asm:11240
-SET_TRANSPOSITION   = $F111 = 61713  codeblock2  cybernoid.asm:11299
-SET_VIBRATO         = $F0B0 = 61616  codeblock2  cybernoid.asm:11248
+SET_TILE16X16_COL   = $A57F = 42367  codeblock2  cybernoid.asm:8531
+SET_TRANS           = $F09E = 61598  codeblock2  cybernoid.asm:11294
+SET_TRANSPOSITION   = $F111 = 61713  codeblock2  cybernoid.asm:11353
+SET_VIBRATO         = $F0B0 = 61616  codeblock2  cybernoid.asm:11302
 SFX_BOUNCE1         = $001C =    28  codeblock2  Constants.asm:14
 SFX_BOUNCE2         = $001D =    29  codeblock2  Constants.asm:15
 SFX_BULLETS         = $001A =    26  codeblock2  Constants.asm:12
@@ -18477,174 +18596,180 @@ SFX_MISSILE         = $0018 =    24  codeblock2  Constants.asm:10
 SFX_PICKUP          = $0019 =    25  codeblock2  Constants.asm:11
 SFX_SEEKER          = $0017 =    23  codeblock2  Constants.asm:9
 SFX_SHIELD          = $0016 =    22  codeblock2  Constants.asm:8
-SHIELD_AMOUNT       = $7E94 = 32404  codeblock2  cybernoid.asm:3648
-SHIELD_LABEL        = $7BCA = 31690  codeblock2  cybernoid.asm:3258 (unused)
-SHIELD_MAX          = $7BD9 = 31705  codeblock2  cybernoid.asm:3262 (unused)
-SHIELD_START        = $7BD8 = 31704  codeblock2  cybernoid.asm:3261 (unused)
-SHOT_HIT            = $7B27 = 31527  codeblock2  cybernoid.asm:3152
-SHOT_HIT_SCENE      = $8D32 = 36146  codeblock2  cybernoid.asm:5655
-SINE_WAVE_TABLE     = $6AF9 = 27385  codeblock2  cybernoid.asm:1040
-SINGLE_CHAN         = $8618 = 34328  codeblock2  cybernoid.asm:4739
-SKIP_               = $6B9B = 27547  codeblock2  cybernoid.asm:1138
-SKIP_1BIT_MUSIC     = $81CB = 33227  codeblock2  cybernoid.asm:4200
-SKIP_48K_SETUP      = $653F = 25919  codeblock2  cybernoid.asm:67
-SKIP_ATTR           = $6B83 = 27523  codeblock2  cybernoid.asm:1119
-SKIP_BEEP_RESTART   = $FBE0 = 64480  codeblock2  cybernoid.asm:11844
-SKIP_CARRY          = $66A1 = 26273  codeblock2  cybernoid.asm:293
-SKIP_CH             = $EF63 = 61283  codeblock2  cybernoid.asm:11074
-SKIP_CTR1           = $6B8F = 27535  codeblock2  cybernoid.asm:1129
-SKIP_CTR2           = $6B9F = 27551  codeblock2  cybernoid.asm:1140
-SKIP_GROUP          = $7284 = 29316  codeblock2  cybernoid.asm:1984
-SKIP_INK            = $6B6D = 27501  codeblock2  cybernoid.asm:1101
-SKIP_MENU_DRAW      = $6B37 = 27447  codeblock2  cybernoid.asm:1060
-SKIP_NO_F4          = $EF6E = 61294  codeblock2  cybernoid.asm:11081
-SKIP_PATTERN        = $FC05 = 64517  codeblock2  cybernoid.asm:11870
-SKIP_SAME           = $8BC5 = 35781  codeblock2  cybernoid.asm:5503
-SKIP_SET_POS        = $6B79 = 27513  codeblock2  cybernoid.asm:1111
-SKIP_SND_UPDATE     = $85B8 = 34232  codeblock2  cybernoid.asm:4668
-SKIP_SPECIAL        = $72AF = 29359  codeblock2  cybernoid.asm:2015
-SKIP_VIBRA          = $F1EF = 61935  codeblock2  cybernoid.asm:11425
-SKIP_X_AXIS         = $6B47 = 27463  codeblock2  cybernoid.asm:1074
-SKIP_Y_AXIS         = $6B54 = 27476  codeblock2  cybernoid.asm:1083
-SKIP_ZERO           = $7D02 = 32002  codeblock2  cybernoid.asm:3451
-SLOT_READY          = $707A = 28794  codeblock2  cybernoid.asm:1703
-SLOT_USED           = $89C0 = 35264  codeblock2  cybernoid.asm:5233
-SNAKES              = $9267 = 37479  codeblock2  cybernoid.asm:6283
-SNAKES_INFO         = $91FE = 37374  codeblock2  cybernoid.asm:6265
-SNAKES_TABLE        = $921E = 37406  codeblock2  cybernoid.asm:6269
-SND_CTRL_FLAGS      = $85A4 = 34212  codeblock2  cybernoid.asm:4643
-SND_DURATION        = $85A9 = 34217  codeblock2  cybernoid.asm:4650
-SND_LOOP            = $8631 = 34353  codeblock2  cybernoid.asm:4754
-SND_LOOP_ENTRY      = $862E = 34350  codeblock2  cybernoid.asm:4751
-SND_PTR1            = $85AC = 34220  codeblock2  cybernoid.asm:4653
-SND_PTR2            = $85AE = 34222  codeblock2  cybernoid.asm:4655
-SND_REPEAT_CNT      = $85A3 = 34211  codeblock2  cybernoid.asm:4642
-SND_SWEEP_RATE      = $85A6 = 34214  codeblock2  cybernoid.asm:4647
-SND_TIMER           = $859C = 34204  codeblock2  cybernoid.asm:4632
-SOUND_DURATION_PARAM = $85A5 = 34213  codeblock2  cybernoid.asm:4644
-SOUND_EFFECT_ID     = $859A = 34202  codeblock2  cybernoid.asm:4630
-SPARKLE_DATA        = $8B16 = 35606  codeblock2  cybernoid.asm:5423
-SPARKLE_EFFECT      = $8ABF = 35519  codeblock2  cybernoid.asm:5359
-SPAWN_ENEMY_SHIPS   = $9B68 = 39784  codeblock2  cybernoid.asm:7252
-SPAWN_LANE_GUARDIANS = $8FD6 = 36822  codeblock2  cybernoid.asm:5993
-SPAWN_SNAKES        = $91B1 = 37297  codeblock2  cybernoid.asm:6216
-SPECCY_MODEL        = $8599 = 34201  codeblock2  cybernoid.asm:4626
-SPECIAL_TITLES      = $729E = 29342  codeblock2  cybernoid.asm:2003
-SPRITE24x16_DATA    = $C6F9 = 50937  codeblock2  cybernoid.asm:9674
-SPRITE_24x16        = $A1FD = 41469  codeblock2  cybernoid.asm:7773
-SPRITE_DATA         = $EC61 = 60513  codeblock2  cybernoid.asm:10938
-SPRITE_EXPLOSION_ID_LIST = $8965 = 35173  codeblock2  cybernoid.asm:5199
-SPRITE_GFX_BASE     = $696D = 26989  codeblock2  cybernoid.asm:778
-SPRITE_LIST         = $8E44 = 36420  codeblock2  cybernoid.asm:5833
-SPRITE_LIST_PTR     = $8E42 = 36418  codeblock2  cybernoid.asm:5831
-START_BEEP_MUSIC    = $FB86 = 64390  codeblock2  cybernoid.asm:11799
-START_POS           = $74C9 = 29897  codeblock2  cybernoid.asm:2334
-STOP_CHAN           = $F0E6 = 61670  codeblock2  cybernoid.asm:11271
-STOP_SOUND_EFFECT   = $870B = 34571  codeblock2  cybernoid.asm:4873
-STORE_AY            = $F204 = 61956  codeblock2  cybernoid.asm:11445
-SUPER_WEAPONS_TABLE = $7BAA = 31658  codeblock2  cybernoid.asm:3247
-SUPER_WEAPON_AMOUNT = $7C54 = 31828  codeblock2  cybernoid.asm:3359
-SUPER_WEAPON_TIMER  = $7AE9 = 31465  codeblock2  cybernoid.asm:3104
-SWAP_LOOP           = $7C05 = 31749  codeblock2  cybernoid.asm:3286
-StartingFrameHigh   = $0003 =     3  codeblock2  Constants.asm:59
-StartingFrameLow    = $0002 =     2  codeblock2  Constants.asm:58
-TABLE_JMP_BOMBS     = $7C5C = 31836  codeblock2  cybernoid.asm:3366
-TABLE_JMP_BOUNCE    = $7E95 = 32405  codeblock2  cybernoid.asm:3650
-TABLE_JMP_MINES     = $7DCE = 32206  codeblock2  cybernoid.asm:3540
-TABLE_JMP_SEEKER    = $800E = 32782  codeblock2  cybernoid.asm:3880
-TABLE_JMP_SHIELD    = $7E76 = 32374  codeblock2  cybernoid.asm:3631
-TABLE_TO_TABLE_CLEAR_INFO = $88AC = 34988  codeblock2  cybernoid.asm:5083
-TELE_TYPE           = $8FA9 = 36777  codeblock2  cybernoid.asm:5965
-TEMP_SND_BUFFER     = $859E = 34206  codeblock2  cybernoid.asm:4635
-TILE_ANIM_LOOP      = $87B0 = 34736  codeblock2  cybernoid.asm:4968
-TILE_GROUP_REPEAT   = $729A = 29338  codeblock2  cybernoid.asm:1998
-TILE_LOOP           = $A567 = 42343  codeblock2  cybernoid.asm:8453
-TILE_SETUP_LOOP     = $72D2 = 29394  codeblock2  cybernoid.asm:2036
-TIMEOUT_BALLS       = $800D = 32781  codeblock2  cybernoid.asm:3878
-TIMEOUT_BOUNCY_BALLS = $7FE7 = 32743  codeblock2  cybernoid.asm:3851
-TONE_REGISTER_PTR   = $F230 = 62000  codeblock2  cybernoid.asm:11476
-TOP_BAR_DRAW_LIST   = $7814 = 30740  codeblock2  cybernoid.asm:2675
-TOP_COL_OCCUPIED    = $A498 = 42136  codeblock2  cybernoid.asm:8265
-TRACER_DATA         = $8B0B = 35595  codeblock2  cybernoid.asm:5419
-TRACER_LOOP         = $8ADD = 35549  codeblock2  cybernoid.asm:5385
-TRANSPOSITION       = $F22C = 61996  codeblock2  cybernoid.asm:11473
-TileGfxHigh         = $0007 =     7  codeblock2  Constants.asm:63
-TileGfxLow          = $0006 =     6  codeblock2  Constants.asm:62
-UPDATE_ALL_CHANS    = $EFAB = 61355  codeblock2  cybernoid.asm:11108
-UPDATE_BOUNCY_BALLS = $7F1D = 32541  codeblock2  cybernoid.asm:3728
-UPDATE_EGG_TIMER    = $79A9 = 31145  codeblock2  cybernoid.asm:2861
-UPDATE_FRAME        = $87EE = 34798  codeblock2  cybernoid.asm:5005
-UPDATE_GEMS_TXT     = $78AF = 30895  codeblock2  cybernoid.asm:2717
-UPDATE_INGAME_TILES = $726F = 29295  codeblock2  cybernoid.asm:1970
-UPDATE_LIVES_TXT    = $78C8 = 30920  codeblock2  cybernoid.asm:2734
-UPDATE_PLR_BOMBS    = $7CD2 = 31954  codeblock2  cybernoid.asm:3425
-UPDATE_SCENE        = $71B4 = 29108  codeblock2  cybernoid.asm:1845
-UPDATE_SCORE_TXT    = $788E = 30862  codeblock2  cybernoid.asm:2694
-UPDATE_SUPER_WEAPON_DIGITS = $7C43 = 31811  codeblock2  cybernoid.asm:3345
-UPDATE_WEAPONS_TXT  = $7B72 = 31602  codeblock2  cybernoid.asm:3206
-UP_BUTTON           = $68A9 = 26793  codeblock2  cybernoid.asm:659
-USER_INPUT          = $688F = 26767  codeblock2  cybernoid.asm:645
-USE_AY              = $7106 = 28934  codeblock2  cybernoid.asm:1806
-USE_RIGHT_FRAME     = $695C = 26972  codeblock2  cybernoid.asm:768
-VIBRATO_CONTROL     = $F234 = 62004  codeblock2  cybernoid.asm:11479
-VIBRATO_CTL         = $F0F3 = 61683  codeblock2  cybernoid.asm:11277
-VIBRATO_DEPTH       = $F220 = 61984  codeblock2  cybernoid.asm:11464
-VIBRATO_SPEED       = $F221 = 61985  codeblock2  cybernoid.asm:11465
-VOLCANO_EJECTA      = $7584 = 30084  codeblock2  cybernoid.asm:2427
-VOLCANO_LIST        = $75A3 = 30115  codeblock2  cybernoid.asm:2452
-VOL_FADE_SPEED      = $F235 = 62005  codeblock2  cybernoid.asm:11480
-VOL_FADE_TARGET     = $F236 = 62006  codeblock2  cybernoid.asm:11481
-WAIT_21xBC          = $676A = 26474  codeblock2  cybernoid.asm:432
-WALK_LIST           = $8EF9 = 36601  codeblock2  cybernoid.asm:5877
-WEAPONS_BASE        = $7BB5 = 31669  codeblock2  cybernoid.asm:3249
+SHIELD_AMOUNT       = $7E94 = 32404  codeblock2  cybernoid.asm:3671
+SHIELD_LABEL        = $7BCA = 31690  codeblock2  cybernoid.asm:3281 (unused)
+SHIELD_MAX          = $7BD9 = 31705  codeblock2  cybernoid.asm:3285 (unused)
+SHIELD_START        = $7BD8 = 31704  codeblock2  cybernoid.asm:3284 (unused)
+SHOT_HIT            = $7B27 = 31527  codeblock2  cybernoid.asm:3175
+SHOT_HIT_SCENE      = $8D32 = 36146  codeblock2  cybernoid.asm:5679
+SINE_WAVE_TABLE     = $6AF9 = 27385  codeblock2  cybernoid.asm:1054
+SINGLE_CHAN         = $8618 = 34328  codeblock2  cybernoid.asm:4763
+SKIP_               = $6B9B = 27547  codeblock2  cybernoid.asm:1153
+SKIP_1BIT_MUSIC     = $81CB = 33227  codeblock2  cybernoid.asm:4223
+SKIP_48K_SETUP      = $653F = 25919  codeblock2  cybernoid.asm:65
+SKIP_ATTR           = $6B83 = 27523  codeblock2  cybernoid.asm:1134
+SKIP_BEEP_RESTART   = $FBE0 = 64480  codeblock2  cybernoid.asm:11898
+SKIP_CARRY          = $66A1 = 26273  codeblock2  cybernoid.asm:307
+SKIP_CH             = $EF63 = 61283  codeblock2  cybernoid.asm:11128
+SKIP_CTR1           = $6B8F = 27535  codeblock2  cybernoid.asm:1144
+SKIP_CTR2           = $6B9F = 27551  codeblock2  cybernoid.asm:1155
+SKIP_GROUP          = $7284 = 29316  codeblock2  cybernoid.asm:2005
+SKIP_INK            = $6B6D = 27501  codeblock2  cybernoid.asm:1116
+SKIP_MENU_DRAW      = $6B37 = 27447  codeblock2  cybernoid.asm:1075
+SKIP_NO_F4          = $EF6E = 61294  codeblock2  cybernoid.asm:11135
+SKIP_PATTERN        = $FC05 = 64517  codeblock2  cybernoid.asm:11924
+SKIP_SAME           = $8BC5 = 35781  codeblock2  cybernoid.asm:5527
+SKIP_SET_POS        = $6B79 = 27513  codeblock2  cybernoid.asm:1126
+SKIP_SND_UPDATE     = $85B8 = 34232  codeblock2  cybernoid.asm:4692
+SKIP_SPECIAL        = $72AF = 29359  codeblock2  cybernoid.asm:2036
+SKIP_VIBRA          = $F1EF = 61935  codeblock2  cybernoid.asm:11479
+SKIP_X_AXIS         = $6B47 = 27463  codeblock2  cybernoid.asm:1089
+SKIP_Y_AXIS         = $6B54 = 27476  codeblock2  cybernoid.asm:1098
+SKIP_ZERO           = $7D02 = 32002  codeblock2  cybernoid.asm:3474
+SLOT_READY          = $707A = 28794  codeblock2  cybernoid.asm:1724
+SLOT_USED           = $89C0 = 35264  codeblock2  cybernoid.asm:5257
+SNAKES              = $9267 = 37479  codeblock2  cybernoid.asm:6307
+SNAKES_INFO         = $91FE = 37374  codeblock2  cybernoid.asm:6289
+SNAKES_TABLE        = $921E = 37406  codeblock2  cybernoid.asm:6293
+SND_CTRL_FLAGS      = $85A4 = 34212  codeblock2  cybernoid.asm:4667
+SND_DURATION        = $85A9 = 34217  codeblock2  cybernoid.asm:4674
+SND_LOOP            = $8631 = 34353  codeblock2  cybernoid.asm:4778
+SND_LOOP_ENTRY      = $862E = 34350  codeblock2  cybernoid.asm:4775
+SND_PTR1            = $85AC = 34220  codeblock2  cybernoid.asm:4677
+SND_PTR2            = $85AE = 34222  codeblock2  cybernoid.asm:4679
+SND_REPEAT_CNT      = $85A3 = 34211  codeblock2  cybernoid.asm:4666
+SND_SWEEP_RATE      = $85A6 = 34214  codeblock2  cybernoid.asm:4671
+SND_TIMER           = $859C = 34204  codeblock2  cybernoid.asm:4656
+SOUND_DURATION_PARAM = $85A5 = 34213  codeblock2  cybernoid.asm:4668
+SOUND_EFFECT_ID     = $859A = 34202  codeblock2  cybernoid.asm:4654
+SPARKLE_DATA        = $8B16 = 35606  codeblock2  cybernoid.asm:5447
+SPARKLE_EFFECT      = $8ABF = 35519  codeblock2  cybernoid.asm:5383
+SPAWN_ENEMY_SHIPS   = $9B68 = 39784  codeblock2  cybernoid.asm:7306
+SPAWN_LANE_GUARDIANS = $8FD6 = 36822  codeblock2  cybernoid.asm:6017
+SPAWN_SNAKES        = $91B1 = 37297  codeblock2  cybernoid.asm:6240
+SPECCY_MODEL        = $8599 = 34201  codeblock2  cybernoid.asm:4650
+SPECIAL_TITLES      = $729E = 29342  codeblock2  cybernoid.asm:2024
+SPRITE24x16_DATA    = $C6F9 = 50937  codeblock2  cybernoid.asm:9728
+SPRITE_24x16        = $A1FD = 41469  codeblock2  cybernoid.asm:7827
+SPRITE_DATA         = $EC61 = 60513  codeblock2  cybernoid.asm:10992
+SPRITE_EXPLOSION_ID_LIST = $8965 = 35173  codeblock2  cybernoid.asm:5223
+SPRITE_GFX_BASE     = $696D = 26989  codeblock2  cybernoid.asm:792
+SPRITE_LIST         = $8E44 = 36420  codeblock2  cybernoid.asm:5857
+SPRITE_LIST_PTR     = $8E42 = 36418  codeblock2  cybernoid.asm:5855
+START_BEEP_MUSIC    = $FB86 = 64390  codeblock2  cybernoid.asm:11853
+START_POS           = $74C9 = 29897  codeblock2  cybernoid.asm:2355
+STOP_CHAN           = $F0E6 = 61670  codeblock2  cybernoid.asm:11325
+STOP_SOUND_EFFECT   = $870B = 34571  codeblock2  cybernoid.asm:4897
+STORE_AY            = $F204 = 61956  codeblock2  cybernoid.asm:11499
+SUPER_WEAPONS_TABLE = $7BAA = 31658  codeblock2  cybernoid.asm:3270
+SUPER_WEAPON_AMOUNT = $7C54 = 31828  codeblock2  cybernoid.asm:3382
+SUPER_WEAPON_TIMER  = $7AE9 = 31465  codeblock2  cybernoid.asm:3127
+SWAP_LOOP           = $7C05 = 31749  codeblock2  cybernoid.asm:3309
+StartingFrameHigh   = $0003 =     3  codeblock2  Constants.asm:72
+StartingFrameLow    = $0002 =     2  codeblock2  Constants.asm:71
+StoreCompletedName  = $961F = 38431  codeblock2  cybernoid.asm:6732
+TABLE_JMP_BOMBS     = $7C5C = 31836  codeblock2  cybernoid.asm:3389
+TABLE_JMP_BOUNCE    = $7E95 = 32405  codeblock2  cybernoid.asm:3673
+TABLE_JMP_MINES     = $7DCE = 32206  codeblock2  cybernoid.asm:3563
+TABLE_JMP_SEEKER    = $800E = 32782  codeblock2  cybernoid.asm:3903
+TABLE_JMP_SHIELD    = $7E76 = 32374  codeblock2  cybernoid.asm:3654
+TABLE_TO_TABLE_CLEAR_INFO = $88AC = 34988  codeblock2  cybernoid.asm:5107
+TELE_TYPE           = $8FA9 = 36777  codeblock2  cybernoid.asm:5989
+TEMP_SND_BUFFER     = $859E = 34206  codeblock2  cybernoid.asm:4659
+TILE_ANIM_LOOP      = $87B0 = 34736  codeblock2  cybernoid.asm:4992
+TILE_GROUP_REPEAT   = $729A = 29338  codeblock2  cybernoid.asm:2019
+TILE_LOOP           = $A567 = 42343  codeblock2  cybernoid.asm:8507
+TILE_SETUP_LOOP     = $72D2 = 29394  codeblock2  cybernoid.asm:2057
+TIMEOUT_BALLS       = $800D = 32781  codeblock2  cybernoid.asm:3901
+TIMEOUT_BOUNCY_BALLS = $7FE7 = 32743  codeblock2  cybernoid.asm:3874
+TONE_REGISTER_PTR   = $F230 = 62000  codeblock2  cybernoid.asm:11530
+TOP_BAR_DRAW_LIST   = $7814 = 30740  codeblock2  cybernoid.asm:2696
+TOP_COL_OCCUPIED    = $A498 = 42136  codeblock2  cybernoid.asm:8319
+TRACER_DATA         = $8B0B = 35595  codeblock2  cybernoid.asm:5443
+TRACER_LOOP         = $8ADD = 35549  codeblock2  cybernoid.asm:5409
+TRANSPOSITION       = $F22C = 61996  codeblock2  cybernoid.asm:11527
+TileGfxHigh         = $0007 =     7  codeblock2  Constants.asm:76
+TileGfxLow          = $0006 =     6  codeblock2  Constants.asm:75
+UPDATE_ALL_CHANS    = $EFAB = 61355  codeblock2  cybernoid.asm:11162
+UPDATE_BOUNCY_BALLS = $7F1D = 32541  codeblock2  cybernoid.asm:3751
+UPDATE_EGG_TIMER    = $79A9 = 31145  codeblock2  cybernoid.asm:2884
+UPDATE_FRAME        = $87EE = 34798  codeblock2  cybernoid.asm:5029
+UPDATE_GEMS_TXT     = $78AF = 30895  codeblock2  cybernoid.asm:2738
+UPDATE_INGAME_TILES = $726F = 29295  codeblock2  cybernoid.asm:1991
+UPDATE_LIVES_TXT    = $78C8 = 30920  codeblock2  cybernoid.asm:2755
+UPDATE_PLR_BOMBS    = $7CD2 = 31954  codeblock2  cybernoid.asm:3448
+UPDATE_SCENE        = $71B4 = 29108  codeblock2  cybernoid.asm:1866
+UPDATE_SCORE_TXT    = $788E = 30862  codeblock2  cybernoid.asm:2715
+UPDATE_SUPER_WEAPON_DIGITS = $7C43 = 31811  codeblock2  cybernoid.asm:3368
+UPDATE_WEAPONS_TXT  = $7B72 = 31602  codeblock2  cybernoid.asm:3229
+UP_BUTTON           = $68A9 = 26793  codeblock2  cybernoid.asm:673
+USER_INPUT          = $688F = 26767  codeblock2  cybernoid.asm:659
+USE_AY              = $7106 = 28934  codeblock2  cybernoid.asm:1827
+USE_RIGHT_FRAME     = $695C = 26972  codeblock2  cybernoid.asm:782
+UpdateChar          = $9610 = 38416  codeblock2  cybernoid.asm:6722
+VIBRATO_CONTROL     = $F234 = 62004  codeblock2  cybernoid.asm:11533
+VIBRATO_CTL         = $F0F3 = 61683  codeblock2  cybernoid.asm:11331
+VIBRATO_DEPTH       = $F220 = 61984  codeblock2  cybernoid.asm:11518
+VIBRATO_SPEED       = $F221 = 61985  codeblock2  cybernoid.asm:11519
+VOLCANO_EJECTA      = $7584 = 30084  codeblock2  cybernoid.asm:2448
+VOLCANO_LIST        = $75A3 = 30115  codeblock2  cybernoid.asm:2473
+VOL_FADE_SPEED      = $F235 = 62005  codeblock2  cybernoid.asm:11534
+VOL_FADE_TARGET     = $F236 = 62006  codeblock2  cybernoid.asm:11535
+WAIT_21xBC          = $676A = 26474  codeblock2  cybernoid.asm:446
+WALK_LIST           = $8EF9 = 36601  codeblock2  cybernoid.asm:5901
+WEAPONS_BASE        = $7BB5 = 31669  codeblock2  cybernoid.asm:3272
 WEAPON_ITEM_BACKSHOT_L = $0007 =     7  codeblock2  Constants.asm:25
 WEAPON_ITEM_BACKSHOT_R = $0008 =     8  codeblock2  Constants.asm:26
 WEAPON_ITEM_MACE    = $0011 =    17  codeblock2  Constants.asm:27
-WEAPON_KEYS_USED    = $7B59 = 31577  codeblock2  cybernoid.asm:3185
-WELL_DONE_TXT       = $76CC = 30412  codeblock2  cybernoid.asm:2622
-WRD_OPCODE          = $F0F9 = 61689  codeblock2  cybernoid.asm:11282
-X_OFFSET            = $A56D = 42349  codeblock2  cybernoid.asm:8458
-X_SCRN_EDGE         = $71C6 = 29126  codeblock2  cybernoid.asm:1857
-Xpos                = $0000 =     0  codeblock2  Constants.asm:56
-Ypos                = $0001 =     1  codeblock2  Constants.asm:57
-_PADDING_           = $859D = 34205  codeblock2  cybernoid.asm:4633 (unused)
+WEAPON_KEYS_USED    = $7B59 = 31577  codeblock2  cybernoid.asm:3208
+WELL_DONE_TXT       = $76CC = 30412  codeblock2  cybernoid.asm:2643
+WHITE               = $0007 =     7  codeblock2  Constants.asm:54
+WRD_OPCODE          = $F0F9 = 61689  codeblock2  cybernoid.asm:11336
+WaitReleaseAnyKey   = $9648 = 38472  codeblock2  cybernoid.asm:6755
+X_OFFSET            = $A56D = 42349  codeblock2  cybernoid.asm:8512
+X_SCRN_EDGE         = $71C6 = 29126  codeblock2  cybernoid.asm:1878
+Xpos                = $0000 =     0  codeblock2  Constants.asm:69
+YELLOW              = $0006 =     6  codeblock2  Constants.asm:53
+Ypos                = $0001 =     1  codeblock2  Constants.asm:70
+_PADDING_           = $859D = 34205  codeblock2  cybernoid.asm:4657 (unused)
 _z80_               = $0001 =     1              cybernoid.asm:1 (unused)
-arp_index           = $000A =    10  codeblock2  Constants.asm:79 (unused)
-arp_speed           = $000B =    11  codeblock2  Constants.asm:80 (unused)
-ch_status           = $0010 =    16  codeblock2  Constants.asm:85
+arp_index           = $000A =    10  codeblock2  Constants.asm:92 (unused)
+arp_speed           = $000B =    11  codeblock2  Constants.asm:93 (unused)
+backspace           = $95FE = 38398  codeblock2  cybernoid.asm:6712
+ch_status           = $0010 =    16  codeblock2  Constants.asm:98
 codeblock2          = $6103 = 24835  codeblock2  loading-screen.asm:11 (unused)
 codeblock2_end      = $FFFF = 65535  codeblock2  loading-screen.asm:11 (unused)
 codeblock2_size     = $9EFC = 40700  codeblock2  loading-screen.asm:11 (unused)
-current_data_ptr    = $0012 =    18  codeblock2  Constants.asm:87
-custom_env_ptr      = $001A =    26  codeblock2  Constants.asm:92
-duration_counter    = $0011 =    17  codeblock2  Constants.asm:86
-env_base_speed      = $0006 =     6  codeblock2  Constants.asm:75 (unused)
-env_data_ptr        = $0004 =     4  codeblock2  Constants.asm:74
-env_loop_counter    = $0008 =     8  codeblock2  Constants.asm:77 (unused)
-env_override_flag   = $0019 =    25  codeblock2  Constants.asm:91
-env_phase           = $0002 =     2  codeblock2  Constants.asm:72 (unused)
-env_release_rate    = $001E =    30  codeblock2  Constants.asm:94
-env_speed_mod       = $0007 =     7  codeblock2  Constants.asm:76 (unused)
-envelope_step       = $0000 =     0  codeblock2  Constants.asm:70 (unused)
-envelope_substep    = $0001 =     1  codeblock2  Constants.asm:71 (unused)
+current_data_ptr    = $0012 =    18  codeblock2  Constants.asm:100
+custom_env_ptr      = $001A =    26  codeblock2  Constants.asm:105
+duration_counter    = $0011 =    17  codeblock2  Constants.asm:99
+env_base_speed      = $0006 =     6  codeblock2  Constants.asm:88 (unused)
+env_data_ptr        = $0004 =     4  codeblock2  Constants.asm:87
+env_loop_counter    = $0008 =     8  codeblock2  Constants.asm:90 (unused)
+env_override_flag   = $0019 =    25  codeblock2  Constants.asm:104
+env_phase           = $0002 =     2  codeblock2  Constants.asm:85 (unused)
+env_release_rate    = $001E =    30  codeblock2  Constants.asm:107
+env_speed_mod       = $0007 =     7  codeblock2  Constants.asm:89 (unused)
+envelope_step       = $0000 =     0  codeblock2  Constants.asm:83 (unused)
+envelope_substep    = $0001 =     1  codeblock2  Constants.asm:84 (unused)
 header2             = $0000 =     0  header2     loading-screen.asm:2 (unused)
 header2_end         = $0011 =    17  header2     loading-screen.asm:2 (unused)
 header2_size        = $0011 =    17  header2     loading-screen.asm:2 (unused)
-loop_start_ptr      = $0014 =    20  codeblock2  Constants.asm:88
-phrase_start_ptr    = $0016 =    22  codeblock2  Constants.asm:89
-portamento_speed    = $000F =    15  codeblock2  Constants.asm:84
-portamento_target   = $000E =    14  codeblock2  Constants.asm:83
-reserved            = $0003 =     3  codeblock2  Constants.asm:73 (unused)
-reserved_09         = $0009 =     9  codeblock2  Constants.asm:78 (unused)
-reserved_1F         = $001F =    31  codeblock2  Constants.asm:95 (unused)
-tone_register_ptr   = $001C =    28  codeblock2  Constants.asm:93
-transposition       = $0018 =    24  codeblock2  Constants.asm:90
-vibrato_control     = $0020 =    32  codeblock2  Constants.asm:96
-vibrato_depth       = $000C =    12  codeblock2  Constants.asm:81
-vibrato_speed       = $000D =    13  codeblock2  Constants.asm:82
-vol_fade_speed      = $0021 =    33  codeblock2  Constants.asm:97
-vol_fade_target     = $0022 =    34  codeblock2  Constants.asm:98
+loop_start_ptr      = $0014 =    20  codeblock2  Constants.asm:101
+phrase_start_ptr    = $0016 =    22  codeblock2  Constants.asm:102
+portamento_speed    = $000F =    15  codeblock2  Constants.asm:97
+portamento_target   = $000E =    14  codeblock2  Constants.asm:96
+reserved            = $0003 =     3  codeblock2  Constants.asm:86 (unused)
+reserved_09         = $0009 =     9  codeblock2  Constants.asm:91 (unused)
+reserved_1F         = $001F =    31  codeblock2  Constants.asm:108 (unused)
+tone_register_ptr   = $001C =    28  codeblock2  Constants.asm:106
+transposition       = $0018 =    24  codeblock2  Constants.asm:103
+vibrato_control     = $0020 =    32  codeblock2  Constants.asm:109
+vibrato_depth       = $000C =    12  codeblock2  Constants.asm:94
+vibrato_speed       = $000D =    13  codeblock2  Constants.asm:95
+vol_fade_speed      = $0021 =    33  codeblock2  Constants.asm:110
+vol_fade_target     = $0022 =    34  codeblock2  Constants.asm:111
 
 
-total time: 0.7567 sec.
+total time: 0.8002 sec.
 no errors

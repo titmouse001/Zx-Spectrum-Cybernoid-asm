@@ -6,9 +6,7 @@
 #include 	"LoadSection.asm"	; basic load part	
 #include 	"Constants.asm"
 ;------------------------------------------------------------------
-
-			;--------------------------------------------------------------------------
-			; Note: $6103-$6503 is cleared early at startup
+			
 			;--------------------------------------------------------------------------
 			; $6300-6400 is the game's screen Ypos lookup table (initialied at statup)
 			; High byte table $6400
@@ -21,7 +19,7 @@
 			; - All X values in the game are stored at half-scale (i.e. 64=128 pixels)
 			; - All Y values are at kept at pixel scale
 			;--------------------------------------------------------------------------
-			    
+			; Note: $6103-$6503 is cleared early at startup    
 			defb $3E										; $6103
 			defs $619A-$6104,0								; $6104-$6199
 			defb $DB,$02,$4D,$00,$04,$65,$00,$00,$03		; $619A
@@ -70,22 +68,29 @@ SKIP_48K_SETUP:
 			LD E,$01						; $6542
 			CALL PLAY_SFX					; $6544 ; (note: modified to RET when 48k model)
 			EI								; $6547
+
 			; -----------------------------------------------------------
 			CALL RESTORE_ALL_WEAPONS		; $6548
 			CALL INIT_MENU_SCREEN_TABLES	; $654B  
+			
 			CALL DO_MENU					; $654E  
 			CALL INIT_GAME_SCREEN_TABLES	; $6551
 			LD A,$04						; $6554	; starting lives
 			LD (LIVES),A					; $6556	;
-			LD HL,$78F9						; $6559
-			LD DE,$78FA						; $655C
-			LD BC,$0005						; $655F
-			LD (HL),$30						; $6562
-			LDIR							; $6564
+
+			; Reset Score to "000000"
+			LD HL,GAME_SCORE						; $6559	
+			LD DE,GAME_SCORE+1						; $655C
+			LD BC,GAME_SCORE_LAST_DIGIT-GAME_SCORE	; $655F
+			LD (HL),"0"								; $6562 ; reset char
+			LDIR									; $6564
+	;	nop
+;		nop
+
 			XOR A							; $6566 ; First level
 			CALL SETUP_LEVEL				; $6567
 	
-	
+
 
 INGAME_LOOP: 
 	
@@ -151,7 +156,16 @@ GO_25FPS:	XOR A						; $6574  ; reset for next 25FPS test
 			CALL DO_EGG_TIMER			; $65DE		; Games countdown timer
 			CALL INGAME_RESET			; $65E1
 			CALL PAUSE_GAME				; $65E4
-		
+
+	
+;***************************************************
+; EXPERIMENTING WITH HI-SCORE MUSIC CODE
+
+	;	CALL FILLOUT_HI_SCORE
+
+;***************************************************
+
+
 	
 		JP INGAME_LOOP					; $65E7
 
@@ -1052,8 +1066,9 @@ SINE_WAVE_TABLE:	defb $00,$E0			; $6AF9  ; Sine Wave for Mace (22 Y/X Coords)
 DRAW_LIST:	
 			ld a,(HL)				; $6B29
 			inc hl					; $6B2A
-			CP $61					; $6B2B  
+			CP 'a'					; $6B2B  
 			JP NC,SKIP_MENU_DRAW	; $6B2D  ; Bytes >= $61
+L2_ICON8x8: ; value from table is a drawable icon
 			CALL ICON8x8			; $6B30  ; IN: DE=y/x, C=colour (A < $61)
 			INC E					; $6B33	 ; Next position (screenX is 0-255)  
 			JP DRAW_LIST			; $6B34  ; keep drawing until marker
@@ -1163,9 +1178,10 @@ L_6BB5:
 			LD B,(HL)				; $6BBA  ; repeat count
 			INC HL					; $6BBB 
 			LD A,(HL)				; $6BBC  ; tile ID
-L_6BBD:		CALL ICON8x8			; $6BBD
+L3_ICON8x8:		
+			CALL ICON8x8			; $6BBD
 			INC E					; $6BC0  ; Move right
-			DJNZ L_6BBD				; $6BC1
+			DJNZ L3_ICON8x8				; $6BC1
 			INC HL					; $6BC3  ; Next comman
 			JP DRAW_LIST			; $6BC4
 L_6BC7:	
@@ -1176,9 +1192,9 @@ L_6BC7:
 			LD B,(HL)				; $6BCC ; repeat count
 			INC HL					; $6BCD
 			LD A,(HL)				; $6BCE ; tile ID
-L_6BCF:		CALL ICON8x8			; $6BCF
+L4_ICON8x8:		CALL ICON8x8			; $6BCF
 			INC D					; $6BD2 ; Move dow
-			DJNZ L_6BCF				; $6BD3
+			DJNZ L4_ICON8x8				; $6BD3
 			INC HL					; $6BD5 ; Next command
 			JP DRAW_LIST			; $6BD6
 L_6BD9:	
@@ -1201,7 +1217,7 @@ L_6BEA:		CP $E7							; $6BEA  ;$E7:store
 			LD HL,FONT_DATA					; $6BF3
 			LD (ICON_LD_ADDR+1),HL			; $6BF6
 			LD A,$20						; $6BF9  ; Tile ID
-			CALL ICON8x8					; $6BFB
+L1_ICON8x8:	CALL ICON8x8					; $6BFB
 			INC E							; $6BFE  ; Move right
 			POP HL							; $6BFF
 			LD (ICON_LD_ADDR+1),HL			; $6C00
@@ -1220,8 +1236,8 @@ L_6C13:		CP $E9					; $6C13
 L_6C1A:		CP $EA					; $6C1A
 			JR NZ,L_6C21			; $6C1C
 			JP DRAW_LIST			; $6C1E
-L_6C21:		CP $EB					; $6C21  ; 
-			RET NZ					; $6C23  ; Return if not (Z flag set if $EB)
+L_6C21:		CP $EB					; $6C21   
+			RET NZ					; $6C23  ; 
 
 			;  (notes: for menu, here HL = $8235 +1)
 			;------------------------------------------------------------------
@@ -1231,16 +1247,16 @@ L_6C21:		CP $EB					; $6C21  ;
 			LD L,(HL)				; $6C26       
 			LD H,$00				; $6C27
 			ADD HL,HL				; $6C29  ; X2
-			LD BC,$6C44				; $6C2A  ; Lookup  table
+			LD BC,FUNC_DRAW_LIST	; $6C2A  ; Lookup  table
 			ADD HL,BC				; $6C2D  ; HL = $6C44 + (2 * index)
 			LD A,(HL)				; $6C2E  ; Load low byte of target address
 			INC HL					; $6C2F  ; 
 			LD H,(HL)				; $6C30  ; Load high byte
 			LD L,A					; $6C31
-			LD ($6B31),HL			; $6C32  ; Patch CALL ICON8x8 to use new routine
-			LD ($6BBE),HL			; $6C35  ; 
-			LD ($6BD0),HL			; $6C38  ; 
-			LD ($6BFC),HL			; $6C3B  ; 
+			LD (L2_ICON8x8+1),HL		; $6C32  ; Patch calls in the code that 
+			LD (L3_ICON8x8+1),HL			; $6C35  ;  were using ICON8x8 to use new routine 
+			LD (L4_ICON8x8+1),HL			; $6C38  ;  from the FUNC_DRAW_LIST table 
+			LD (L1_ICON8x8+1),HL		; $6C3B  ;  (call address is replaced!)
 			POP HL					; $6C3E
 			POP BC					; $6C3F
 			INC HL					; $6C40  
@@ -1249,7 +1265,12 @@ L_6C21:		CP $EB					; $6C21  ;
 			;------------------------------------------------------------------
 			; Setup Command ($EB):
 			; - Table entries are addresses of rendering functions (e.g ICON8x8)
-			defb $4A,$6C,$87,$6C,$87,$6C     ; $6C44  ; Lookup table: addresses for rendering routines
+	;		defb $4A,$6C,$87,$6C,$87,$6C     ; $6C44  ; Lookup table: addresses for rendering routines
+FUNC_DRAW_LIST:  ; looks like this table was never fully used, last 2 items are place holders
+			defw ICON8x8
+			defw L_6C87  ; DO NOTHING - RET
+			defw L_6C87	 ; DO NOTHING - RET
+			
 			;------------------------------------------------------------------
 
 ; == DISPLAY 8x8 icon ==
@@ -1310,7 +1331,7 @@ L_6C6B:		LD A,(DE)			; $6C6B ; char data
 			POP DE				; $6C84
 			POP AF				; $6C85
 			RET					; $6C86
-
+L_6C87
 			RET					; $6C87
 
 CREATE_EJECT_VELOCITY:
@@ -1795,9 +1816,9 @@ ISR:
 			JR NZ,USE_AY			; $70F6
 			;----------------------------------------------------------
 			; INGAME BEEPER SFX DRIVER - called at a 50% duty cycle
-			LD A,($711B)					; $70F8 ; get
+			LD A,(DUTY_CYCLE)					; $70F8 ; get
 			XOR $01							; $70FB ; flip (A=!A)
-			LD ($711B),A					; $70FD ; store
+			LD (DUTY_CYCLE),A					; $70FD ; store
 			CALL Z,POLL_SFX_USING_BEEPER 	; $7100 
 			;----------------------------------------------------------
 			JP EXIT_IM2			; $7103
@@ -2745,7 +2766,7 @@ L_78D4:
 			PUSH DE				; $78D6
 			PUSH HL				; $78D7
 			LD C,$00				; $78D8
-			LD HL,L78FE				; $78DA
+			LD HL,GAME_SCORE_LAST_DIGIT				; $78DA
 			LD B,$06				; $78DD
 L_78DF:
 			LD A,(DE)				; $78DF
@@ -2770,19 +2791,21 @@ L_78EF:
 			POP AF				; $78F7
 			RET				; $78F8
 
-			defb $30,$30                         	 	; $78F9 00
-			defb $30,$30,$30							; $78FB
-L78FE:
-			defb $30,$30,$30,$30,$30					; $78FE
-			defb $32									; $7903
+GAME_SCORE:
+			defb "00000"
+GAME_SCORE_LAST_DIGIT:
+			defb "0"
+
+			defb $30,$30,$30,$30,$32		; $78FF						
 L7904:
-			defb $35,$30,$30,$30,$31,$30,$30
-			defb $30,$30,$30,$32,$35,$30,$30,$30		; $790B 00025000
-			defb $30,$35,$30,$30,$30,$30,$31,$30		; $7913 05000010
-			defb $30,$30,$30,$30,$32,$30,$30,$30		; $791B 00002000
-			defb $30,$30,$35,$30,$30,$30,$30,$31		; $7923 00500001
-			defb $30,$30,$30,$30,$30,$32,$30,$30		; $792B 00000200
-			defb $30,$30                             	; $7933 00
+			defb $35,$30,$30,$30,$31,$30
+			defb $30,$30,$30,$30,$32,$35
+			defb $30,$30,$30,$30,$35,$30
+			defb $30,$30,$30,$31,$30,$30
+			defb $30,$30,$30,$32,$30,$30
+			defb $30,$30,$30,$35,$30,$30
+			defb $30,$30,$31,$30,$30,$30
+			defb $30,$30,$32,$30,$30,$30,$30                             
 
 L_7935:
 			LD HL,($7973)				; $7935
@@ -4325,9 +4348,10 @@ REDEFINE_KEYS:		CALL CLR_SCREEN		; $830C		 ; CALL $66AA
 			LD DE,$0C0F						; $8324	 ; Y/X coords of new keys
 			LD B,$04						; $8327  ; amount to define
 
+			; ask for new key
 L_8329:		PUSH BC						; $8329
-			LD A,$3F					; $832A
-			LD C,$44					; $832C
+			LD A,"?"					; $832A  ; new char prompt
+			LD C,BRIGHT+GREEN					; $832C  ; colour 01000100
 			CALL ICON8x8				; $832E
 			PUSH DE						; $8331
 
@@ -6562,181 +6586,211 @@ HI_SCORE_DRAW_LIST:
 			defw FONT_DATA	
 			defb SET_POS,$09,$05
 			defb GLOBAL_COL  
-			defb $44,$43,$59,$42,$45,$52,$4E,$4F				; $9483 DCYBERNO
-			defb $49,$44,$20,$48,$41,$4C,$4C,$20				; $948B ID HALL 
-			defb $4F,$46,$20,$46,$41,$4D,$45,$FF				; $9493 OF FAME.
+			defb "DCYBERNO"										; $9483 DCYBERNO
+			defb "ID HALL "										; $948B ID HALL 
+			defb "OF FAME",$FF									; $9493 OF FAME.
 			defb $00											; $949B .
 HI_SCORE_TEXT:			
-			defb $52,$41,$46,$46,$41,$45,$4C					; $949C  RAFFAEL
-			defb $45,$20,$20,$30,$31,$35,$30,$30				; $94A3 E  01500
-			defb $30,$53,$55,$52,$59,$41,$4E,$49				; $94AB 0SURYANI
-			defb $20,$20,$20,$30,$31,$30,$30,$30				; $94B3    01000
-			defb $30,$42,$4F,$4E,$4E,$49,$45,$20				; $94BB 0BONNIE 
-			defb $20,$20,$20,$30,$30,$35,$30,$30				; $94C3    00500
-			defb $30,$51,$55,$45,$45,$4E,$20,$20				; $94CB 0QUEEN  
-			defb $20,$20,$20,$30,$30,$32,$35,$30				; $94D3    00250
-			defb $30,$4E,$49,$43,$4B,$20,$42,$4F				; $94DB 0NICK BO
-			defb $59,$20,$20,$30,$30,$31,$30,$30				; $94E3 Y  00100
-			defb $30,$53,$41,$4E,$44,$52,$41,$20				; $94EB 0SANDRA 
-			defb $20,$20,$20,$30,$30,$31,$30,$30				; $94F3    00100
-			defb $30,$44,$41,$56,$49,$44,$2E,$50				; $94FB 0DAVID.P
-			defb $2E,$20,$20,$30,$30,$31,$30,$30				; $9503 .  00100
-			defb $30,$53,$48,$41,$52,$4B,$59,$20				; $950B 0SHARKY 
-			defb $20,$20,$20,$30,$30,$31,$30,$30				; $9513    00100
-			defb $30,$45,$4D,$49,$4C,$59,$20,$20				; $951B 0EMILY  
-			defb $20,$20,$20,$30,$30,$31,$30,$30				; $9523    00100
-			defb $30,$4F,$4E,$49,$4F,$4E,$20,$20				; $952B 0ONION  
-			defb $20,$20,$20,$30,$30,$31,$30,$30				; $9533    00100
-			defb $30,$FF,$01,$A8,$00,$8B,$01,$A8				; $953B 0.......
-			defb $45,$01,$01,$A8,$45,$02,$A8,$A8				; $9543 E...E...
-			defb $45,$02,$00,$00                                ; $954B E...
+			defb "RAFFAELE  015000"						
+			defb "SURYANI   010000"						
+			defb "BONNIE    005000"				
+			defb "QUEEN     002500"					
+			defb "NICK BOY  001000"					
+			defb "SANDRA    001000"				
+			defb "DAVID.P.  001000" 				
+			defb "SHARKY    001000"			
+			defb "EMILY     001000"			
+			defb "ONION     00100"		  
+HI_SCORE_TEXT_SPARE
+			defb "0",$FF,$01,$A8,$00,$8B,$01,$A8	
+			defb $45,$01,$01,$A8,$45,$02,$A8,$A8	
+HI_SCORE_TEXT_END:
+			defb $45,$02,$00,$00            
 ;--------------------------------------------------------
 FILLOUT_HI_SCORE:		
 			LD IX,HI_SCORE_TEXT		; $954F
-L_9553:		BIT 7,(IX+$00)			; $9553
-			JP NZ,L_9648			; $9557
-
+LOOP_CHECK_SCORES:		BIT 7,(IX+$00)			; $9553
+			JP NZ,WaitReleaseAnyKey			; $9557  ; end of table
+	
 			PUSH IX					; $955A
-			LD DE,$000A				; $955C
+			LD DE,$000A				; $955C  ; score offset
 			ADD IX,DE				; $955F
-			LD HL,$78F9				; $9561
-			LD B,$06				; $9564
-L_9566:		LD A,(IX+$00)			; $9566
+			LD HL,$78F9				; $9561  ; players score addr (holds 6 chars)
+			LD B,$06				; $9564  ; score length
+
+; Digit-by-digit score comparison (chars right to left)
+CheckScoreBytes:		
+			LD A,(IX+$00)			; $9566 ; 
 			CP (HL)					; $9569
-			JP Z,L_9637				; $956A
-			JP NC,L_963E			; $956D
-			POP HL					; $9570
+			JP Z,AdvanceScoreByte	; $956A ; Equal, next digit
+			JP NC,NextScoreItem		; $956D ; table score > player's, skip to next entry
+			
+			; find high score terminator
+			POP HL					; $9570 ; get start of entry
 			PUSH HL					; $9571
-			LD A,$FF				; $9572
+			LD A,$FF				; $9572 ; terminator
 			LD BC,$03E8				; $9574
 			CPIR					; $9577
+
+			; calc hi-score table size
 			LD HL,$03E8				; $9579
-			AND A					; $957C
-			SBC HL,BC				; $957D
+			AND A					; $957C 
+			SBC HL,BC				; $957D  
 			PUSH HL					; $957F
-			POP BC					; $9580
-			LD DE,$954B				; $9581
-			LD HL,$953B				; $9584
-			LDDR					; $9587
+			POP BC					; $9580 ; BC = table size
+			; Shift table down
+			LD DE,HI_SCORE_TEXT_END		; $9581
+			LD HL,HI_SCORE_TEXT_SPARE	; $9584
+			LDDR						; $9587 ; shift table down
+   		
 			LD A,$FF				; $9589
 			LD ($953C),A			; $958B
-			POP HL					; $958E
+
+			; Insert new score
+			POP HL					; $958E ; Get entry position again
 			PUSH HL					; $958F
-			LD DE,$000A				; $9590
+			;  note: names use 8 chars and 2 extra spaces to separate score
+			LD DE,$000A				; $9590 ; score offset
 			ADD HL,DE				; $9593
-			EX DE,HL				; $9594
-			LD HL,$78F9				; $9595
-			LD BC,$0006				; $9598
+			EX DE,HL				; $9594 ; score position
+			LD HL,$78F9				; $9595 ; player's score
+			LD BC,$0006				; $9598 ; 6 digits
 			LDIR					; $959B
+
 			CALL CLR_SCREEN			; $959D
 			LD E,SFX_HISCORE		; $95A0
 			CALL PLAY_SFX			; $95A2
-			LD HL,$96D0				; $95A5
-			LD DE,$96D1				; $95A8
-			LD BC,$0007				; $95AB
-			LD (HL),$20				; $95AE
-			LDIR					; $95B0
-			CALL DRAW_MENU_BORDERS	; $95B2
-			LD HL,$9664				; $95B5
-			CALL DRAW_LIST			; $95B8
-			LD DE,$0F0C				; $95BB
-			LD HL,$96D0				; $95BE
-L_95C1:		LD C,$44				; $95C1
-			LD A,$3F				; $95C3
+			
+			; Clear name buffer with spaces
+			LD HL,ENTER_NAME_BUFFER		; $95A5 ; Name buffer start
+			LD DE,ENTER_NAME_BUFFER+1	; $95A8
+			LD BC,$0007					; $95AB
+			LD (HL)," "					; $95AE 
+			LDIR						; $95B0 ; clear
+
+			CALL DRAW_MENU_BORDERS	 ; $95B2
+			LD HL,CONGRATS_DRAW_LIST ; $95B5  ; congratlations
+			CALL DRAW_LIST			 ; $95B8
+
+			LD DE,$0F0C				 ; $95BB ; coords
+			LD HL,ENTER_NAME_BUFFER	 ; $95BE ; Name buffer
+
+			; Current charater to enter for new name
+NewChar:	LD C,BRIGHT+GREEN		; $95C1
+			LD A,"?"				; $95C3  ; new char prompt 
 			CALL ICON8x8			; $95C5
-L_95C8:		LD BC,$03E8				; $95C8
+DelayFeedbackNameFull:		
+			LD BC,$03E8				; $95C8
 			CALL WAIT_21xBC			; $95CB
-L_95CE:		CALL ANY_KEY_DOWN		; $95CE
+LoopForKeyRelease:		
+			CALL ANY_KEY_DOWN		; $95CE
 			CALL NZ,SCROLL_BORDER	; $95D1
-			JR NZ,L_95CE			; $95D4
+			JR NZ,LoopForKeyRelease	; $95D4  ; Loop until key released
 			PUSH DE					; $95D6
-L_95D7:		CALL GET_KEY			; $95D7
+ProcessKeysLoop:		
+			CALL GET_KEY			; $95D7
 			OR A					; $95DA
 			CALL Z,SCROLL_BORDER	; $95DB
-			JR Z,L_95D7				; $95DE
+			JR Z,ProcessKeysLoop				; $95DE
 			POP DE					; $95E0
-			CP $0D					; $95E1
-			JR Z,L_961F				; $95E3
-			CP $01					; $95E5
-			JR Z,L_95F0				; $95E7
-			CP $02					; $95E9
-			JR NZ,L_9610			; $95EB
+			CP $0D					; $95E1	; Enter Key
+			JR Z,StoreCompletedName	; $95E3
+			CP $01					; $95E5 ; CAPS_KEY (delete last character)
+			JR Z,DeleteChar			; $95E7
+			CP $02					; $95E9 ; alphanumeric keys
+			JR NZ,UpdateChar		; $95EB
 			PUSH DE					; $95ED
-			JR L_95D7				; $95EE
-L_95F0:		LD A,E					; $95F0
-			CP $13					; $95F1
-			JR NZ,L_95FE			; $95F3
+			JR ProcessKeysLoop				; $95EE
+DeleteChar:	LD A,E					; $95F0 ; x pos
+			CP $13					; $95F1 ; Rightmost (limit chars)
+			JR NZ,backspace			; $95F3
 			LD A,(HL)				; $95F5
 			CP $20					; $95F6
-			JR Z,L_95FE				; $95F8
+			JR Z,backspace			; $95F8
 			LD (HL),$20				; $95FA
-			JR L_95C1				; $95FC
-L_95FE:		LD A,E					; $95FE
+			JR NewChar				; $95FC
+backspace:	LD A,E					; $95FE
 			CP $0C					; $95FF
-			JR Z,L_95C1				; $9601
-			LD A,$2D				; $9603
-			LD C,$47				; $9605
+			JR Z,NewChar			; $9601
+			LD A,"-"				; $9603 ; dash char
+			LD C,BRIGHT+WHITE		; $9605 ; colour
 			CALL ICON8x8			; $9607
 			DEC HL					; $960A
-			LD (HL),$20				; $960B
-			DEC E					; $960D
-			JR L_95C1				; $960E
-L_9610:		LD (HL),A				; $9610
-			LD C,$46				; $9611
+			LD (HL)," "				; $960B ; replace with space
+			DEC E					; $960D ; xpos left 
+			JR NewChar				; $960E 
+UpdateChar:		
+			LD (HL),A				; $9610 ; store char
+			LD C,BRIGHT+YELLOW		; $9611 ; colour 
 			CALL ICON8x8			; $9613
 			LD A,E					; $9616
-			CP $13					; $9617
-			JR Z,L_95C8				; $9619
+			CP $13					; $9617 ; limit chars
+			JR Z,DelayFeedbackNameFull				; $9619 ; no more chars
 			INC HL					; $961B
-			INC E					; $961C
-			JR L_95C1				; $961D
-L_961F:		POP DE					; $961F
-			LD HL,$96D0				; $9620
-			LD BC,$0008				; $9623
-			LDIR					; $9626
-L_9628:		CALL ANY_KEY_DOWN		; $9628
+			INC E					; $961C ; xpos right
+			JR NewChar				; $961D
+StoreCompletedName:		
+			POP DE					; $961F ; table
+			LD HL,ENTER_NAME_BUFFER	; $9620 ; Name buffer
+			LD BC,$0008				; $9623 ; 8 chars 
+			LDIR					; $9626 ; update hi-score table
+
+			; Wait for key to be released, so we dont leave screen by mistake
+ReleaseKeyLoop:		
+			CALL ANY_KEY_DOWN		; $9628
 			CALL NZ,SCROLL_BORDER	; $962B
-			JP NZ,L_9628			; $962E
+			JP NZ,ReleaseKeyLoop	; $962E
 			CALL DRAW_HI_SCORES		; $9631
 			JP MAIN					; $9634
-L_9637:		INC HL					; $9637
+AdvanceScoreByte:		
+			INC HL					; $9637
 			INC IX					; $9638
 			DEC B					; $963A
-			JP NZ,L_9566			; $963B
-L_963E:		POP IX					; $963E
+			JP NZ,CheckScoreBytes	; $963B
+NextScoreItem:		
+			POP IX					; $963E
 			LD DE,$0010				; $9640
 			ADD IX,DE				; $9643
-			JP L_9553				; $9645
-L_9648:		CALL ANY_KEY_DOWN		; $9648
-			JP NZ,L_9648			; $964B
-			LD BC,$0352				; $964E
-L_9651:		HALT					; $9651
+			JP LOOP_CHECK_SCORES	; $9645
+WaitReleaseAnyKey:		
+			CALL ANY_KEY_DOWN		; $9648
+			JP NZ,WaitReleaseAnyKey	; $964B ; Wait for key release 
+			LD BC,$0352				; $964E ; timer
+
+			; waits for enter to be released		
+ContinueWaiting:	
+			HALT					; $9651
 			PUSH BC					; $9652
 			CALL GET_KEY			; $9653
 			POP BC					; $9656
 			OR A					; $9657
-			JP NZ,MAIN				; $9658
-			DEC BC					; $965B
+			JP NZ,MAIN				; $9658 ; key pressed exit
+			DEC BC					; $965B ; hi-score timer
 			LD A,B					; $965C
-			OR C					; $965D
-			JP NZ,L_9651			; $965E
+			OR C					; $965D 
+			JP NZ,ContinueWaiting	; $965E ; Continue waiting
 			JP MAIN					; $9661
 ;--------------------------------------------------------
-			defb $EB,$00,$DF,$09,$08,$E0,$46                    ; $9664 ......F
-			defb $E6,$F1,$C2,$43,$4F,$4E,$47,$52				; $966B ...CONGR
-			defb $41,$54,$55,$4C,$41,$54,$49,$4F				; $9673 ATULATIO
-			defb $4E,$53,$21,$7A,$ED,$DB,$50,$4C				; $967B NS!z..PL
-			defb $45,$41,$53,$45,$20,$45,$4E,$54				; $9683 EASE ENT
-			defb $45,$52,$20,$59,$4F,$55,$52,$20				; $968B ER YOUR 
-			defb $4E,$41,$4D,$45,$DF,$0F,$0C,$DE				; $9693 NAME....
-			defb $2D,$2D,$2D,$2D,$2D,$2D,$2D,$2D				; $969B --------
-			defb $7B,$F2,$DC,$50,$52,$45,$53,$53				; $96A3 {..PRESS
-			defb $20,$43,$41,$50,$53,$20,$54,$4F				; $96AB  CAPS TO
-			defb $20,$44,$45,$4C,$45,$54,$45,$7A				; $96B3  DELETEz
-			defb $ED,$DD,$50,$52,$45,$53,$53,$20				; $96BB ..PRESS 
-			defb $45,$4E,$54,$45,$52,$20,$54,$4F				; $96C3 ENTER TO
-			defb $20,$45,$4E,$44,$FF,$20,$20,$20				; $96CB  END.   
-			defb $20,$20,$20,$20,$20                            ; $96D3
+CONGRATS_DRAW_LIST:
+			defb SETUP,$00
+			defb SET_POS,$09,$08
+			defb GLOBAL_COL,$46                   					
+			defb SET_SOURCE_DATA
+			defw FONT_DATA
+			defb "CONGRATULATIONS!"
+			defb RELATIVE_X+2,RELATIVE_Y+62,INK_GREEN 
+			defb "PLEASE ENTER YOUR NAME"
+			defb SET_POS,$0F,$0C
+			defb INK_WHITE
+			defb "--------"   ; players name section
+			defb RELATIVE_X+3,RELATIVE_Y+67,INK_CYAN  	
+			defb "PRESS CAPS TO DELETE"
+			defb RELATIVE_X+2,RELATIVE_Y+62,INK_YELLOW 
+			defb "PRESS ENTER TO END"
+			defb END_MARKER
+
+ENTER_NAME_BUFFER:		
+			defb $20,$20,$20,$20,$20,$20,$20,$20                            
 
 L_96D8:		LD IX,$979F					; $96D8
 			LD H,A						; $96DC
@@ -12204,3 +12258,26 @@ L_FF7F:
 CODE2END equ $ ; Marker to show end of object code
 
 #end ; terminate #target
+
+
+
+
+; NOTES:
+;
+; --- ZX ATTRIBUTE COLOURS ---
+; Bit  7 - colour flashes
+; Bit  6 - colours are rendered bright
+; Bits 5-3 background paper 0-7
+; Bits 2-0 foreground ink 0-7
+;   #################
+;	|7|6|5|4|3|2|1|0|
+;	|F|B|P|P|P|I|I|I|
+;   #################   
+;	0 - black  (000)
+;	1 - blue   (001)
+;	2 - red    (010)
+;	3 - purple (011)
+;	4 - green  (100)
+;	5 - cyan   (101)
+;	6 - yellow (110)
+;	7 - white  (111)

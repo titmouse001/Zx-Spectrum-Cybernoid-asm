@@ -37,18 +37,31 @@ MOVE				EQU $78		; Base value for relative moves ($79-$8F)
 SET_POS				EQU $DF		; Set absolute position (Y,X)
 GLOBAL_COL			EQU $E0		; Set global color attribute (paper + default ink)
 SET_SOURCE_DATA		EQU $E6		; Patch icon source address (L,H)
-SETUP				EQU $EB		; Configure rendering routine via lookup table
+SETUP				EQU $EB		; Modify code to pick new routine via lookup (2nd param)
 END_MARKER			EQU $FF		; End of draw list
+RELATIVE_X         EQU $78
+RELATIVE_Y         EQU $AF
+
+
+BRIGHT          EQU %01000000
+BLACK			EQU %000	
+BLUE			EQU %001	
+RED				EQU %010
+PURPLE			EQU %011
+GREEN			EQU %100
+CYAN			EQU %101
+YELLOW			EQU %110
+WHITE			EQU %111
 
 ; Ink Colors  (these are bright variants using +8)
-INK_BLACK			EQU $CF+0+8	
-INK_BLUE			EQU $CF+1+8	
-INK_RED				EQU $CF+2+8	
-INK_PURPLE			EQU $CF+3+8
-INK_GREEN			EQU $CF+4+8
-INK_CYAN			EQU $CF+5+8
-INK_YELLOW			EQU $CF+6+8
-INK_WHITE			EQU $CF+7+8
+INK_BLACK			EQU $CF+BLACK+8	
+INK_BLUE			EQU $CF+BLUE+8	
+INK_RED				EQU $CF+RED+8	
+INK_PURPLE			EQU $CF+PURPLE+8
+INK_GREEN			EQU $CF+GREEN+8
+INK_CYAN			EQU $CF+CYAN+8
+INK_YELLOW			EQU $CF+YELLOW+8
+INK_WHITE			EQU $CF+WHITE+8
 
 ;-----------------------------------------
 
